@@ -582,3 +582,26 @@ input::placeholder{ color: rgba(255,255,255,.35); }
   border-radius: 999px;
   font-size: 12px;
 }
+/* ===========================
+   FIX SELECT / OPTION (Shopify Admin dark mode)
+   =========================== */
+
+/* Le champ select (fermé) */
+select {
+  color: #e5e7eb;              /* texte clair */
+  background: rgba(17, 24, 39, 0.9);
+  border-color: rgba(148, 163, 184, 0.25);
+}
+
+/* La liste déroulante (options) — IMPORTANT */
+select option {
+  color: #111827 !important;   /* texte sombre lisible */
+  background: #ffffff !important; /* fond clair */
+}
+
+/* Focus propre */
+select:focus {
+  outline: none;
+  border-color: rgba(99, 102, 241, 0.8);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+}
