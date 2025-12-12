@@ -287,12 +287,111 @@ function displayProducts(stock) {
   const productList = document.getElementById('productList');
   if (!productList) return;
 
-  const products = Object.entries(stock);
-
-  if (products.length === 0) {
-    productList.innerHTML = '<div style="text-align: center; padding: 40px; color: #a0aec0;">Aucun produit configuré</div>';
+  const entries = Object.entries(stock || {});
+  if (entries.length === 0) {
+    productList.innerHTML = '<div style="text-align:center; padding:40px; color:#a0aec0;">Aucun produit configuré</div>';
     return;
   }
+
+  // Helper: nom catégorie depuis id
+  const catNameById = (cid) => categories.find(c => c.id === cid)?.name || null;
+
+  // Groupes: { "catId": [ [productId, product], ... ] } + sans catégorie
+  const groups = {};
+  const uncategorized = [];
+
+  for (const [id, product] of entries) {
+    const ids = Array.isArray(product.categoryIds) ? product.categoryIds : [];
+    if (!ids.length) {
+      uncategorized.push([id, product]);
+      continue;
+    }
+
+    // Un produit peut être dans plusieurs catégories → on l’affiche dans chaque
+    for (const cid of ids) {
+      if (!groups[cid]) groups[cid] = [];
+      groups[cid].push([id, product]);
+    }
+  }
+
+  // Tri des catégories par nom
+  const sortedCatIds = Object.keys(groups).sort((a, b) => {
+    const an = String(catNameById(a) || '').toLowerCase();
+    const bn = String(catNameById(b) || '').toLowerCase();
+    return an.localeCompare(bn, 'fr', { sensitivity: 'base' });
+  });
+
+  // Tri interne des produits (option tri alpha déjà côté serveur, mais on sécurise)
+  const sortEntries = (arr) => arr.slice().sort((A, B) => {
+    const a = String(A[1]?.name || '');
+    const b = String(B[1]?.name || '');
+    return a.localeCompare(b, 'fr', { sensitivity: 'base' });
+  });
+
+  function renderProductCard(id, product) {
+    const total = Number(product.totalGrams || 0);
+    const percent = Math.max(0, Math.min(100, Math.round((total / 200) * 100)));
+    const lowClass = total <= Number(serverInfo?.lowStockThreshold || 10) ? ' low' : '';
+
+    const cats = Array.isArray(product.categoryIds) ? product.categoryIds : [];
+    const catNames = cats.map(catNameById).filter(Boolean);
+
+    return `
+      <div class="product-item${lowClass}" onclick="openProductModal('${id}')">
+        <div class="product-header" style="display:flex; justify-content:space-between; gap:10px;">
+          <div style="min-width:0;">
+            <div class="product-name" style="font-weight:900;">${escapeHtml(product.name)}</div>
+            ${catNames.length ? `<div class="product-cats" style="margin-top:6px; display:flex; flex-wrap:wrap; gap:6px;">
+              ${catNames.map(n => `<span class="pill" style="border:1px solid rgba(255,255,255,.12); background:rgba(255,255,255,.04); padding:3px 8px; border-radius:999px; font-size:12px;">${escapeHtml(n)}</span>`).join('')}
+            </div>` : ''}
+          </div>
+          <div class="product-stock" style="font-weight:900; white-space:nowrap;">${total}g</div>
+        </div>
+        <div class="stock-bar" style="margin-top:10px; height:8px; border-radius:999px; background:rgba(255,255,255,.08); overflow:hidden;">
+          <div class="stock-bar-fill" style="height:100%; width:${percent}%; background:rgba(167,139,250,.9);"></div>
+        </div>
+      </div>
+    `;
+  }
+
+  let html = '';
+
+  // Catégories
+  for (const cid of sortedCatIds) {
+    const name = catNameById(cid) || 'Catégorie';
+    const items = sortEntries(groups[cid]);
+
+    html += `
+      <div class="category-section">
+        <div class="category-title">
+          <div>${escapeHtml(name)}</div>
+          <div class="category-count">${items.length} produit(s)</div>
+        </div>
+        <div class="product-grid">
+          ${items.map(([id, p]) => renderProductCard(id, p)).join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  // Sans catégorie
+  if (uncategorized.length) {
+    const items = sortEntries(uncategorized);
+    html += `
+      <div class="category-section">
+        <div class="category-title">
+          <div>Sans catégorie</div>
+          <div class="category-count">${items.length} produit(s)</div>
+        </div>
+        <div class="product-grid">
+          ${items.map(([id, p]) => renderProductCard(id, p)).join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  productList.innerHTML = html;
+}
 
   productList.innerHTML = products.map(([id, product]) => {
     const total = Number(product.totalGrams || 0);
