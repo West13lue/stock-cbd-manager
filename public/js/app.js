@@ -5,6 +5,7 @@
 // + Tri alphabétique
 // + Alertes stock bas
 // + Export CSV
+// + Historique mouvements (au-dessus console)
 // ============================================
 
 // --------------------------------------------
@@ -41,11 +42,104 @@ function escapeHtml(str) {
     .replace(/'/g, '&#039;');
 }
 
+function fmtDateFR(iso) {
+  try {
+    return new Date(iso).toLocaleString('fr-FR');
+  } catch {
+    return String(iso || '');
+  }
+}
+
+function fmtDelta(delta) {
+  const n = Number(delta || 0);
+  const sign = n > 0 ? '+' : '';
+  return `${sign}${n}g`;
+}
+
+function deltaBadge(delta) {
+  const n = Number(delta || 0);
+  if (n > 0) return '✅';
+  if (n < 0) return '🔻';
+  return '•';
+}
+
+// ============================================
+// HISTORIQUE DES MOUVEMENTS (au-dessus console)
+// Requiert : GET /api/movements -> { movements: [...] }
+// ============================================
+async function refreshMovements() {
+  const box = el('movementsList');
+  if (!box) return;
+
+  const days = Number(el('movementsDays')?.value || 7);
+
+  box.innerHTML = `<div style="color:#9ca3af; padding:8px 2px;">⏳ Chargement...</div>`;
+
+  try {
+    const url = new URL(window.location.origin + '/api/movements');
+    url.searchParams.set('days', String(days));
+    url.searchParams.set('limit', '80');
+
+    const res = await fetch(url.pathname + url.search);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data?.error || 'Erreur chargement mouvements');
+
+    const rows = Array.isArray(data.movements) ? data.movements : [];
+    if (!rows.length) {
+      box.innerHTML = `<div style="color:#9ca3af; padding:8px 2px;">Aucun mouvement sur ${days} jour(s).</div>`;
+      return;
+    }
+
+    box.innerHTML = rows.map((m) => {
+      const ts = fmtDateFR(m.ts || m.createdAt || m.time || '');
+      const name = m.productName || (stockData[m.productId]?.name) || m.productId || '-';
+      const delta = Number(m.deltaGrams ?? m.gramsDelta ?? m.delta ?? 0);
+      const type = m.type || m.source || 'mouvement';
+      const extra = m.orderName ? ` • ${escapeHtml(m.orderName)}` : (m.orderId ? ` • #${escapeHtml(m.orderId)}` : '');
+
+      // Style inline pour être robuste même si ton CSS n'a pas encore les classes
+      return `
+        <div style="
+          display:flex;
+          justify-content:space-between;
+          align-items:flex-start;
+          gap:10px;
+          padding:10px 10px;
+          border:1px solid rgba(255,255,255,.08);
+          border-radius:12px;
+          background:rgba(15,23,42,.6);
+          margin-bottom:8px;
+        ">
+          <div style="min-width:0;">
+            <div style="font-weight:800; line-height:1.2;">${escapeHtml(name)}</div>
+            <div style="color:#9ca3af; font-size:12px; margin-top:4px;">
+              ${escapeHtml(ts)} • ${escapeHtml(type)}${extra}
+            </div>
+          </div>
+          <div style="
+            flex:0 0 auto;
+            border:1px solid rgba(255,255,255,.12);
+            background:rgba(255,255,255,.04);
+            border-radius:999px;
+            padding:6px 10px;
+            font-weight:900;
+            white-space:nowrap;
+          ">
+            ${deltaBadge(delta)} ${escapeHtml(fmtDelta(delta))}
+          </div>
+        </div>
+      `;
+    }).join('');
+
+  } catch (e) {
+    box.innerHTML = `<div style="color:#ef4444; padding:8px 2px;">❌ ${escapeHtml(e.message)}</div>`;
+  }
+}
+
 // ============================================
 // UI: Ajout barre de tri/filtre/import si absente
 // ============================================
 function ensureCatalogControls() {
-  // On essaye d'accrocher ça au header si possible
   const header = document.querySelector('.header');
   if (!header) return;
 
@@ -75,14 +169,13 @@ function ensureCatalogControls() {
       <div class="catalog-actions">
         <button class="btn btn-secondary btn-sm" id="btnCategories">📁 Catégories</button>
         <button class="btn btn-primary btn-sm" id="btnImport">➕ Import Shopify</button>
-        <button class="btn btn-info btn-sm" id="btnExportStock">⬇️ Stock CSV</button>
+        <button class="btn btn-info btn-sm" id="btnExportStock"⬇️ Stock CSV</button>
         <button class="btn btn-secondary btn-sm" id="btnExportMovements">⬇️ Mouvements CSV</button>
       </div>
     </div>
   `;
   header.appendChild(wrap);
 
-  // Events
   el('categoryFilter').addEventListener('change', async (e) => {
     currentCategoryFilter = e.target.value || '';
     await refreshStock();
@@ -97,7 +190,6 @@ function ensureCatalogControls() {
     window.location.href = '/api/stock.csv';
   });
   el('btnExportMovements').addEventListener('click', () => {
-    // Par défaut sur la rétention du plan côté serveur
     window.location.href = '/api/movements.csv';
   });
 }
@@ -128,8 +220,6 @@ async function getServerInfo() {
 
 // ============================================
 // STOCK (supporte 2 formats API)
-// - Ancien: { [id]: {name,totalGrams,variants} }
-// - Nouveau: { products:[...], categories:[...] }
 // ============================================
 async function refreshStock() {
   ensureCatalogControls();
@@ -148,7 +238,6 @@ async function refreshStock() {
       catalogData = data;
       categories = Array.isArray(data.categories) ? data.categories : [];
 
-      // Convert vers format legacy pour réutiliser ton UI existante
       const map = {};
       for (const p of data.products) {
         map[p.productId] = {
@@ -192,7 +281,7 @@ function updateCategoryFilterOptions() {
 }
 
 // ============================================
-// AFFICHAGE PRODUITS (liste actuelle)
+// AFFICHAGE PRODUITS
 // ============================================
 function displayProducts(stock) {
   const productList = document.getElementById('productList');
@@ -207,7 +296,7 @@ function displayProducts(stock) {
 
   productList.innerHTML = products.map(([id, product]) => {
     const total = Number(product.totalGrams || 0);
-    const percent = Math.max(0, Math.min(100, Math.round((total / 200) * 100))); // jauge visuelle
+    const percent = Math.max(0, Math.min(100, Math.round((total / 200) * 100)));
     const lowClass = total <= Number(serverInfo?.lowStockThreshold || 10) ? ' low' : '';
     const cats = Array.isArray(product.categoryIds) ? product.categoryIds : [];
     const catNames = cats
@@ -255,13 +344,14 @@ async function testOrder() {
     const data = await res.json();
     log('✅ COMMANDE TEST TRAITÉE\n\n' + JSON.stringify(data, null, 2), 'success');
     await refreshStock();
+    await refreshMovements();
   } catch (err) {
     log('❌ ERREUR: ' + err.message, 'error');
   }
 }
 
 // ============================================
-// RÉAPPROVISIONNEMENT (existant)
+// RÉAPPROVISIONNEMENT
 // ============================================
 function openRestockModal() {
   const modal = document.getElementById('restockModal');
@@ -284,7 +374,7 @@ function closeRestockModal() {
 }
 
 // ============================================
-// MODAL PRODUIT (existant + assign catégories)
+// MODAL PRODUIT (assign catégories)
 // ============================================
 function openProductModal(productId) {
   currentProductId = productId;
@@ -299,10 +389,8 @@ function openProductModal(productId) {
 
   displayVariants(product.variants);
 
-  // Inject categories selector in modal (once)
   ensureProductCategoriesUI();
 
-  // Set current categories
   const catSelect = el('productCategoriesSelect');
   if (catSelect) {
     const ids = Array.isArray(product.categoryIds) ? product.categoryIds : [];
@@ -344,7 +432,6 @@ function displayVariants(variants) {
   }).join('');
 }
 
-// Ajoute une UI multi-select de catégories dans le modal produit
 function ensureProductCategoriesUI() {
   const modalContent = document.querySelector('#productModal .modal-content');
   if (!modalContent) return;
@@ -361,15 +448,11 @@ function ensureProductCategoriesUI() {
     </div>
   `;
 
-  // Insère avant les boutons du modal (si existants)
   const buttons = modalContent.querySelector('.modal-buttons');
   if (buttons) modalContent.insertBefore(block, buttons);
   else modalContent.appendChild(block);
 
-  // Fill options
   updateProductCategoriesOptions();
-
-  // Save categories
   el('btnSaveCategories')?.addEventListener('click', saveProductCategories);
 }
 
@@ -409,7 +492,7 @@ async function saveProductCategories() {
 }
 
 // ============================================
-// MODAL: Catégories (CRUD simple)
+// MODAL: Catégories (CRUD)
 // ============================================
 function openCategoriesModal() {
   let modal = el('categoriesModal');
@@ -565,7 +648,6 @@ function openImportModal() {
     el('btnSearchShopify').addEventListener('click', () => searchShopifyProducts());
   }
 
-  // Populate categories dropdown
   const sel = el('importCategory');
   if (sel) {
     sel.innerHTML = `<option value="">Aucune</option>` + categories
@@ -639,6 +721,7 @@ async function importProduct(productId) {
     log('✅ Produit importé\n\n' + JSON.stringify(data, null, 2), 'success');
 
     await refreshStock();
+    await refreshMovements();
   } catch (e) {
     log('❌ Import échoué: ' + e.message, 'error');
   }
@@ -652,10 +735,17 @@ window.addEventListener('load', async () => {
   await loadCategories();
   await refreshStock();
 
+  // Historique mouvements
+  await refreshMovements();
+  el('movementsDays')?.addEventListener('change', refreshMovements);
+
   // expose functions used in onclick in HTML
   window.openProductModal = openProductModal;
   window.openRestockModal = openRestockModal;
   window.closeRestockModal = closeRestockModal;
   window.closeProductModal = closeProductModal;
   window.testOrder = testOrder;
+
+  // expose movements refresh for the button in index.html
+  window.refreshMovements = refreshMovements;
 });
