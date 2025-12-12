@@ -4,236 +4,184 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>CBD Stock Manager</title>
-
-  <!-- CSS (doit exister dans public/css/style.css) -->
   <link rel="stylesheet" href="/css/style.css" />
-
-  <!-- (Optionnel) petites bases si ton CSS n'est pas chargé -->
-  <style>
-    /* fallback minimal au cas où le CSS ne charge pas */
-    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 0; }
-    .hidden { display:none !important; }
-  </style>
 </head>
 
 <body>
-  <div class="app">
-    <!-- Header -->
-    <header class="header">
-      <div class="header-left">
-        <h1 class="title">CBD Stock Manager</h1>
-        <div class="sub">
-          <span id="statusText">Chargement...</span>
-          <span class="muted">•</span>
-          <span class="muted">Mode: <strong id="modeText">...</strong></span>
-        </div>
-      </div>
+  <div class="container">
+    <!-- HEADER (important: .header pour que app.js injecte les contrôles) -->
+    <div class="header">
+      <div class="header-main">
+        <h1>CBD Stock Manager</h1>
 
-      <div class="header-right">
-        <div class="toolbar">
-          <button id="btnCategories" class="btn">
-            🗂️ <span>Catégories</span>
-          </button>
-          <button id="btnImportShopify" class="btn btn-primary">
-            ➕ <span>Import Shopify</span>
-          </button>
-
-          <a id="btnStockCSV" class="btn btn-outline" href="/api/stock.csv" target="_blank" rel="noopener">
-            ⬇️ <span>Stock CSV</span>
-          </a>
-          <a id="btnMovementsCSV" class="btn btn-outline" href="/api/movements.csv" target="_blank" rel="noopener">
-            ⬇️ <span>Mouvements CSV</span>
-          </a>
-        </div>
-      </div>
-    </header>
-
-    <!-- Filters row -->
-    <section class="filters">
-      <div class="filter">
-        <label for="categorySelect">CATÉGORIE</label>
-        <select id="categorySelect">
-          <option value="">Toutes</option>
-        </select>
-      </div>
-
-      <div class="filter">
-        <label for="sortSelect">TRI</label>
-        <select id="sortSelect">
-          <option value="alpha">A → Z</option>
-          <option value="stock_asc">Stock ↑</option>
-          <option value="stock_desc">Stock ↓</option>
-        </select>
-      </div>
-    </section>
-
-    <!-- Main layout -->
-    <main class="main">
-      <!-- Left: Summary + actions + console -->
-      <aside class="sidebar">
-        <div class="card">
-          <h2 class="card-title">Produits actifs</h2>
-          <div class="kv">
-            <div class="k">Configurations actives</div>
-            <div class="v" id="activeProductsCount">-</div>
-          </div>
-        </div>
-
-        <div class="card">
-          <h2 class="card-title">Stock total</h2>
-          <div class="kv">
-            <div class="k">Grammes disponibles</div>
-            <div class="v" id="totalGramsAll">-</div>
-          </div>
-        </div>
-
-        <div class="card">
-          <h2 class="card-title">Webhook</h2>
-          <div class="kv">
-            <div class="k">Vérification</div>
-            <div class="v" id="webhookStatus">-</div>
-          </div>
-        </div>
-
-        <div class="card">
-          <h2 class="card-title">Sécurité HMAC</h2>
-          <div class="kv">
-            <div class="k">Vérification</div>
-            <div class="v" id="hmacStatus">-</div>
-          </div>
-        </div>
-
-        <div class="card">
-          <h2 class="card-title">📦 Gestion du Stock</h2>
-          <p class="muted">
-            Surveillance en temps réel.<br />
-            Les stocks sont mis à jour automatiquement lors de chaque commande Shopify.
-          </p>
-          <div class="kv">
-            <div class="k">Dernière maj</div>
-            <div class="v" id="lastUpdateText">-</div>
-          </div>
-        </div>
-
-        <div class="card">
-          <h2 class="card-title">⚡ Actions Rapides</h2>
-          <div class="actions">
-            <button id="btnTestOrder" class="btn btn-outline">🧪 Tester une commande</button>
-            <button id="btnRestock" class="btn btn-outline">♻️ Réapprovisionner</button>
-            <button id="btnRefresh" class="btn">🔄 Actualiser le stock</button>
-          </div>
-
-          <div class="tip">
-            💡 <strong>Astuce</strong><br />
-            Utilise <em>“Tester”</em> pour simuler une commande et vérifier le fonctionnement.
-          </div>
-        </div>
-
-        <div class="card">
-          <h2 class="card-title">🧾 Console de résultats</h2>
-          <pre id="consoleLog" class="console">...</pre>
-        </div>
-      </aside>
-
-      <!-- Right: Products table -->
-      <section class="content">
-        <div class="card">
-          <div class="card-head">
-            <h2 class="card-title">Produits</h2>
-
-            <div class="search">
-              <input id="searchInput" type="search" placeholder="Rechercher une variété..." />
-            </div>
-          </div>
-
-          <div class="table-wrap">
-            <table class="table" id="stockTable">
-              <thead>
-                <tr>
-                  <th>Produit</th>
-                  <th>Total (g)</th>
-                  <th>Variantes (dispo)</th>
-                  <th>Catégories</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody id="stockTableBody">
-                <tr>
-                  <td colspan="5" class="muted">Chargement...</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </section>
-    </main>
-
-    <!-- ===================== -->
-    <!-- MODALS (simples)      -->
-    <!-- ===================== -->
-
-    <!-- Modal Catégories -->
-    <div id="modalCategories" class="modal hidden" aria-hidden="true">
-      <div class="modal-backdrop" data-close="true"></div>
-      <div class="modal-card" role="dialog" aria-modal="true" aria-label="Catégories">
-        <div class="modal-head">
-          <h3>Catégories</h3>
-          <button class="btn btn-icon" data-close="true" aria-label="Fermer">✖</button>
-        </div>
-
-        <div class="modal-body">
-          <div class="row">
-            <input id="newCategoryName" type="text" placeholder="Nom de la catégorie..." />
-            <button id="btnAddCategory" class="btn btn-primary">Ajouter</button>
-          </div>
-
-          <div id="categoriesList" class="list muted">Chargement...</div>
+        <div class="server-line">
+          <span id="serverStatus" class="server-badge">⏳ Connexion...</span>
+          <span class="server-meta">Mode: <strong id="serverMode">...</strong></span>
         </div>
       </div>
     </div>
 
-    <!-- Modal Import Shopify -->
-    <div id="modalImport" class="modal hidden" aria-hidden="true">
-      <div class="modal-backdrop" data-close="true"></div>
-      <div class="modal-card" role="dialog" aria-modal="true" aria-label="Import Shopify">
-        <div class="modal-head">
-          <h3>Import Shopify</h3>
-          <button class="btn btn-icon" data-close="true" aria-label="Fermer">✖</button>
+    <!-- STATS -->
+    <div class="stats-grid">
+      <div class="card">
+        <div class="card-title">Produits actifs</div>
+        <div class="card-sub">Configurations actives</div>
+        <div class="card-value" id="statProducts">-</div>
+        <div class="card-foot muted">Produit(s) configuré(s)</div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Stock total</div>
+        <div class="card-sub">Grammes disponibles</div>
+        <div class="card-value" id="statGrams">-</div>
+        <div class="card-foot muted">Dernière maj: <span id="lastUpdate">-</span></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Serveur</div>
+        <div class="card-sub">Produits configurés</div>
+        <div class="card-value" id="productCount">-</div>
+        <div class="card-foot muted">API /api/server-info</div>
+      </div>
+    </div>
+
+    <!-- ACTIONS -->
+    <div class="card" style="margin-top:16px;">
+      <div class="card-title">⚡ Actions rapides</div>
+      <div class="actions-row">
+        <button class="btn" type="button" onclick="testOrder()">🧪 Tester une commande</button>
+        <button class="btn" type="button" onclick="openRestockModal()">♻️ Réapprovisionner</button>
+        <button class="btn" type="button" onclick="location.reload()">🔄 Recharger</button>
+      </div>
+      <div class="muted" style="margin-top:8px;">
+        Astuce : “Tester” simule une commande côté serveur (si ton endpoint existe).
+      </div>
+    </div>
+
+    <!-- MAIN -->
+    <div class="main-grid">
+      <!-- LISTE PRODUITS -->
+      <div class="card">
+        <div class="card-title">Produits</div>
+        <div id="productList" class="product-list">
+          <div class="muted" style="padding:12px;">Chargement...</div>
         </div>
+      </div>
 
-        <div class="modal-body">
-          <p class="muted">
-            Sélectionne un produit Shopify, puis importe sa configuration (variantes + inventoryItemId).
-          </p>
-
-          <div class="row">
-            <button id="btnLoadShopifyProducts" class="btn btn-outline">📥 Charger les produits</button>
-            <span class="muted" id="importStatus">-</span>
-          </div>
-
-          <div class="row">
-            <label class="muted" for="shopifyProductSelect">Produit Shopify</label>
-            <select id="shopifyProductSelect" style="width:100%">
-              <option value="">—</option>
-            </select>
-          </div>
-
-          <div class="row">
-            <label class="muted" for="importTotalGrams">Total grammes initial (optionnel)</label>
-            <input id="importTotalGrams" type="number" min="0" step="1" placeholder="Ex: 50" />
-          </div>
-
-          <div class="row">
-            <button id="btnDoImport" class="btn btn-primary">Importer</button>
-          </div>
-
-          <div id="importPreview" class="console muted">...</div>
-        </div>
+      <!-- CONSOLE -->
+      <div class="card">
+        <div class="card-title">🧾 Console</div>
+        <div id="result" class="result-content">...</div>
       </div>
     </div>
   </div>
 
-  <!-- JS (doit exister dans public/js/app.js) -->
+  <!-- ===================== -->
+  <!-- MODAL RESTOCK         -->
+  <!-- ===================== -->
+  <div id="restockModal" class="modal">
+    <div class="modal-backdrop" onclick="closeRestockModal()"></div>
+    <div class="modal-panel">
+      <div class="modal-head">
+        <div class="modal-title">♻️ Réapprovisionner</div>
+        <button class="btn btn-close" type="button" onclick="closeRestockModal()">✖</button>
+      </div>
+
+      <form id="restockForm" class="modal-body">
+        <div class="form-group">
+          <label>Produit</label>
+          <select id="productSelect" required></select>
+        </div>
+
+        <div class="form-group">
+          <label>Grammes à ajouter</label>
+          <input id="restockGrams" type="number" min="1" step="1" placeholder="Ex: 50" required />
+        </div>
+
+        <div class="modal-actions">
+          <button class="btn" type="button" onclick="closeRestockModal()">Annuler</button>
+          <button class="btn btn-primary" type="submit">Valider</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ===================== -->
+  <!-- MODAL PRODUIT         -->
+  <!-- ===================== -->
+  <div id="productModal" class="modal">
+    <div class="modal-backdrop" onclick="closeProductModal()"></div>
+    <div class="modal-panel">
+      <div class="modal-head">
+        <div class="modal-title" id="productModalTitle">📦 Produit</div>
+        <button class="btn btn-close" type="button" onclick="closeProductModal()">✖</button>
+      </div>
+
+      <div class="modal-content modal-body">
+        <div class="form-group">
+          <label>Total grammes (info)</label>
+          <input id="totalGramsInput" type="number" min="0" step="1" />
+          <div class="hint muted">Ce champ est utilisé par ton UI, mais ton app.js ne l’envoie pas au serveur actuellement.</div>
+        </div>
+
+        <div class="form-group">
+          <label>Variantes</label>
+          <div id="variantsList" class="variants-list">
+            <div class="muted" style="padding:12px;">-</div>
+          </div>
+        </div>
+
+        <!-- Les catégories sont injectées par app.js dans .modal-content -->
+      </div>
+
+      <div class="modal-actions">
+        <button class="btn" type="button" onclick="closeProductModal()">Fermer</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- JS principal -->
   <script src="/js/app.js"></script>
+
+  <!-- Mini glue: handle restock form (ton app.js n'a pas le submit) -->
+  <script>
+    (function () {
+      const form = document.getElementById("restockForm");
+      if (!form) return;
+
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const productId = document.getElementById("productSelect").value;
+        const grams = Number(document.getElementById("restockGrams").value);
+
+        if (!productId || !grams || grams <= 0) return;
+
+        try {
+          const res = await fetch("/api/restock", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ productId, grams })
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data?.error || "Erreur restock");
+
+          // ferme modal + recharge
+          if (window.closeRestockModal) window.closeRestockModal();
+          location.reload();
+        } catch (err) {
+          alert("Erreur: " + err.message);
+        }
+      });
+
+      // Modals: comportement CSS "active"
+      const patchModalToggle = () => {
+        const rm = document.getElementById("restockModal");
+        const pm = document.getElementById("productModal");
+        if (rm && !rm.classList.contains("modal")) rm.classList.add("modal");
+        if (pm && !pm.classList.contains("modal")) pm.classList.add("modal");
+      };
+      patchModalToggle();
+    })();
+  </script>
 </body>
 </html>
