@@ -3,9 +3,11 @@
 // Gestion du stock côté serveur
 // Source de vérité = ton app (elle écrase Shopify)
 // + Persistance des totalGrams pour éviter le reset à 50
+// + Support import Shopify + catégories + tri/filtre (via snapshot)
 // ===============================
 
 const { loadState, saveState } = require("./stockState");
+const { listCategories } = require("./catalogStore");
 
 // -----------------------------
 // CONFIG PRODUITS : pool de grammes par variété
@@ -16,6 +18,7 @@ const PRODUCT_CONFIG = {
   "10349843513687": {
     name: "3x Filtré",
     totalGrams: 50,
+    categoryIds: [],
     variants: {
       "1.5": { gramsPerUnit: 1.5, inventoryItemId: 54088575582551 },
       "3": { gramsPerUnit: 3, inventoryItemId: 54088575615319 },
@@ -30,6 +33,7 @@ const PRODUCT_CONFIG = {
   "10309343248727": {
     name: "Amnesia US",
     totalGrams: 50,
+    categoryIds: [],
     variants: {
       "1.5": { gramsPerUnit: 1.5, inventoryItemId: 53927411155287 },
       "3": { gramsPerUnit: 3, inventoryItemId: 53872331096407 },
@@ -44,6 +48,7 @@ const PRODUCT_CONFIG = {
   "10314007576919": {
     name: "Blue Gelato",
     totalGrams: 50,
+    categoryIds: [],
     variants: {
       "1.5": { gramsPerUnit: 1.5, inventoryItemId: 53915774091607 },
       "3": { gramsPerUnit: 3, inventoryItemId: 53890393768279 },
@@ -58,6 +63,7 @@ const PRODUCT_CONFIG = {
   "10322603934039": {
     name: "Citrus Kush",
     totalGrams: 50,
+    categoryIds: [],
     variants: {
       "1.5": { gramsPerUnit: 1.5, inventoryItemId: 53925853725015 },
       "3": { gramsPerUnit: 3, inventoryItemId: 53925853757783 },
@@ -72,6 +78,7 @@ const PRODUCT_CONFIG = {
   "10349865271639": {
     name: "Jaune",
     totalGrams: 50,
+    categoryIds: [],
     variants: {
       "1.5": { gramsPerUnit: 1.5, inventoryItemId: 54088627519831 },
       "3": { gramsPerUnit: 3, inventoryItemId: 54088627552599 },
@@ -86,6 +93,7 @@ const PRODUCT_CONFIG = {
   "10314004857175": {
     name: "Kosher Kush",
     totalGrams: 50,
+    categoryIds: [],
     variants: {
       "1.5": { gramsPerUnit: 1.5, inventoryItemId: 53927425966423 },
       "3": { gramsPerUnit: 3, inventoryItemId: 53890386133335 },
@@ -100,6 +108,7 @@ const PRODUCT_CONFIG = {
   "10322668486999": {
     name: "M.A.C (LAC) – Miracle Alien Cookies",
     totalGrams: 50,
+    categoryIds: [],
     variants: {
       "1.5": { gramsPerUnit: 1.5, inventoryItemId: 53926378406231 },
       "3": { gramsPerUnit: 3, inventoryItemId: 53926378438999 },
@@ -114,6 +123,7 @@ const PRODUCT_CONFIG = {
   "10322635751767": {
     name: "Moonrock 57%",
     totalGrams: 50,
+    categoryIds: [],
     variants: {
       "1.5": { gramsPerUnit: 1.5, inventoryItemId: 53926137725271 },
       "3": { gramsPerUnit: 3, inventoryItemId: 53926137758039 },
@@ -128,6 +138,7 @@ const PRODUCT_CONFIG = {
   "10322564874583": {
     name: "Rainbow x GP3",
     totalGrams: 50,
+    categoryIds: [],
     variants: {
       "1.5": { gramsPerUnit: 1.5, inventoryItemId: 53925670224215 },
       "3": { gramsPerUnit: 3, inventoryItemId: 53925670256983 },
@@ -142,6 +153,7 @@ const PRODUCT_CONFIG = {
   "10408700772695": {
     name: "Small Buds HQCT – Greenhouse FR",
     totalGrams: 50,
+    categoryIds: [],
     variants: {
       "3": { gramsPerUnit: 3, inventoryItemId: 54246752846167 },
       "5": { gramsPerUnit: 5, inventoryItemId: 54246752878935 },
@@ -155,6 +167,7 @@ const PRODUCT_CONFIG = {
   "10322557337943": {
     name: "Snow OG",
     totalGrams: 50,
+    categoryIds: [],
     variants: {
       "1.5": { gramsPerUnit: 1.5, inventoryItemId: 53925636079959 },
       "3": { gramsPerUnit: 3, inventoryItemId: 53925636112727 },
@@ -169,6 +182,7 @@ const PRODUCT_CONFIG = {
   "10322589745495": {
     name: "Sorbet",
     totalGrams: 50,
+    categoryIds: [],
     variants: {
       "1.5": { gramsPerUnit: 1.5, inventoryItemId: 53925801820503 },
       "3": { gramsPerUnit: 3, inventoryItemId: 53925801853271 },
@@ -183,6 +197,7 @@ const PRODUCT_CONFIG = {
   "10322506744151": {
     name: "Sour Diesel (GP3)",
     totalGrams: 50,
+    categoryIds: [],
     variants: {
       "1.5": { gramsPerUnit: 1.5, inventoryItemId: 53925434327383 },
       "3": { gramsPerUnit: 3, inventoryItemId: 53925434360151 },
@@ -197,6 +212,7 @@ const PRODUCT_CONFIG = {
   "10314002989399": {
     name: "Strawberry Diesel",
     totalGrams: 50,
+    categoryIds: [],
     variants: {
       "1.5": { gramsPerUnit: 1.5, inventoryItemId: 53927442252119 },
       "3": { gramsPerUnit: 3, inventoryItemId: 53890381873495 },
@@ -211,6 +227,7 @@ const PRODUCT_CONFIG = {
   "10322613993815": {
     name: "Super OG",
     totalGrams: 50,
+    categoryIds: [],
     variants: {
       "1.5": { gramsPerUnit: 1.5, inventoryItemId: 53925976146263 },
       "3": { gramsPerUnit: 3, inventoryItemId: 53925976179031 },
@@ -224,12 +241,18 @@ const PRODUCT_CONFIG = {
 
 // -----------------------------
 // Persistance : charge l'état sauvegardé au démarrage
+// On persiste: totalGrams + categoryIds (si dispo)
 // -----------------------------
 (function applySavedTotals() {
-  const saved = loadState(); // { [productId]: { totalGrams } }
+  const saved = loadState(); // { [productId]: { totalGrams, categoryIds } }
   for (const [pid, data] of Object.entries(saved || {})) {
-    if (PRODUCT_CONFIG[pid] && typeof data?.totalGrams === "number") {
+    if (!PRODUCT_CONFIG[pid]) continue;
+
+    if (typeof data?.totalGrams === "number") {
       PRODUCT_CONFIG[pid].totalGrams = data.totalGrams;
+    }
+    if (Array.isArray(data?.categoryIds)) {
+      PRODUCT_CONFIG[pid].categoryIds = data.categoryIds.map(String);
     }
   }
 })();
@@ -237,7 +260,10 @@ const PRODUCT_CONFIG = {
 function persistState() {
   const out = {};
   for (const [pid, p] of Object.entries(PRODUCT_CONFIG)) {
-    out[pid] = { totalGrams: Number(p.totalGrams || 0) };
+    out[pid] = {
+      totalGrams: Number(p.totalGrams || 0),
+      categoryIds: Array.isArray(p.categoryIds) ? p.categoryIds.map(String) : [],
+    };
   }
   saveState(out);
 }
@@ -247,20 +273,22 @@ function persistState() {
 // -----------------------------
 function buildProductView(config) {
   const variants = {};
+  for (const [label, v] of Object.entries(config.variants || {})) {
+    const gramsPer = Number(v.gramsPerUnit || 0);
+    const canSell = gramsPer > 0 ? Math.floor((Number(config.totalGrams || 0)) / gramsPer) : 0;
 
-  for (const [label, v] of Object.entries(config.variants)) {
-    const canSell = Math.floor((config.totalGrams || 0) / v.gramsPerUnit);
     variants[label] = {
-      gramsPerUnit: v.gramsPerUnit,
+      gramsPerUnit: gramsPer,
       inventoryItemId: v.inventoryItemId,
       canSell,
     };
   }
-
   return variants;
 }
 
-// Applique une commande (soustraction de grammes)
+// -----------------------------
+// Core operations
+// -----------------------------
 function applyOrderToProduct(productId, gramsToSubtract) {
   const config = PRODUCT_CONFIG[productId];
   if (!config) return null;
@@ -275,11 +303,11 @@ function applyOrderToProduct(productId, gramsToSubtract) {
     productId,
     name: config.name,
     totalGrams: config.totalGrams,
+    categoryIds: config.categoryIds || [],
     variants: buildProductView(config),
   };
 }
 
-// Réassort manuel (+ ou -)
 function restockProduct(productId, grams) {
   const config = PRODUCT_CONFIG[productId];
   if (!config) return null;
@@ -294,23 +322,109 @@ function restockProduct(productId, grams) {
     productId,
     name: config.name,
     totalGrams: config.totalGrams,
+    categoryIds: config.categoryIds || [],
     variants: buildProductView(config),
   };
 }
 
-// Vue globale du stock (pour /api/stock)
 function getStockSnapshot() {
   const stock = {};
-
   for (const [productId, config] of Object.entries(PRODUCT_CONFIG)) {
     stock[productId] = {
       name: config.name,
       totalGrams: config.totalGrams,
+      categoryIds: config.categoryIds || [],
       variants: buildProductView(config),
     };
   }
-
   return stock;
+}
+
+// -----------------------------
+// NOUVEAU: Catégories par produit
+// -----------------------------
+function setProductCategories(productId, categoryIds) {
+  const p = PRODUCT_CONFIG[productId];
+  if (!p) return false;
+
+  p.categoryIds = Array.isArray(categoryIds) ? categoryIds.map(String) : [];
+  persistState();
+  return true;
+}
+
+// -----------------------------
+// NOUVEAU: Import / upsert depuis Shopify
+// - Crée ou met à jour une config produit
+// - Ne casse pas totalGrams persistant si tu passes totalGrams explicitement
+// -----------------------------
+function upsertImportedProductConfig({ productId, name, totalGrams, variants, categoryIds }) {
+  const pid = String(productId);
+  const exists = !!PRODUCT_CONFIG[pid];
+
+  const safeVariants = {};
+  for (const [label, v] of Object.entries(variants || {})) {
+    const gramsPerUnit = Number(v.gramsPerUnit || 0) || 1;
+    const inventoryItemId = Number(v.inventoryItemId);
+    if (!inventoryItemId) continue;
+    safeVariants[String(label)] = { gramsPerUnit, inventoryItemId };
+  }
+
+  if (!Object.keys(safeVariants).length) {
+    throw new Error("Import: aucune variante valide (inventoryItemId manquant)");
+  }
+
+  if (!exists) {
+    PRODUCT_CONFIG[pid] = {
+      name: String(name || pid),
+      totalGrams: Number.isFinite(Number(totalGrams)) ? Number(totalGrams) : 0,
+      categoryIds: Array.isArray(categoryIds) ? categoryIds.map(String) : [],
+      variants: safeVariants,
+    };
+  } else {
+    // update contrôlé
+    PRODUCT_CONFIG[pid].name = String(name || PRODUCT_CONFIG[pid].name);
+    PRODUCT_CONFIG[pid].variants = safeVariants;
+
+    if (Number.isFinite(Number(totalGrams))) {
+      PRODUCT_CONFIG[pid].totalGrams = Number(totalGrams);
+      if (PRODUCT_CONFIG[pid].totalGrams < 0) PRODUCT_CONFIG[pid].totalGrams = 0;
+    }
+
+    if (Array.isArray(categoryIds)) {
+      PRODUCT_CONFIG[pid].categoryIds = categoryIds.map(String);
+    } else if (!Array.isArray(PRODUCT_CONFIG[pid].categoryIds)) {
+      PRODUCT_CONFIG[pid].categoryIds = [];
+    }
+  }
+
+  persistState();
+
+  const cfg = PRODUCT_CONFIG[pid];
+  return {
+    productId: pid,
+    name: cfg.name,
+    totalGrams: cfg.totalGrams,
+    categoryIds: cfg.categoryIds || [],
+    variants: buildProductView(cfg),
+  };
+}
+
+// -----------------------------
+// NOUVEAU: Snapshot "catalog" pour le front
+// Retourne: { products:[...], categories:[...] }
+// -----------------------------
+function getCatalogSnapshot() {
+  const categories = listCategories ? listCategories() : [];
+
+  const products = Object.entries(PRODUCT_CONFIG).map(([productId, p]) => ({
+    productId,
+    name: p.name,
+    totalGrams: Number(p.totalGrams || 0),
+    categoryIds: Array.isArray(p.categoryIds) ? p.categoryIds : [],
+    variants: buildProductView(p),
+  }));
+
+  return { products, categories };
 }
 
 // -----------------------------
@@ -321,4 +435,9 @@ module.exports = {
   applyOrderToProduct,
   restockProduct,
   getStockSnapshot,
+
+  // nouveaux exports utilisés par server.js
+  upsertImportedProductConfig,
+  setProductCategories,
+  getCatalogSnapshot,
 };

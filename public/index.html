@@ -11,21 +11,30 @@
     <!-- Header -->
     <div class="header">
       <h1>🌿 CBD Stock Manager</h1>
+
+      <!-- Badge statut -->
       <span class="status-badge" id="statusBadge">
         <span class="loading"></span> Chargement...
       </span>
+
+      <!-- Infos serveur (remplies par app.js) -->
+      <div class="server-meta" style="margin-top:10px; color:#718096; font-weight:600;">
+        Mode: <span id="serverMode">-</span>
+      </div>
+      <!-- Le JS injecte ici le bloc tri/filtre/import -->
+      <!-- (catalogControls sera auto-ajouté dans .header) -->
     </div>
 
     <!-- Stats Grid -->
     <div class="stats-grid">
       <div class="stat-card">
         <h3>Produits actifs</h3>
-        <div class="value" id="productCount">-</div>
+        <div class="value" id="statProducts">-</div>
         <div class="label">Configurations actives</div>
       </div>
       <div class="stat-card">
         <h3>Stock total</h3>
-        <div class="value" id="totalStock">-</div>
+        <div class="value" id="statGrams">-</div>
         <div class="label">Grammes disponibles</div>
       </div>
       <div class="stat-card">
@@ -89,10 +98,16 @@ Bienvenue dans le gestionnaire de stock CBD ! 🌿
   • Mise à jour en temps réel du stock
   • Réapprovisionnement manuel
   • Tests de commandes simulées
+  • Import produits Shopify (auto variantes)
+  • Catégories + tri A→Z
+  • Export CSV (stock + mouvements)
 
 👆 Cliquez sur un bouton pour commencer...
       </div>
     </div>
+
+    <!-- (optionnel) Dernière MAJ (si ton JS veut l’afficher) -->
+    <div style="display:none" id="lastUpdate">-</div>
   </div>
 
   <!-- Restock Modal -->
@@ -129,7 +144,7 @@ Bienvenue dans le gestionnaire de stock CBD ! 🌿
         <h3 class="modal-title" id="productModalTitle">Détails du produit</h3>
         <button type="button" class="btn-close" onclick="closeProductModal()">✕</button>
       </div>
-      
+
       <div class="product-detail-grid">
         <!-- Stock Total -->
         <div class="detail-section">
@@ -146,9 +161,7 @@ Bienvenue dans le gestionnaire de stock CBD ! 🌿
         <!-- Variantes -->
         <div class="detail-section">
           <h4>📦 Variantes disponibles</h4>
-          <div id="variantsList" class="variants-list">
-            <!-- Les variantes seront insérées ici -->
-          </div>
+          <div id="variantsList" class="variants-list"></div>
         </div>
       </div>
 

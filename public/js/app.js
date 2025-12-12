@@ -1,87 +1,230 @@
 // ============================================
-// VARIABLES GLOBALES
+// BULK STOCK MANAGER - Front (Admin UI)
+// + Import produits Shopify
+// + Catégories (tri/filtre)
+// + Tri alphabétique
+// + Alertes stock bas
+// + Export CSV
 // ============================================
+
+// --------------------------------------------
+// Références DOM existantes
+// --------------------------------------------
 const result = document.getElementById('result');
-let stockData = {};
+let stockData = {};       // legacy map: { [productId]: {name,totalGrams,variants,...} }
+let catalogData = null;   // new API: { products:[], categories:[] }
 let serverInfo = {};
 let currentProductId = null;
+
+let currentCategoryFilter = '';
+let sortAlpha = true; // par défaut A->Z
+let categories = [];  // [{id,name}]
 
 // ============================================
 // FONCTIONS UTILITAIRES
 // ============================================
 function log(message, type = 'info') {
   const timestamp = new Date().toLocaleTimeString('fr-FR');
+  if (!result) return;
   result.textContent = `[${timestamp}] ${message}`;
   result.className = 'result-content ' + type;
   result.scrollTop = result.scrollHeight;
 }
 
+function qs(sel) { return document.querySelector(sel); }
+function el(id) { return document.getElementById(id); }
+
+function escapeHtml(str) {
+  return String(str ?? '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
 // ============================================
-// RÉCUPÉRATION DES INFOS SERVEUR
+// UI: Ajout barre de tri/filtre/import si absente
+// ============================================
+function ensureCatalogControls() {
+  // On essaye d'accrocher ça au header si possible
+  const header = document.querySelector('.header');
+  if (!header) return;
+
+  if (document.getElementById('catalogControls')) return;
+
+  const wrap = document.createElement('div');
+  wrap.id = 'catalogControls';
+  wrap.className = 'catalog-controls';
+
+  wrap.innerHTML = `
+    <div class="catalog-row">
+      <div class="field">
+        <label>Catégorie</label>
+        <select id="categoryFilter">
+          <option value="">Toutes</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label>Tri</label>
+        <select id="sortMode">
+          <option value="alpha">A → Z</option>
+          <option value="none">Par défaut</option>
+        </select>
+      </div>
+
+      <div class="catalog-actions">
+        <button class="btn btn-secondary btn-sm" id="btnCategories">📁 Catégories</button>
+        <button class="btn btn-primary btn-sm" id="btnImport">➕ Import Shopify</button>
+        <button class="btn btn-info btn-sm" id="btnExportStock">⬇️ Stock CSV</button>
+        <button class="btn btn-secondary btn-sm" id="btnExportMovements">⬇️ Mouvements CSV</button>
+      </div>
+    </div>
+  `;
+  header.appendChild(wrap);
+
+  // Events
+  el('categoryFilter').addEventListener('change', async (e) => {
+    currentCategoryFilter = e.target.value || '';
+    await refreshStock();
+  });
+  el('sortMode').addEventListener('change', async (e) => {
+    sortAlpha = e.target.value === 'alpha';
+    await refreshStock();
+  });
+  el('btnImport').addEventListener('click', openImportModal);
+  el('btnCategories').addEventListener('click', openCategoriesModal);
+  el('btnExportStock').addEventListener('click', () => {
+    window.location.href = '/api/stock.csv';
+  });
+  el('btnExportMovements').addEventListener('click', () => {
+    // Par défaut sur la rétention du plan côté serveur
+    window.location.href = '/api/movements.csv';
+  });
+}
+
+// ============================================
+// SERVER INFO
 // ============================================
 async function getServerInfo() {
   try {
     const res = await fetch('/api/server-info');
     serverInfo = await res.json();
-    updateServerInfo(serverInfo);
+
+    const badge = document.getElementById('serverStatus');
+    const mode = document.getElementById('serverMode');
+    const count = document.getElementById('productCount');
+
+    if (badge) {
+      badge.classList.remove('online', 'dev');
+      badge.classList.add('online');
+      badge.innerHTML = `🟢 En ligne`;
+    }
+    if (mode) mode.textContent = serverInfo.mode || 'development';
+    if (count) count.textContent = serverInfo.productCount ?? '0';
   } catch (err) {
-    console.error('Erreur récupération infos serveur:', err);
+    log('❌ Impossible de récupérer les infos serveur: ' + err.message, 'error');
   }
 }
 
-function updateServerInfo(info) {
-  const statusBadge = document.getElementById('statusBadge');
-  const isProduction = info.mode === 'production';
-  
-  statusBadge.className = 'status-badge ' + (isProduction ? 'online' : 'dev');
-  statusBadge.textContent = isProduction ? '🔴 Production' : '🟡 Développement';
-
-  document.getElementById('webhookStatus').textContent = '✅';
-  document.getElementById('webhookLabel').textContent = `Actif sur port ${info.port}`;
-
-  document.getElementById('hmacStatus').textContent = info.hmacEnabled ? '🔒' : '⚠️';
-  document.getElementById('hmacLabel').textContent = info.hmacEnabled ? 'Activée' : 'Désactivée (DEV)';
-}
-
 // ============================================
-// GESTION DU STOCK
+// STOCK (supporte 2 formats API)
+// - Ancien: { [id]: {name,totalGrams,variants} }
+// - Nouveau: { products:[...], categories:[...] }
 // ============================================
 async function refreshStock() {
+  ensureCatalogControls();
+
   log('⏳ Actualisation du stock...', 'info');
   try {
-    const res = await fetch('/api/stock');
-    stockData = await res.json();
-    
+    const url = new URL(window.location.origin + '/api/stock');
+    if (sortAlpha) url.searchParams.set('sort', 'alpha');
+    if (currentCategoryFilter) url.searchParams.set('category', currentCategoryFilter);
+
+    const res = await fetch(url.pathname + url.search);
+    const data = await res.json();
+
+    // Format nouveau
+    if (data && Array.isArray(data.products)) {
+      catalogData = data;
+      categories = Array.isArray(data.categories) ? data.categories : [];
+
+      // Convert vers format legacy pour réutiliser ton UI existante
+      const map = {};
+      for (const p of data.products) {
+        map[p.productId] = {
+          name: p.name,
+          totalGrams: p.totalGrams,
+          variants: p.variants || {},
+          categoryIds: p.categoryIds || [],
+        };
+      }
+      stockData = map;
+      updateCategoryFilterOptions();
+      displayProducts(stockData);
+      updateStats(stockData);
+
+      log('✅ Stock actualisé (catalog)\n\n' + JSON.stringify(data, null, 2), 'success');
+      return;
+    }
+
+    // Format legacy
+    stockData = data || {};
     displayProducts(stockData);
     updateStats(stockData);
-    
-    log('✅ STOCK ACTUALISÉ\n\n' + JSON.stringify(stockData, null, 2), 'success');
+    log('✅ Stock actualisé\n\n' + JSON.stringify(stockData, null, 2), 'success');
   } catch (err) {
     log('❌ ERREUR: ' + err.message, 'error');
   }
 }
 
+function updateCategoryFilterOptions() {
+  const sel = el('categoryFilter');
+  if (!sel) return;
+
+  const current = sel.value;
+  sel.innerHTML = `<option value="">Toutes</option>` + categories
+    .slice()
+    .sort((a, b) => String(a.name).localeCompare(String(b.name), 'fr'))
+    .map(c => `<option value="${escapeHtml(c.id)}">${escapeHtml(c.name)}</option>`)
+    .join('');
+
+  if (current) sel.value = current;
+}
+
+// ============================================
+// AFFICHAGE PRODUITS (liste actuelle)
+// ============================================
 function displayProducts(stock) {
   const productList = document.getElementById('productList');
+  if (!productList) return;
+
   const products = Object.entries(stock);
-  
+
   if (products.length === 0) {
     productList.innerHTML = '<div style="text-align: center; padding: 40px; color: #a0aec0;">Aucun produit configuré</div>';
     return;
   }
 
   productList.innerHTML = products.map(([id, product]) => {
-    const maxGrams = 1000; // Ajustable selon vos besoins
-    const percentage = Math.min((product.totalGrams / maxGrams) * 100, 100);
-    
+    const total = Number(product.totalGrams || 0);
+    const percent = Math.max(0, Math.min(100, Math.round((total / 200) * 100))); // jauge visuelle
+    const lowClass = total <= Number(serverInfo?.lowStockThreshold || 10) ? ' low' : '';
+    const cats = Array.isArray(product.categoryIds) ? product.categoryIds : [];
+    const catNames = cats
+      .map(cid => categories.find(c => c.id === cid)?.name)
+      .filter(Boolean);
+
     return `
-      <div class="product-item" onclick="openProductModal('${id}')">
+      <div class="product-item${lowClass}" onclick="openProductModal('${id}')">
         <div class="product-header">
-          <span class="product-name">${product.name}</span>
-          <span class="product-stock">${product.totalGrams}g</span>
+          <div>
+            <div class="product-name">${escapeHtml(product.name)}</div>
+            ${catNames.length ? `<div class="product-cats">${catNames.map(n => `<span class="pill">${escapeHtml(n)}</span>`).join('')}</div>` : ''}
+          </div>
+          <div class="product-stock">${total}g</div>
         </div>
         <div class="stock-bar">
-          <div class="stock-bar-fill" style="width: ${percentage}%"></div>
+          <div class="stock-bar-fill" style="width:${percent}%"></div>
         </div>
       </div>
     `;
@@ -89,22 +232,28 @@ function displayProducts(stock) {
 }
 
 function updateStats(stock) {
-  const totalGrams = Object.values(stock).reduce((sum, p) => sum + p.totalGrams, 0);
-  const productCount = Object.keys(stock).length;
-  
-  document.getElementById('totalStock').textContent = totalGrams + 'g';
-  document.getElementById('productCount').textContent = productCount;
+  const products = Object.values(stock || {});
+  const totalProducts = products.length;
+  const totalGrams = products.reduce((acc, p) => acc + Number(p.totalGrams || 0), 0);
+
+  const countEl = document.getElementById('statProducts');
+  const gramsEl = document.getElementById('statGrams');
+  const lastEl = document.getElementById('lastUpdate');
+
+  if (countEl) countEl.textContent = totalProducts;
+  if (gramsEl) gramsEl.textContent = `${totalGrams}g`;
+  if (lastEl) lastEl.textContent = new Date().toLocaleString('fr-FR');
 }
 
 // ============================================
-// TEST DE COMMANDE
+// TEST COMMANDE
 // ============================================
 async function testOrder() {
   log('⏳ Traitement de la commande test en cours...', 'info');
   try {
     const res = await fetch('/api/test-order', { method: 'POST' });
     const data = await res.json();
-    log('✅ COMMANDE TEST TRAITÉE AVEC SUCCÈS\n\n' + JSON.stringify(data, null, 2), 'success');
+    log('✅ COMMANDE TEST TRAITÉE\n\n' + JSON.stringify(data, null, 2), 'success');
     await refreshStock();
   } catch (err) {
     log('❌ ERREUR: ' + err.message, 'error');
@@ -112,155 +261,386 @@ async function testOrder() {
 }
 
 // ============================================
-// RÉAPPROVISIONNEMENT
+// RÉAPPROVISIONNEMENT (existant)
 // ============================================
 function openRestockModal() {
   const modal = document.getElementById('restockModal');
   const select = document.getElementById('productSelect');
-  
+  if (!modal || !select) return;
+
   select.innerHTML = '<option value="">Sélectionnez un produit...</option>' +
-    Object.entries(stockData).map(([id, product]) => 
-      `<option value="${id}">${product.name} (Stock actuel: ${product.totalGrams}g)</option>`
+    Object.entries(stockData).map(([id, product]) =>
+      `<option value="${id}">${escapeHtml(product.name)} (Stock actuel: ${Number(product.totalGrams || 0)}g)</option>`
     ).join('');
-  
+
   modal.classList.add('active');
 }
 
 function closeRestockModal() {
-  document.getElementById('restockModal').classList.remove('active');
-  document.getElementById('restockForm').reset();
-}
-
-async function submitRestock(event) {
-  event.preventDefault();
-  
-  const productId = document.getElementById('productSelect').value;
-  const grams = document.getElementById('gramsInput').value;
-  
-  closeRestockModal();
-  log(`⏳ Réapprovisionnement de ${grams}g en cours...`, 'info');
-  
-  try {
-    const res = await fetch('/api/restock', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ productId, grams: Number(grams) })
-    });
-    const data = await res.json();
-    log(`♻️ RÉAPPROVISIONNEMENT RÉUSSI\n\n${JSON.stringify(data, null, 2)}`, 'success');
-    await refreshStock();
-  } catch (err) {
-    log('❌ ERREUR: ' + err.message, 'error');
-  }
+  const m = el('restockModal');
+  if (m) m.classList.remove('active');
+  const f = el('restockForm');
+  if (f) f.reset();
 }
 
 // ============================================
-// EVENT LISTENERS
-// ============================================
-document.getElementById('restockModal').addEventListener('click', (e) => {
-  if (e.target.id === 'restockModal') {
-    closeRestockModal();
-  }
-});
-
-document.getElementById('productModal').addEventListener('click', (e) => {
-  if (e.target.id === 'productModal') {
-    closeProductModal();
-  }
-});
-
-// ============================================
-// GESTION DU MODAL PRODUIT
+// MODAL PRODUIT (existant + assign catégories)
 // ============================================
 function openProductModal(productId) {
   currentProductId = productId;
   const product = stockData[productId];
-  
-  if (!product) {
-    log('❌ Produit introuvable', 'error');
-    return;
+  if (!product) return;
+
+  const title = el('productModalTitle');
+  const totalInput = el('totalGramsInput');
+
+  if (title) title.textContent = `📦 ${product.name}`;
+  if (totalInput) totalInput.value = Number(product.totalGrams || 0);
+
+  displayVariants(product.variants);
+
+  // Inject categories selector in modal (once)
+  ensureProductCategoriesUI();
+
+  // Set current categories
+  const catSelect = el('productCategoriesSelect');
+  if (catSelect) {
+    const ids = Array.isArray(product.categoryIds) ? product.categoryIds : [];
+    for (const opt of Array.from(catSelect.options)) {
+      opt.selected = ids.includes(opt.value);
+    }
   }
 
-  // Mettre à jour le titre
-  document.getElementById('productModalTitle').textContent = `📦 ${product.name}`;
-  
-  // Mettre à jour le stock total
-  document.getElementById('totalGramsInput').value = product.totalGrams;
-  
-  // Afficher les variantes
-  displayVariants(product.variants);
-  
-  // Ouvrir le modal
-  document.getElementById('productModal').classList.add('active');
+  el('productModal')?.classList.add('active');
 }
 
 function closeProductModal() {
-  document.getElementById('productModal').classList.remove('active');
+  el('productModal')?.classList.remove('active');
   currentProductId = null;
 }
 
 function displayVariants(variants) {
   const variantsList = document.getElementById('variantsList');
-  
-  const variantsArray = Object.entries(variants);
-  
+  if (!variantsList) return;
+
+  const variantsArray = Object.entries(variants || {});
   if (variantsArray.length === 0) {
     variantsList.innerHTML = '<div style="text-align: center; padding: 20px; color: #a0aec0;">Aucune variante configurée</div>';
     return;
   }
 
   variantsList.innerHTML = variantsArray.map(([label, variant]) => {
+    const canSell = Number(variant.canSell ?? 0);
     let stockClass = 'high';
-    if (variant.canSell === 0) stockClass = 'low';
-    else if (variant.canSell < 5) stockClass = 'medium';
-    
+    if (canSell <= 2) stockClass = 'low';
+    else if (canSell <= 10) stockClass = 'medium';
+
     return `
-      <div class="variant-item">
-        <div class="variant-info">
-          <div class="variant-name">${label}</div>
-          <div class="variant-details">
-            ${variant.gramsPerUnit}g par unité
-          </div>
-        </div>
-        <div class="variant-stock ${stockClass}">
-          ${variant.canSell} unité${variant.canSell > 1 ? 's' : ''}
-        </div>
+      <div class="variant-item ${stockClass}">
+        <div class="variant-label">${escapeHtml(label)}g</div>
+        <div class="variant-stock">${canSell} unité(s)</div>
       </div>
     `;
   }).join('');
 }
 
-async function updateTotalStock() {
-  const newTotal = parseFloat(document.getElementById('totalGramsInput').value);
-  
-  if (isNaN(newTotal) || newTotal < 0) {
-    log('❌ Quantité invalide', 'error');
+// Ajoute une UI multi-select de catégories dans le modal produit
+function ensureProductCategoriesUI() {
+  const modalContent = document.querySelector('#productModal .modal-content');
+  if (!modalContent) return;
+  if (el('productCategoriesSelect')) return;
+
+  const block = document.createElement('div');
+  block.className = 'form-group';
+  block.innerHTML = `
+    <label>Catégories</label>
+    <select id="productCategoriesSelect" multiple size="5"></select>
+    <div class="hint">Astuce : Ctrl (Windows) / Cmd (Mac) pour sélectionner plusieurs.</div>
+    <div style="margin-top:10px; display:flex; gap:10px;">
+      <button type="button" class="btn btn-secondary btn-sm" id="btnSaveCategories">💾 Enregistrer catégories</button>
+    </div>
+  `;
+
+  // Insère avant les boutons du modal (si existants)
+  const buttons = modalContent.querySelector('.modal-buttons');
+  if (buttons) modalContent.insertBefore(block, buttons);
+  else modalContent.appendChild(block);
+
+  // Fill options
+  updateProductCategoriesOptions();
+
+  // Save categories
+  el('btnSaveCategories')?.addEventListener('click', saveProductCategories);
+}
+
+function updateProductCategoriesOptions() {
+  const sel = el('productCategoriesSelect');
+  if (!sel) return;
+
+  sel.innerHTML = categories
+    .slice()
+    .sort((a, b) => String(a.name).localeCompare(String(b.name), 'fr'))
+    .map(c => `<option value="${escapeHtml(c.id)}">${escapeHtml(c.name)}</option>`)
+    .join('');
+}
+
+async function saveProductCategories() {
+  if (!currentProductId) return;
+  const sel = el('productCategoriesSelect');
+  if (!sel) return;
+
+  const categoryIds = Array.from(sel.selectedOptions).map(o => o.value);
+
+  try {
+    const res = await fetch(`/api/products/${encodeURIComponent(currentProductId)}/categories`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ categoryIds }),
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data?.error || 'Erreur');
+
+    log('✅ Catégories enregistrées\n\n' + JSON.stringify(data, null, 2), 'success');
+    await refreshStock();
+  } catch (e) {
+    log('❌ Erreur catégories: ' + e.message, 'error');
+  }
+}
+
+// ============================================
+// MODAL: Catégories (CRUD simple)
+// ============================================
+function openCategoriesModal() {
+  let modal = el('categoriesModal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'categoriesModal';
+    modal.className = 'modal';
+    modal.innerHTML = `
+      <div class="modal-content">
+        <div class="modal-title">📁 Catégories</div>
+
+        <div class="info-box">
+          Crée des catégories pour trier tes produits (ex: Fleurs, Résines, Gummies…).
+        </div>
+
+        <div class="catalog-modal-row">
+          <input id="newCategoryName" placeholder="Nom de catégorie (ex: Fleurs)" />
+          <button class="btn btn-primary btn-sm" id="btnAddCategory">Ajouter</button>
+        </div>
+
+        <div id="categoriesList" class="categories-list"></div>
+
+        <div class="modal-buttons">
+          <button class="btn btn-secondary" id="btnCloseCategories">Fermer</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+
+    el('btnCloseCategories').addEventListener('click', () => modal.classList.remove('active'));
+    el('btnAddCategory').addEventListener('click', async () => {
+      const name = el('newCategoryName').value.trim();
+      if (!name) return;
+      try {
+        const res = await fetch('/api/categories', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data?.error || 'Erreur');
+        el('newCategoryName').value = '';
+        await loadCategories();
+        await refreshStock();
+      } catch (e) {
+        log('❌ Erreur création catégorie: ' + e.message, 'error');
+      }
+    });
+  }
+
+  renderCategoriesList();
+  modal.classList.add('active');
+}
+
+async function loadCategories() {
+  try {
+    const res = await fetch('/api/categories');
+    const data = await res.json();
+    categories = Array.isArray(data.categories) ? data.categories : [];
+    updateCategoryFilterOptions();
+    updateProductCategoriesOptions();
+  } catch (e) {
+    log('❌ Erreur chargement catégories: ' + e.message, 'error');
+  }
+}
+
+function renderCategoriesList() {
+  const list = el('categoriesList');
+  if (!list) return;
+
+  const sorted = categories.slice().sort((a, b) => String(a.name).localeCompare(String(b.name), 'fr'));
+  if (!sorted.length) {
+    list.innerHTML = `<div style="color:#a0aec0; padding:10px;">Aucune catégorie</div>`;
     return;
   }
 
-  log(`⏳ Mise à jour du stock total à ${newTotal}g...`, 'info');
-  
+  list.innerHTML = sorted.map(c => `
+    <div class="category-item">
+      <div class="category-name">${escapeHtml(c.name)}</div>
+      <div class="category-actions">
+        <button class="btn btn-secondary btn-sm" data-act="rename" data-id="${escapeHtml(c.id)}">Renommer</button>
+        <button class="btn btn-secondary btn-sm" data-act="delete" data-id="${escapeHtml(c.id)}">Supprimer</button>
+      </div>
+    </div>
+  `).join('');
+
+  list.querySelectorAll('button[data-act]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id = btn.getAttribute('data-id');
+      const act = btn.getAttribute('data-act');
+      try {
+        if (act === 'rename') {
+          const name = prompt('Nouveau nom de la catégorie ?');
+          if (!name) return;
+          const res = await fetch(`/api/categories/${encodeURIComponent(id)}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: name.trim() }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data?.error || 'Erreur');
+        } else if (act === 'delete') {
+          if (!confirm('Supprimer cette catégorie ?')) return;
+          const res = await fetch(`/api/categories/${encodeURIComponent(id)}`, { method: 'DELETE' });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data?.error || 'Erreur');
+        }
+        await loadCategories();
+        await refreshStock();
+        renderCategoriesList();
+      } catch (e) {
+        log('❌ Erreur catégorie: ' + e.message, 'error');
+      }
+    });
+  });
+}
+
+// ============================================
+// MODAL: Import Shopify
+// ============================================
+function openImportModal() {
+  let modal = el('importModal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'importModal';
+    modal.className = 'modal';
+    modal.innerHTML = `
+      <div class="modal-content modal-wide">
+        <div class="modal-title">➕ Import depuis Shopify</div>
+
+        <div class="import-toolbar">
+          <input id="importQuery" placeholder="Rechercher un produit (ex: amnesia)" />
+          <button class="btn btn-info btn-sm" id="btnSearchShopify">Rechercher</button>
+
+          <div class="field">
+            <label>Catégorie (optionnel)</label>
+            <select id="importCategory">
+              <option value="">Aucune</option>
+            </select>
+          </div>
+        </div>
+
+        <div id="importResults" class="import-results"></div>
+
+        <div class="modal-buttons">
+          <button class="btn btn-secondary" id="btnCloseImport">Fermer</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+
+    el('btnCloseImport').addEventListener('click', () => modal.classList.remove('active'));
+    el('btnSearchShopify').addEventListener('click', () => searchShopifyProducts());
+  }
+
+  // Populate categories dropdown
+  const sel = el('importCategory');
+  if (sel) {
+    sel.innerHTML = `<option value="">Aucune</option>` + categories
+      .slice()
+      .sort((a, b) => String(a.name).localeCompare(String(b.name), 'fr'))
+      .map(c => `<option value="${escapeHtml(c.id)}">${escapeHtml(c.name)}</option>`)
+      .join('');
+  }
+
+  el('importResults').innerHTML = `<div style="color:#a0aec0; padding:10px;">Lance une recherche pour afficher tes produits Shopify.</div>`;
+  modal.classList.add('active');
+}
+
+async function searchShopifyProducts() {
+  const q = el('importQuery')?.value?.trim() || '';
+  const results = el('importResults');
+  if (!results) return;
+
+  results.innerHTML = `<div class="import-loading">⏳ Recherche en cours...</div>`;
+
   try {
-    const res = await fetch('/api/set-total-stock', {
+    const url = new URL(window.location.origin + '/api/shopify/products');
+    url.searchParams.set('limit', '100');
+    if (q) url.searchParams.set('query', q);
+
+    const res = await fetch(url.pathname + url.search);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data?.error || 'Erreur');
+
+    const items = Array.isArray(data.products) ? data.products : [];
+    if (!items.length) {
+      results.innerHTML = `<div style="color:#a0aec0; padding:10px;">Aucun produit trouvé.</div>`;
+      return;
+    }
+
+    results.innerHTML = items.map(p => `
+      <div class="import-item">
+        <div class="import-main">
+          <div class="import-title">${escapeHtml(p.title)}</div>
+          <div class="import-sub">ID: ${escapeHtml(p.id)} • Variantes: ${escapeHtml(p.variantsCount ?? '?')}</div>
+        </div>
+        <button class="btn btn-primary btn-sm" data-import="${escapeHtml(p.id)}">Importer</button>
+      </div>
+    `).join('');
+
+    results.querySelectorAll('button[data-import]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const productId = btn.getAttribute('data-import');
+        await importProduct(productId);
+      });
+    });
+  } catch (e) {
+    results.innerHTML = `<div style="color:#f56565; padding:10px;">Erreur: ${escapeHtml(e.message)}</div>`;
+  }
+}
+
+async function importProduct(productId) {
+  const cat = el('importCategory')?.value || '';
+  const categoryIds = cat ? [cat] : [];
+
+  log(`⏳ Import du produit Shopify ${productId}...`, 'info');
+  try {
+    const res = await fetch('/api/import/product', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        productId: currentProductId, 
-        totalGrams: newTotal 
-      })
+      body: JSON.stringify({ productId, categoryIds, gramsMode: 'parse_title' }),
     });
-    
-    if (!res.ok) {
-      throw new Error('Erreur lors de la mise à jour');
-    }
-    
     const data = await res.json();
-    log(`✅ STOCK MIS À JOUR\n\n${JSON.stringify(data, null, 2)}`, 'success');
-    
+    if (!res.ok) throw new Error(data?.error || 'Erreur');
+
+    log('✅ Produit importé\n\n' + JSON.stringify(data, null, 2), 'success');
+
     await refreshStock();
-    closeProductModal();
-  } catch (err) {
-    log('❌ ERREUR: ' + err.message, 'error');
+  } catch (e) {
+    log('❌ Import échoué: ' + e.message, 'error');
   }
 }
 
@@ -269,5 +649,13 @@ async function updateTotalStock() {
 // ============================================
 window.addEventListener('load', async () => {
   await getServerInfo();
+  await loadCategories();
   await refreshStock();
+
+  // expose functions used in onclick in HTML
+  window.openProductModal = openProductModal;
+  window.openRestockModal = openRestockModal;
+  window.closeRestockModal = closeRestockModal;
+  window.closeProductModal = closeProductModal;
+  window.testOrder = testOrder;
 });

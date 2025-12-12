@@ -1,9 +1,10 @@
 // server.js
 // ============================================
-// GESTIONNAIRE DE STOCK CBD POUR SHOPIFY
-// PRÊT POUR RENDER (PORT + 0.0.0.0 + /health)
-// + LOGS STRUCTURÉS JSON
-// + HISTORIQUE DES MOUVEMENTS (rotation par JOUR)
+// BULK STOCK MANAGER (Shopify) - Render Ready
+// - Webhook orders/create (HMAC)
+// - Source de vérité = app (écrase Shopify)
+// - Mouvements + logs JSON structurés + CSV export
+// - Catégories + import produits Shopify + tri alpha
 // ============================================
 
 if (process.env.NODE_ENV !== "production") {
@@ -15,18 +16,32 @@ const crypto = require("crypto");
 const path = require("path");
 
 const { getShopifyClient } = require("./shopifyClient");
+
+// Stock
 const {
   PRODUCT_CONFIG,
   applyOrderToProduct,
-  getStockSnapshot,
   restockProduct,
+  getStockSnapshot,
+  setProductCategories,
+  upsertImportedProductConfig,
+  getCatalogSnapshot,
 } = require("./stockManager");
 
-const { addMovement, listMovements, purgeOld } = require("./movementStore");
+// Mouvements
+const { addMovement, listMovements, toCSV, clearMovements } = require("./movementStore");
 
-// ============================================
-// LOG JSON (Render-friendly)
-// ============================================
+// Catégories (adapter si ton fichier a des noms différents)
+const {
+  listCategories,
+  createCategory,
+  renameCategory,
+  deleteCategory,
+} = require("./catalogStore");
+
+const app = express();
+
+// ============ Helpers ============
 function logEvent(event, data = {}, level = "info") {
   console.log(
     JSON.stringify({
@@ -38,556 +53,434 @@ function logEvent(event, data = {}, level = "info") {
   );
 }
 
-// ============================================
-// PLAN / RÉTENTION
-// ============================================
-const PLAN = (process.env.PLAN || "free").toLowerCase();
-const RETENTION_BY_PLAN = {
-  free: 7,
-  starter: 30,
-  pro: 90,
-  unlimited: 365,
-};
-const RETENTION_DAYS = RETENTION_BY_PLAN[PLAN] ?? 7;
-
-// Nettoyage des anciens fichiers de mouvements au boot
-try {
-  purgeOld(RETENTION_DAYS);
-  logEvent("movements_purged_on_boot", { retentionDays: RETENTION_DAYS, plan: PLAN });
-} catch (e) {
-  logEvent("movements_purge_error", { message: e.message }, "warn");
+function verifyShopifyWebhook(rawBodyBuffer, hmacHeader) {
+  const secret = process.env.SHOPIFY_WEBHOOK_SECRET;
+  if (!secret) return true; // dev
+  const hash = crypto.createHmac("sha256", secret).update(rawBodyBuffer).digest("base64");
+  return hash === hmacHeader;
 }
 
-// ============================================
-// EXPRESS
-// ============================================
-const app = express();
+function parseGramsFromVariantTitle(variantTitle = "") {
+  // ex: "1.5", "3", "10 g", "25G", "50"
+  const m = String(variantTitle).match(/([\d.,]+)/);
+  if (!m) return null;
+  return parseFloat(m[1].replace(",", "."));
+}
 
-// --------------------------------------------
-// Static files
-// --------------------------------------------
+// ============ Middlewares ============
 app.use(express.static(path.join(__dirname, "public")));
 
-// --------------------------------------------
-// Health
-// --------------------------------------------
-app.get("/health", (req, res) => res.status(200).send("ok"));
-
-// --------------------------------------------
-// CORS
-// --------------------------------------------
+// CORS (si tu utilises l’UI dans un iframe Shopify / admin)
 app.use((req, res, next) => {
   res.header("Access-Control-Allow-Origin", "*");
   res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-  res.header(
-    "Access-Control-Allow-Headers",
-    "Content-Type, Authorization, X-Shopify-Hmac-Sha256"
-  );
+  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Shopify-Hmac-Sha256");
   if (req.method === "OPTIONS") return res.sendStatus(200);
   next();
 });
 
-// --------------------------------------------
-// CSP pour Shopify Admin (embedded-safe)
-// --------------------------------------------
+// CSP Shopify Admin
 app.use((req, res, next) => {
-  const shopDomain = process.env.SHOP_NAME
-    ? `https://${process.env.SHOP_NAME}.myshopify.com`
-    : "*";
-  res.setHeader(
-    "Content-Security-Policy",
-    `frame-ancestors https://admin.shopify.com ${shopDomain};`
-  );
+  const shopDomain = process.env.SHOP_NAME ? `https://${process.env.SHOP_NAME}.myshopify.com` : "*";
+  res.setHeader("Content-Security-Policy", `frame-ancestors https://admin.shopify.com ${shopDomain};`);
   next();
 });
 
-// ============================================
-// SHOPIFY CLIENT
-// ============================================
+// JSON pour toutes les routes API classiques
+app.use("/api", express.json({ limit: "1mb" }));
+
+// Healthcheck Render
+app.get("/health", (req, res) => res.status(200).send("ok"));
+
+// Shopify client
 const shopify = getShopifyClient();
 
-// ============================================
-// HMAC Verification
-// ============================================
-function verifyShopifyWebhook(rawBodyBuffer, hmacHeader) {
-  const secret = process.env.SHOPIFY_WEBHOOK_SECRET;
-  if (!secret) {
-    logEvent("hmac_bypass_no_secret", {}, "warn");
-    return true;
-  }
+// ============ Webhook Shopify (RAW BODY) ============
+// IMPORTANT: express.raw uniquement ici, sinon HMAC faux
+app.post(
+  "/webhooks/orders/create",
+  express.raw({ type: "application/json" }),
+  async (req, res) => {
+    const isProduction = process.env.NODE_ENV === "production";
+    const skipHmac = process.env.SKIP_HMAC_VALIDATION === "true";
+    const hmacHeader = req.get("X-Shopify-Hmac-Sha256");
 
-  const hash = crypto
-    .createHmac("sha256", secret)
-    .update(rawBodyBuffer)
-    .digest("base64");
+    logEvent("webhook_received", { mode: isProduction ? "production" : "dev" });
 
-  return hash === hmacHeader;
-}
-
-// ============================================
-// Update Shopify inventory from app state
-// ============================================
-async function updateProductStock(productId, gramsToSubtract, context = {}) {
-  const before = PRODUCT_CONFIG?.[productId]?.totalGrams ?? null;
-
-  const update = applyOrderToProduct(productId, gramsToSubtract);
-  if (!update) {
-    logEvent("product_not_configured", { productId, ...context }, "warn");
-    return null;
-  }
-
-  // Écrase Shopify selon ton stock interne (source de vérité = app)
-  for (const [label, variantCfg] of Object.entries(update.variants)) {
-    const unitsAvailable = variantCfg.canSell;
     try {
-      await shopify.inventoryLevel.set({
-        location_id: process.env.LOCATION_ID,
-        inventory_item_id: variantCfg.inventoryItemId,
-        available: unitsAvailable,
-      });
-    } catch (error) {
-      logEvent(
-        "shopify_inventory_set_error",
-        {
-          productId,
-          label,
-          inventoryItemId: variantCfg.inventoryItemId,
-          message: error.message,
-          ...context,
-        },
-        "error"
-      );
-    }
-  }
+      const rawBody = req.body; // Buffer
 
-  const after = update.totalGrams;
-
-  logEvent("stock_updated", {
-    productId,
-    productName: update.name,
-    gramsDelta: -Number(gramsToSubtract || 0),
-    gramsBefore: before,
-    gramsAfter: after,
-    ...context,
-  });
-
-  return { before, after, update };
-}
-
-// ============================================
-// WEBHOOK orders/create
-// ============================================
-app.post("/webhooks/orders/create", (req, res) => {
-  const isProduction = process.env.NODE_ENV === "production";
-  const skipHmac = process.env.SKIP_HMAC_VALIDATION === "true";
-  const hmacHeader = req.get("X-Shopify-Hmac-Sha256");
-
-  const requestId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-
-  logEvent("webhook_received", {
-    requestId,
-    path: "/webhooks/orders/create",
-    mode: isProduction ? "production" : "dev",
-  });
-
-  const chunks = [];
-  req.on("data", (chunk) => chunks.push(chunk));
-
-  req.on("end", async () => {
-    try {
-      if (chunks.length === 0) {
-        logEvent("webhook_no_body", { requestId }, "warn");
-        return res.sendStatus(400);
-      }
-
-      const rawBody = Buffer.concat(chunks);
-
-      // HMAC validation in production
+      // HMAC en prod
       if (isProduction && process.env.SHOPIFY_WEBHOOK_SECRET && !skipHmac) {
         if (!hmacHeader) {
-          logEvent("webhook_hmac_missing", { requestId }, "warn");
+          logEvent("webhook_hmac_missing", {}, "warn");
           return res.sendStatus(401);
         }
-        const isValid = verifyShopifyWebhook(rawBody, hmacHeader);
-        if (!isValid) {
-          logEvent("webhook_hmac_invalid", { requestId }, "warn");
+        const ok = verifyShopifyWebhook(rawBody, hmacHeader);
+        if (!ok) {
+          logEvent("webhook_hmac_invalid", {}, "warn");
           return res.sendStatus(401);
         }
-        logEvent("webhook_hmac_valid", { requestId });
-      } else {
-        logEvent("webhook_hmac_skipped", { requestId, reason: skipHmac ? "SKIP_HMAC_VALIDATION" : "not_production_or_no_secret" }, "warn");
+        logEvent("webhook_hmac_valid");
       }
 
       let order;
       try {
         order = JSON.parse(rawBody.toString("utf8"));
-      } catch (e) {
-        logEvent("webhook_json_parse_error", { requestId }, "warn");
+      } catch {
+        logEvent("webhook_json_parse_error", {}, "warn");
         return res.sendStatus(400);
       }
 
       if (!order?.id || !Array.isArray(order?.line_items)) {
-        logEvent("webhook_invalid_payload", { requestId }, "warn");
+        logEvent("webhook_invalid_payload", { hasId: !!order?.id }, "warn");
         return res.sendStatus(200);
       }
 
       logEvent("order_received", {
-        requestId,
         orderId: String(order.id),
-        orderName: order.name || null,
-        lineItems: order.line_items.length,
+        orderName: String(order.name || ""),
+        lineCount: order.line_items.length,
       });
 
+      // applique chaque ligne à ton pool de grammes
       for (const item of order.line_items) {
-        const productId = item?.product_id ? String(item.product_id) : null;
-        const variantTitle = item?.variant_title || "";
-        const quantity = Number(item?.quantity || 0);
+        if (!item?.product_id) continue;
 
-        if (!productId) continue;
+        const productId = String(item.product_id);
+        const variantTitle = String(item.variant_title || "");
+        const quantity = Number(item.quantity || 0);
 
-        if (!PRODUCT_CONFIG[productId]) {
-          logEvent("skip_line_item", {
-            requestId,
-            orderId: String(order.id),
-            reason: "product_not_in_config",
-            productId,
-            title: item?.title || null,
-          });
-          continue;
-        }
+        if (!PRODUCT_CONFIG[productId]) continue;
 
-        if (!variantTitle) {
-          logEvent("skip_line_item", {
-            requestId,
-            orderId: String(order.id),
-            reason: "missing_variant_title",
-            productId,
-            title: item?.title || null,
-          });
-          continue;
-        }
+        const gramsPerUnit = parseGramsFromVariantTitle(variantTitle);
+        if (!gramsPerUnit || gramsPerUnit <= 0) continue;
 
-        const gramsMatch = variantTitle.match(/([\d.,]+)/);
-        if (!gramsMatch) {
-          logEvent("skip_line_item", {
-            requestId,
-            orderId: String(order.id),
-            reason: "no_grams_in_variant_title",
-            productId,
-            variantTitle,
-            title: item?.title || null,
-          });
-          continue;
-        }
+        const gramsDelta = gramsPerUnit * quantity;
 
-        const gramsPerUnit = parseFloat(gramsMatch[1].replace(",", "."));
-        const totalGrams = gramsPerUnit * quantity;
+        // 1) update local pool (source de vérité)
+        const updated = applyOrderToProduct(productId, gramsDelta);
 
-        const ctx = {
-          requestId,
-          source: "shopify:webhook",
-          orderId: String(order.id),
-          orderName: order.name || null,
-          lineTitle: item?.title || null,
-          variantTitle,
-        };
+        // 2) push vers Shopify (écrase Shopify)
+        if (updated) {
+          // calc units dispo par variant = floor(totalGrams/gramsPerUnit)
+          for (const [label, v] of Object.entries(updated.variants || {})) {
+            const unitsAvailable = Number(v.canSell || 0);
+            try {
+              await shopify.inventoryLevel.set({
+                location_id: process.env.LOCATION_ID,
+                inventory_item_id: v.inventoryItemId,
+                available: unitsAvailable,
+              });
 
-        // Update app state + overwrite Shopify inventory
-        const result = await updateProductStock(productId, totalGrams, ctx);
+              logEvent("inventory_level_set", {
+                productId,
+                label,
+                unitsAvailable,
+                inventoryItemId: v.inventoryItemId,
+                locationId: process.env.LOCATION_ID,
+              });
+            } catch (e) {
+              logEvent(
+                "inventory_level_set_error",
+                { productId, label, message: e?.message },
+                "error"
+              );
+            }
+          }
 
-        // Movement log (rotation par jour)
-        if (result?.update) {
+          // mouvement
           addMovement({
-            ts: new Date().toISOString(),
-            type: "order",
-            source: "shopify:webhook",
-            requestId,
-            orderId: String(order.id),
-            orderName: order.name || null,
+            source: "webhook_order",
             productId,
-            productName: result.update.name,
-            deltaGrams: -Number(totalGrams),
-            gramsBefore: result.before,
-            gramsAfter: result.after,
-            lineTitle: item?.title || null,
-            variantTitle,
+            productName: updated.name,
+            gramsDelta: -Math.abs(gramsDelta),
+            totalAfter: updated.totalGrams,
+            meta: { orderId: String(order.id), orderName: String(order.name || "") },
           });
 
-          logEvent("movement_recorded", {
-            requestId,
-            orderId: String(order.id),
+          logEvent("stock_movement", {
+            source: "webhook_order",
             productId,
-            deltaGrams: -Number(totalGrams),
+            gramsDelta: -Math.abs(gramsDelta),
+            totalAfter: updated.totalGrams,
           });
         }
       }
 
       return res.sendStatus(200);
-    } catch (err) {
-      logEvent("webhook_error", { requestId, message: err.message }, "error");
-      if (!res.headersSent) return res.sendStatus(500);
+    } catch (e) {
+      logEvent("webhook_error", { message: e?.message }, "error");
+      return res.sendStatus(500);
     }
-  });
+  }
+);
 
-  req.on("error", (err) => {
-    logEvent("webhook_stream_error", { requestId, message: err.message }, "error");
-    if (!res.headersSent) return res.sendStatus(500);
-  });
-});
+// ============ Pages ============
+app.get("/", (req, res) => res.sendFile(path.join(__dirname, "public", "index.html")));
 
-// ============================================
-// API: server info
-// ============================================
+// ============ API ============
 app.get("/api/server-info", (req, res) => {
   res.json({
     mode: process.env.NODE_ENV || "development",
     port: process.env.PORT || 3000,
     hmacEnabled: !!process.env.SHOPIFY_WEBHOOK_SECRET,
     productCount: Object.keys(PRODUCT_CONFIG).length,
-    plan: PLAN,
-    retentionDays: RETENTION_DAYS,
   });
 });
 
-// ============================================
-// API: stock snapshot
-// ============================================
+// Stock (option tri + filtre)
 app.get("/api/stock", (req, res) => {
-  res.json(getStockSnapshot());
+  const { sort = "alpha", categoryId = "" } = req.query;
+
+  const snapshot = getStockSnapshot();
+  let products = Object.entries(snapshot).map(([productId, p]) => ({
+    productId,
+    ...p,
+  }));
+
+  if (categoryId) {
+    products = products.filter((p) => Array.isArray(p.categoryIds) && p.categoryIds.includes(String(categoryId)));
+  }
+
+  if (sort === "alpha") {
+    products.sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "fr", { sensitivity: "base" }));
+  }
+
+  res.json({ count: products.length, data: products });
 });
 
-// ============================================
-// API: movements list (last N days)
-// GET /api/movements?days=7
-// ============================================
-app.get("/api/movements", (req, res) => {
-  const days = Math.max(1, Math.min(Number(req.query.days || RETENTION_DAYS), RETENTION_DAYS));
-  const data = listMovements({ days });
+// Catalog complet (produits + catégories)
+app.get("/api/catalog", (req, res) => {
+  const catalog = getCatalogSnapshot();
+  // tri alpha côté API
+  catalog.products.sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "fr", { sensitivity: "base" }));
+  res.json(catalog);
+});
 
-  // Tri décroissant par date (au cas où)
-  data.sort((a, b) => (a.ts < b.ts ? 1 : -1));
+// Catégories CRUD
+app.get("/api/categories", (req, res) => res.json({ data: listCategories() }));
 
-  res.json({
-    days,
-    count: data.length,
-    data,
+app.post("/api/categories", (req, res) => {
+  const { name } = req.body || {};
+  if (!name || String(name).trim().length < 1) return res.status(400).json({ error: "Nom invalide" });
+  const created = createCategory(String(name).trim());
+  addMovement({ source: "category_create", gramsDelta: 0, meta: { categoryId: created.id, name: created.name } });
+  return res.json({ success: true, category: created });
+});
+
+app.put("/api/categories/:id", (req, res) => {
+  const id = String(req.params.id);
+  const { name } = req.body || {};
+  if (!name || String(name).trim().length < 1) return res.status(400).json({ error: "Nom invalide" });
+  const updated = renameCategory(id, String(name).trim());
+  if (!updated) return res.status(404).json({ error: "Catégorie introuvable" });
+  addMovement({ source: "category_rename", gramsDelta: 0, meta: { categoryId: id, name: updated.name } });
+  return res.json({ success: true, category: updated });
+});
+
+app.delete("/api/categories/:id", (req, res) => {
+  const id = String(req.params.id);
+  const ok = deleteCategory(id);
+  if (!ok) return res.status(404).json({ error: "Catégorie introuvable" });
+  addMovement({ source: "category_delete", gramsDelta: 0, meta: { categoryId: id } });
+  return res.json({ success: true });
+});
+
+// Assigner catégories à un produit
+app.put("/api/products/:productId/categories", (req, res) => {
+  const productId = String(req.params.productId);
+  const { categoryIds } = req.body || {};
+  const ok = setProductCategories(productId, Array.isArray(categoryIds) ? categoryIds : []);
+  if (!ok) return res.status(404).json({ error: "Produit introuvable" });
+
+  addMovement({
+    source: "product_set_categories",
+    productId,
+    gramsDelta: 0,
+    meta: { categoryIds: Array.isArray(categoryIds) ? categoryIds : [] },
   });
+
+  return res.json({ success: true });
 });
 
-// ============================================
-// API: purge old movements now
-// POST /api/movements/purge
-// ============================================
-app.post("/api/movements/purge", express.json(), (req, res) => {
+// Restock (+)
+app.post("/api/restock", async (req, res) => {
   try {
-    purgeOld(RETENTION_DAYS);
-    logEvent("movements_purged_manual", { retentionDays: RETENTION_DAYS, plan: PLAN });
-    res.json({ success: true, retentionDays: RETENTION_DAYS });
+    const { productId, grams } = req.body || {};
+    const g = Number(grams);
+    if (!productId) return res.status(400).json({ error: "productId manquant" });
+    if (!g || g <= 0) return res.status(400).json({ error: "Quantité invalide" });
+
+    const updated = restockProduct(String(productId), g);
+    if (!updated) return res.status(404).json({ error: "Produit non trouvé" });
+
+    // Push Shopify (écrase)
+    for (const [label, v] of Object.entries(updated.variants || {})) {
+      await shopify.inventoryLevel.set({
+        location_id: process.env.LOCATION_ID,
+        inventory_item_id: v.inventoryItemId,
+        available: Number(v.canSell || 0),
+      });
+    }
+
+    addMovement({
+      source: "restock",
+      productId: String(productId),
+      productName: updated.name,
+      gramsDelta: +Math.abs(g),
+      totalAfter: updated.totalGrams,
+    });
+
+    return res.json({ success: true, productId: String(productId), newTotal: updated.totalGrams });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    logEvent("api_restock_error", { message: e?.message }, "error");
+    return res.status(500).json({ error: e?.message || "Erreur serveur" });
   }
 });
 
-// ============================================
-// API: restock (+ / -)
-// POST /api/restock { productId, grams }
-// ============================================
-app.post("/api/restock", express.json(), async (req, res) => {
+// Set total stock (écrase total)
+app.post("/api/set-total-stock", async (req, res) => {
   try {
-    const productId = String(req.body?.productId || "");
-    const g = Number(req.body?.grams);
+    const { productId, totalGrams } = req.body || {};
+    const newTotal = Number(totalGrams);
+    if (!productId) return res.status(400).json({ error: "productId manquant" });
+    if (!Number.isFinite(newTotal) || newTotal < 0) return res.status(400).json({ error: "Quantité invalide" });
 
-    if (!productId || !PRODUCT_CONFIG[productId]) {
-      return res.status(404).json({ error: "Produit non trouvé" });
+    // restockProduct accepte + / - → on calcule diff
+    const current = PRODUCT_CONFIG[String(productId)]?.totalGrams ?? null;
+    if (current === null) return res.status(404).json({ error: "Produit non trouvé" });
+
+    const diff = newTotal - Number(current || 0);
+    const updated = restockProduct(String(productId), diff);
+
+    // Push Shopify (écrase)
+    for (const [label, v] of Object.entries(updated.variants || {})) {
+      await shopify.inventoryLevel.set({
+        location_id: process.env.LOCATION_ID,
+        inventory_item_id: v.inventoryItemId,
+        available: Number(v.canSell || 0),
+      });
     }
-    if (!Number.isFinite(g) || g === 0) {
-      return res.status(400).json({ error: "Quantité invalide" });
-    }
-
-    const before = PRODUCT_CONFIG[productId].totalGrams ?? null;
-
-    // Modifie l'état interne
-    const updated = restockProduct(productId, g);
-    if (!updated) return res.status(404).json({ error: "Produit non trouvé" });
-
-    // Écrase Shopify selon l'état interne (0 pour ne pas resoustraire)
-    const ctx = { source: "manual:restock" };
-    await updateProductStock(productId, 0, ctx);
 
     addMovement({
-      ts: new Date().toISOString(),
-      type: "restock",
-      source: "manual",
-      productId,
+      source: "set_total",
+      productId: String(productId),
       productName: updated.name,
-      deltaGrams: Number(g),
-      gramsBefore: before,
-      gramsAfter: updated.totalGrams,
+      gramsDelta: diff,
+      totalAfter: updated.totalGrams,
+      meta: { previousTotal: Number(current || 0), newTotal },
     });
 
-    logEvent("restock_done", {
-      productId,
-      productName: updated.name,
-      gramsDelta: Number(g),
-      gramsBefore: before,
-      gramsAfter: updated.totalGrams,
-    });
-
-    return res.json({
-      success: true,
-      productId,
-      newTotal: updated.totalGrams,
-    });
-  } catch (error) {
-    logEvent("api_restock_error", { message: error.message }, "error");
-    return res.status(500).json({ error: error.message });
+    return res.json({ success: true, productId: String(productId), previousTotal: Number(current || 0), newTotal, difference: diff });
+  } catch (e) {
+    logEvent("api_set_total_error", { message: e?.message }, "error");
+    return res.status(500).json({ error: e?.message || "Erreur serveur" });
   }
 });
 
-// ============================================
-// API: set total stock
-// POST /api/set-total-stock { productId, totalGrams }
-// ============================================
-app.post("/api/set-total-stock", express.json(), async (req, res) => {
+// Mouvements
+app.get("/api/movements", (req, res) => {
+  const limit = Math.min(Number(req.query.limit || 200), 2000);
+  const data = listMovements({ limit });
+  res.json({ count: data.length, data });
+});
+
+app.get("/api/movements.csv", (req, res) => {
+  const limit = Math.min(Number(req.query.limit || 2000), 10000);
+  const data = listMovements({ limit });
+  const csv = toCSV(data);
+  res.setHeader("Content-Type", "text/csv; charset=utf-8");
+  res.setHeader("Content-Disposition", 'attachment; filename="stock-movements.csv"');
+  res.send(csv);
+});
+
+app.delete("/api/movements", (req, res) => {
+  clearMovements();
+  return res.json({ success: true });
+});
+
+// Alertes stock bas (simple)
+app.get("/api/alerts/low-stock", (req, res) => {
+  const threshold = Number(req.query.threshold ?? process.env.LOW_STOCK_THRESHOLD ?? 10);
+  const snap = getStockSnapshot();
+
+  const low = Object.entries(snap)
+    .map(([productId, p]) => ({ productId, ...p }))
+    .filter((p) => Number(p.totalGrams || 0) <= threshold)
+    .sort((a, b) => Number(a.totalGrams || 0) - Number(b.totalGrams || 0));
+
+  res.json({ threshold, count: low.length, data: low });
+});
+
+// Shopify: lister produits (pour import)
+app.get("/api/shopify/products", async (req, res) => {
   try {
-    const productId = String(req.body?.productId || "");
-    const newTotal = Number(req.body?.totalGrams);
+    const limit = Math.min(Number(req.query.limit || 50), 250);
 
-    if (!productId || !PRODUCT_CONFIG[productId]) {
-      return res.status(404).json({ error: "Produit non trouvé" });
-    }
-    if (!Number.isFinite(newTotal) || newTotal < 0) {
-      return res.status(400).json({ error: "Quantité invalide" });
-    }
+    // REST shopify-api-node: shopify.product.list({ limit })
+    const products = await shopify.product.list({ limit });
 
-    const currentTotal = Number(PRODUCT_CONFIG[productId].totalGrams || 0);
-    const difference = newTotal - currentTotal;
+    const out = (products || []).map((p) => ({
+      productId: String(p.id),
+      title: p.title,
+      variants: (p.variants || []).map((v) => ({
+        variantId: String(v.id),
+        title: String(v.title || ""),
+        inventoryItemId: Number(v.inventory_item_id),
+      })),
+    }));
 
-    const updated = restockProduct(productId, difference);
-    if (!updated) return res.status(404).json({ error: "Produit non trouvé" });
-
-    const ctx = { source: "manual:set_total" };
-    await updateProductStock(productId, 0, ctx);
-
-    addMovement({
-      ts: new Date().toISOString(),
-      type: "set_total",
-      source: "manual",
-      productId,
-      productName: updated.name,
-      deltaGrams: Number(difference),
-      gramsBefore: currentTotal,
-      gramsAfter: updated.totalGrams,
-    });
-
-    logEvent("set_total_done", {
-      productId,
-      productName: updated.name,
-      gramsBefore: currentTotal,
-      gramsAfter: updated.totalGrams,
-      deltaGrams: Number(difference),
-    });
-
-    return res.json({
-      success: true,
-      productId,
-      previousTotal: currentTotal,
-      newTotal: updated.totalGrams,
-      difference,
-    });
-  } catch (error) {
-    logEvent("api_set_total_error", { message: error.message }, "error");
-    return res.status(500).json({ error: error.message });
+    return res.json({ count: out.length, data: out });
+  } catch (e) {
+    logEvent("shopify_products_list_error", { message: e?.message }, "error");
+    return res.status(500).json({ error: e?.message || "Erreur Shopify" });
   }
 });
 
-// ============================================
-// API: test order (manual simulation)
-// POST /api/test-order
-// ============================================
-app.post("/api/test-order", express.json(), async (req, res) => {
+// Import 1 produit Shopify -> crée/maj config dans l’app
+app.post("/api/import/product", async (req, res) => {
   try {
-    const requestId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const { productId, totalGrams, categoryIds } = req.body || {};
+    if (!productId) return res.status(400).json({ error: "productId manquant" });
 
-    logEvent("test_order_start", { requestId });
+    const p = await shopify.product.get(Number(productId));
+    if (!p?.id) return res.status(404).json({ error: "Produit Shopify introuvable" });
 
-    const testOrder = {
-      id: Date.now(),
-      name: "#TEST-" + Date.now(),
-      line_items: [
-        {
-          product_id: 10349843513687,
-          variant_title: "3",
-          quantity: 2,
-          title: "3x Filtré",
-        },
-      ],
-    };
-
-    for (const item of testOrder.line_items) {
-      const productId = String(item.product_id);
-      const variantTitle = item.variant_title || "";
-      const quantity = Number(item.quantity || 0);
-
-      const gramsMatch = variantTitle.match(/([\d.,]+)/);
-      if (!gramsMatch) continue;
-
-      const gramsPerUnit = parseFloat(gramsMatch[1].replace(",", "."));
-      const totalGrams = gramsPerUnit * quantity;
-
-      const ctx = {
-        requestId,
-        source: "test_order",
-        orderId: String(testOrder.id),
-        orderName: testOrder.name,
-        lineTitle: item.title,
-        variantTitle,
+    const variants = {};
+    for (const v of p.variants || []) {
+      const grams = parseGramsFromVariantTitle(v.title);
+      if (!grams) continue;
+      variants[String(grams)] = {
+        gramsPerUnit: grams,
+        inventoryItemId: Number(v.inventory_item_id),
       };
-
-      const result = await updateProductStock(productId, totalGrams, ctx);
-
-      if (result?.update) {
-        addMovement({
-          ts: new Date().toISOString(),
-          type: "test_order",
-          source: "test_order",
-          requestId,
-          orderId: String(testOrder.id),
-          orderName: testOrder.name,
-          productId,
-          productName: result.update.name,
-          deltaGrams: -Number(totalGrams),
-          gramsBefore: result.before,
-          gramsAfter: result.after,
-          lineTitle: item.title,
-          variantTitle,
-        });
-      }
     }
 
-    logEvent("test_order_done", { requestId, orderId: String(testOrder.id) });
-
-    return res.json({
-      success: true,
-      message: "Commande test traitée",
-      order: testOrder,
+    const imported = upsertImportedProductConfig({
+      productId: String(p.id),
+      name: String(p.title || p.handle || p.id),
+      totalGrams: Number.isFinite(Number(totalGrams)) ? Number(totalGrams) : undefined,
+      variants,
+      categoryIds: Array.isArray(categoryIds) ? categoryIds : [],
     });
-  } catch (error) {
-    logEvent("test_order_error", { message: error.message }, "error");
-    return res.status(500).json({ error: error.message });
+
+    addMovement({
+      source: "import_shopify_product",
+      productId: String(p.id),
+      productName: imported.name,
+      gramsDelta: 0,
+      meta: { categories: Array.isArray(categoryIds) ? categoryIds : [] },
+    });
+
+    return res.json({ success: true, product: imported });
+  } catch (e) {
+    logEvent("import_product_error", { message: e?.message }, "error");
+    return res.status(500).json({ error: e?.message || "Erreur import" });
   }
 });
 
-// ============================================
-// Home
-// ============================================
-app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
-});
-
-// ============================================
-// Start server (Render-ready)
-// ============================================
+// ============ Start ============
 const PORT = process.env.PORT || 3000;
 const HOST = "0.0.0.0";
 
@@ -595,8 +488,6 @@ app.listen(PORT, HOST, () => {
   logEvent("server_started", {
     host: HOST,
     port: PORT,
-    productCount: Object.keys(PRODUCT_CONFIG).length,
-    plan: PLAN,
-    retentionDays: RETENTION_DAYS,
+    products: Object.keys(PRODUCT_CONFIG).length,
   });
 });
