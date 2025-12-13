@@ -1,7 +1,4 @@
-// server.js — FIX "Réponse non-JSON du serveur" (Express 5 safe)
-// + Routes complètes attendues par public/js/app.js
-// + Support ?shop=... (détection auto single-shop vs multi-shop)
-// + /api renvoie TOUJOURS du JSON (même 404/500)
+// server.js — FIX "Réponse non-JSON du serveur" + Multi-shop safe + Express 5 safe
 
 if (process.env.NODE_ENV !== "production") {
   require("dotenv").config();
@@ -11,14 +8,28 @@ const express = require("express");
 const path = require("path");
 const crypto = require("crypto");
 
-const { logEvent } = require("./utils/logger");
+// --- logger (compat : ./utils/logger OU ./logger)
+let logEvent = (event, data = {}, level = "info") =>
+  console.log(JSON.stringify({ ts: new Date().toISOString(), level, event, ...data }));
+try {
+  ({ logEvent } = require("./utils/logger"));
+} catch {
+  try {
+    ({ logEvent } = require("./logger"));
+  } catch {}
+}
+
+// --- Shopify
 const { getShopifyClient } = require("./shopifyClient");
 const shopify = getShopifyClient();
 
+// --- Stock (source de vérité app)
 const stock = require("./stockManager");
 
-// Stores (peuvent être single-shop OU multi-shop suivant ta version)
+// --- Catalog/categories (multi-shop)
 const catalogStore = require("./catalogStore");
+
+// --- Movements (multi-shop)
 const movementStore = require("./movementStore");
 
 const app = express();
@@ -28,72 +39,85 @@ const PUBLIC_DIR = path.join(__dirname, "public");
 const INDEX_HTML = path.join(PUBLIC_DIR, "index.html");
 
 // =========================
-// Helpers multi-shop (auto)
+// Helpers
 // =========================
 function getShop(req) {
-  // Shopify admin iframe ajoute souvent ?shop=xxx.myshopify.com
-  const s = String(req.query?.shop || "").trim();
-  return s || "default";
+  // 1) query string (iframe admin) -> ?shop=xxx.myshopify.com
+  const q = String(req.query?.shop || "").trim();
+  if (q) return q;
+
+  // 2) header Shopify (webhooks)
+  const h = String(req.get("X-Shopify-Shop-Domain") || "").trim();
+  if (h) return h;
+
+  // 3) fallback env (si tu n’as qu’un shop)
+  const envShopName = String(process.env.SHOP_NAME || "").trim();
+  if (envShopName && envShopName.includes(".myshopify.com")) return envShopName;
+  if (envShopName) return `${envShopName}.myshopify.com`;
+
+  return "default";
 }
 
-// Détection auto: si ton catalogStore supporte (shop, name)
-// - multi-shop: exports.sanitizeShop OU fonction à 2+ params
-const isCatalogMultiShop =
-  typeof catalogStore?.sanitizeShop === "function" ||
-  (typeof catalogStore?.listCategories === "function" && catalogStore.listCategories.length >= 1 && catalogStore.createCategory?.length >= 2);
-
-// Détection auto movementStore multi-shop
-const isMovementsMultiShop =
-  typeof movementStore?.shopDir === "function" ||
-  (typeof movementStore?.listMovements === "function" && movementStore.listMovements.length >= 1);
-
-// Wrappers catalog (compat)
-function listCategoriesFor(req) {
-  const shop = getShop(req);
-  return isCatalogMultiShop ? catalogStore.listCategories(shop) : catalogStore.listCategories();
-}
-function createCategoryFor(req, name) {
-  const shop = getShop(req);
-  return isCatalogMultiShop ? catalogStore.createCategory(shop, name) : catalogStore.createCategory(name);
-}
-function renameCategoryFor(req, id, name) {
-  const shop = getShop(req);
-  return isCatalogMultiShop ? catalogStore.renameCategory(shop, id, name) : catalogStore.renameCategory(id, name);
-}
-function deleteCategoryFor(req, id) {
-  const shop = getShop(req);
-  return isCatalogMultiShop ? catalogStore.deleteCategory(shop, id) : catalogStore.deleteCategory(id);
+function verifyShopifyWebhook(rawBodyBuffer, hmacHeader) {
+  const secret = process.env.SHOPIFY_WEBHOOK_SECRET;
+  if (!secret) return true; // dev
+  const hash = crypto.createHmac("sha256", secret).update(rawBodyBuffer).digest("base64");
+  return hash === hmacHeader;
 }
 
-// Wrappers movements (compat)
-function addMovementFor(req, movement) {
-  const shop = getShop(req);
-  // si movementStore multi-shop: addMovement(movement, shop) OU addMovement({shop:...})
+function apiError(res, code, message, extra) {
+  return res.status(code).json({ error: message, ...(extra ? { extra } : {}) });
+}
+
+function safeJson(res, fn) {
   try {
-    if (movementStore.addMovement.length >= 2) return movementStore.addMovement(movement, shop);
-    return movementStore.addMovement({ ...movement, shop });
-  } catch {
-    // fallback
-    return movementStore.addMovement(movement);
+    const out = fn();
+    if (out && typeof out.then === "function") {
+      return out.catch((e) => {
+        logEvent("api_error", { message: e?.message }, "error");
+        return apiError(res, 500, e?.message || "Erreur serveur");
+      });
+    }
+    return out;
+  } catch (e) {
+    logEvent("api_error", { message: e?.message }, "error");
+    return apiError(res, 500, e?.message || "Erreur serveur");
   }
 }
-function listMovementsFor(req, { days, limit } = {}) {
-  const shop = getShop(req);
-  const opts = { days, limit, shop };
-  return movementStore.listMovements(opts);
+
+function parseGramsFromVariant(v) {
+  // Essaie plusieurs champs Shopify (robuste)
+  const candidates = [v?.option1, v?.option2, v?.option3, v?.title, v?.sku].filter(Boolean);
+  for (const c of candidates) {
+    const m = String(c).match(/([\d.,]+)/);
+    if (!m) continue;
+    const g = parseFloat(m[1].replace(",", "."));
+    if (Number.isFinite(g) && g > 0) return g;
+  }
+  return null;
+}
+
+async function pushProductInventoryToShopify(productView) {
+  const locationId = process.env.LOCATION_ID;
+  if (!locationId) return;
+  if (!productView?.variants) return;
+
+  for (const [, v] of Object.entries(productView.variants)) {
+    const inventoryItemId = Number(v.inventoryItemId || 0);
+    const unitsAvailable = Number(v.canSell || 0);
+    if (!inventoryItemId) continue;
+
+    await shopify.inventoryLevel.set({
+      location_id: locationId,
+      inventory_item_id: inventoryItemId,
+      available: unitsAvailable,
+    });
+  }
 }
 
 // =========================
 // 1) MIDDLEWARES
 // =========================
-
-// Webhook Shopify doit rester en RAW uniquement sur sa route (pas global)
-function verifyShopifyWebhook(rawBodyBuffer, hmacHeader) {
-  const secret = process.env.SHOPIFY_WEBHOOK_SECRET;
-  if (!secret) return true;
-  const hash = crypto.createHmac("sha256", secret).update(rawBodyBuffer).digest("base64");
-  return hash === hmacHeader;
-}
 
 // JSON parser AVANT /api (sinon req.body undefined)
 app.use("/api", express.json({ limit: "2mb" }));
@@ -109,7 +133,13 @@ app.use((req, res, next) => {
 
 // CSP Shopify admin iframe
 app.use((req, res, next) => {
-  const shopDomain = process.env.SHOP_NAME ? `https://${process.env.SHOP_NAME}.myshopify.com` : "*";
+  const envShopName = String(process.env.SHOP_NAME || "").trim();
+  const shopDomain = envShopName
+    ? envShopName.includes(".myshopify.com")
+      ? `https://${envShopName}`
+      : `https://${envShopName}.myshopify.com`
+    : "*";
+
   res.setHeader("Content-Security-Policy", `frame-ancestors https://admin.shopify.com ${shopDomain};`);
   next();
 });
@@ -120,342 +150,258 @@ app.get("/health", (req, res) => res.status(200).send("ok"));
 // =========================
 // 2) WEBHOOKS (RAW BODY)
 // =========================
-app.post(
-  "/webhooks/orders/create",
-  express.raw({ type: "application/json" }),
-  async (req, res) => {
-    try {
-      const hmac = req.get("X-Shopify-Hmac-Sha256");
-      if (process.env.NODE_ENV === "production" && process.env.SHOPIFY_WEBHOOK_SECRET) {
-        if (!hmac || !verifyShopifyWebhook(req.body, hmac)) return res.sendStatus(401);
-      }
+app.post("/webhooks/orders/create", express.raw({ type: "application/json" }), async (req, res) => {
+  try {
+    const hmac = req.get("X-Shopify-Hmac-Sha256");
+    const shop = getShop(req);
 
-      // (optionnel) traitement commande...
-      return res.sendStatus(200);
-    } catch (e) {
-      console.error("webhook error:", e);
-      return res.sendStatus(500);
+    if (process.env.NODE_ENV === "production" && process.env.SHOPIFY_WEBHOOK_SECRET) {
+      if (!hmac || !verifyShopifyWebhook(req.body, hmac)) return res.sendStatus(401);
     }
+
+    // Si tu veux remettre le traitement commande ici, fais-le.
+    // (Ton système “stock vrac” décrémente et push ensuite l’inventaire Shopify)
+
+    return res.sendStatus(200);
+  } catch (e) {
+    logEvent("webhook_error", { message: e.message }, "error");
+    return res.sendStatus(500);
   }
-);
+});
 
 // =========================
 // 3) API (TOUJOURS JSON)
 // =========================
 
-// helper : JSON error safe
-function apiError(res, code, message, extra) {
-  return res.status(code).json({ error: message, ...(extra ? { extra } : {}) });
-}
-
-// ---------------- server-info ----------------
-// attendu par app.js: mode, productCount, lowStockThreshold
 app.get("/api/server-info", (req, res) => {
+  const productCount = stock?.PRODUCT_CONFIG ? Object.keys(stock.PRODUCT_CONFIG).length : 0;
   res.json({
     mode: process.env.NODE_ENV || "development",
-    productCount: Object.keys(stock?.PRODUCT_CONFIG || {}).length,
-    lowStockThreshold: Number(process.env.LOW_STOCK_THRESHOLD || 10),
     port: PORT,
+    productCount,
+    lowStockThreshold: Number(process.env.LOW_STOCK_THRESHOLD || 10),
   });
 });
 
-// ---------------- categories CRUD ----------------
-app.get("/api/categories", (req, res) => {
-  try {
-    res.json({ categories: listCategoriesFor(req) });
-  } catch (e) {
-    console.error("GET categories error:", e);
-    return apiError(res, 500, e.message);
-  }
-});
-
-app.post("/api/categories", (req, res) => {
-  try {
-    const name = String(req.body?.name ?? req.body?.categoryName ?? "").trim();
-    if (!name) return apiError(res, 400, "Nom de catégorie invalide");
-    const created = createCategoryFor(req, name);
-
-    addMovementFor(req, { source: "category_create", gramsDelta: 0, meta: { id: created.id, name: created.name } });
-    res.json({ success: true, category: created });
-  } catch (e) {
-    console.error("POST category error:", e);
-    return apiError(res, 500, e.message);
-  }
-});
-
-app.put("/api/categories/:id", (req, res) => {
-  try {
-    const id = String(req.params.id);
-    const name = String(req.body?.name ?? "").trim();
-    if (!name) return apiError(res, 400, "Nom invalide");
-
-    const updated = renameCategoryFor(req, id, name);
-    addMovementFor(req, { source: "category_rename", gramsDelta: 0, meta: { id, name } });
-
-    res.json({ success: true, category: updated });
-  } catch (e) {
-    console.error("PUT category error:", e);
-    return apiError(res, 500, e.message);
-  }
-});
-
-app.delete("/api/categories/:id", (req, res) => {
-  try {
-    const id = String(req.params.id);
-    deleteCategoryFor(req, id);
-
-    addMovementFor(req, { source: "category_delete", gramsDelta: 0, meta: { id } });
-    res.json({ success: true });
-  } catch (e) {
-    console.error("DELETE category error:", e);
-    return apiError(res, 500, e.message);
-  }
-});
-
-// ---------------- stock (UI) ----------------
-// attendu par app.js: { products:[{productId,name,totalGrams,variants,categoryIds}], categories:[...] }
-// support: ?sort=alpha & ?category=<id>
+// ---- Stock (ce que ton front attend : { products:[...], categories:[...] })
 app.get("/api/stock", (req, res) => {
-  try {
-    const snap = stock.getCatalogSnapshot(); // { products, categories }
-    let products = Array.isArray(snap.products) ? snap.products.slice() : [];
-    const categories = Array.isArray(snap.categories) ? snap.categories : [];
+  safeJson(res, () => {
+    const shop = getShop(req);
+    const { sort = "alpha", category = "" } = req.query;
 
-    const sort = String(req.query.sort || "");
-    const category = String(req.query.category || "");
+    const snapshot = typeof stock.getCatalogSnapshot === "function"
+      ? stock.getCatalogSnapshot()
+      : { products: [], categories: [] };
+
+    // ⚠️ catégories doivent venir du store multi-shop
+    const categories = catalogStore.listCategories ? catalogStore.listCategories(shop) : [];
+    let products = Array.isArray(snapshot.products) ? snapshot.products.slice() : [];
 
     if (category) {
-      products = products.filter((p) => Array.isArray(p.categoryIds) && p.categoryIds.map(String).includes(category));
+      products = products.filter((p) => Array.isArray(p.categoryIds) && p.categoryIds.includes(String(category)));
     }
 
     if (sort === "alpha") {
-      products.sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "fr", { sensitivity: "base" }));
+      products.sort((a, b) =>
+        String(a.name || "").localeCompare(String(b.name || ""), "fr", { sensitivity: "base" })
+      );
     }
 
     res.json({ products, categories });
-  } catch (e) {
-    console.error("GET stock error:", e);
-    return apiError(res, 500, e.message);
-  }
+  });
 });
 
-// CSV stock (attendu par app.js: /api/stock.csv)
-function csvEscape(v) {
-  const s = v === null || v === undefined ? "" : String(v);
-  if (/[,"\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
-  return s;
-}
-app.get("/api/stock.csv", (req, res) => {
-  try {
-    const snap = stock.getCatalogSnapshot();
-    const rows = Array.isArray(snap.products) ? snap.products : [];
+// ---- Catégories
+app.get("/api/categories", (req, res) => {
+  safeJson(res, () => {
+    const shop = getShop(req);
+    const categories = catalogStore.listCategories ? catalogStore.listCategories(shop) : [];
+    res.json({ categories });
+  });
+});
 
-    const cols = ["productId", "name", "totalGrams", "categoryIds", "variants"];
-    const header = cols.join(",");
+app.post("/api/categories", (req, res) => {
+  safeJson(res, () => {
+    const shop = getShop(req);
+    const name = String(req.body?.name ?? req.body?.categoryName ?? "").trim();
+    if (!name) return apiError(res, 400, "Nom de catégorie invalide");
 
-    const lines = rows.map((p) => {
-      const categoryIds = Array.isArray(p.categoryIds) ? p.categoryIds.join("|") : "";
-      const variants = p.variants ? JSON.stringify(p.variants) : "";
-      return [
-        csvEscape(p.productId),
-        csvEscape(p.name),
-        csvEscape(p.totalGrams),
-        csvEscape(categoryIds),
-        csvEscape(variants),
-      ].join(",");
-    });
+    const created = catalogStore.createCategory(shop, name);
 
-    const csv = [header, ...lines].join("\n");
+    // log movement (optionnel)
+    if (movementStore.addMovement) {
+      movementStore.addMovement(
+        { source: "category_create", gramsDelta: 0, meta: { categoryId: created.id, name: created.name } },
+        shop
+      );
+    }
+
+    res.json({ success: true, category: created });
+  });
+});
+
+app.put("/api/categories/:id", (req, res) => {
+  safeJson(res, () => {
+    const shop = getShop(req);
+    const id = String(req.params.id);
+    const name = String(req.body?.name || "").trim();
+    if (!name) return apiError(res, 400, "Nom invalide");
+
+    const updated = catalogStore.renameCategory(shop, id, name);
+
+    if (movementStore.addMovement) {
+      movementStore.addMovement(
+        { source: "category_rename", gramsDelta: 0, meta: { categoryId: id, name } },
+        shop
+      );
+    }
+
+    res.json({ success: true, category: updated });
+  });
+});
+
+app.delete("/api/categories/:id", (req, res) => {
+  safeJson(res, () => {
+    const shop = getShop(req);
+    const id = String(req.params.id);
+
+    catalogStore.deleteCategory(shop, id);
+
+    if (movementStore.addMovement) {
+      movementStore.addMovement(
+        { source: "category_delete", gramsDelta: 0, meta: { categoryId: id } },
+        shop
+      );
+    }
+
+    res.json({ success: true });
+  });
+});
+
+// ---- Mouvements (ton front attend {count,data})
+app.get("/api/movements", (req, res) => {
+  safeJson(res, () => {
+    const shop = getShop(req);
+    const limit = Math.min(Number(req.query.limit || 200), 2000);
+    const days = Math.min(Math.max(Number(req.query.days || 7), 1), 365);
+
+    const rows = movementStore.listMovements
+      ? movementStore.listMovements({ shop, days, limit })
+      : [];
+
+    res.json({ count: rows.length, data: rows });
+  });
+});
+
+app.get("/api/movements.csv", (req, res) => {
+  safeJson(res, () => {
+    const shop = getShop(req);
+    const limit = Math.min(Number(req.query.limit || 2000), 10000);
+    const days = Math.min(Math.max(Number(req.query.days || 30), 1), 365);
+
+    const rows = movementStore.listMovements
+      ? movementStore.listMovements({ shop, days, limit })
+      : [];
+
+    const csv = movementStore.toCSV ? movementStore.toCSV(rows) : "ts,source,productId\n";
+
     res.setHeader("Content-Type", "text/csv; charset=utf-8");
-    res.setHeader("Content-Disposition", 'attachment; filename="stock.csv"');
-    return res.status(200).send(csv);
-  } catch (e) {
-    console.error("GET stock.csv error:", e);
-    return apiError(res, 500, e.message);
-  }
+    res.setHeader("Content-Disposition", 'attachment; filename="stock-movements.csv"');
+    res.send(csv);
+  });
 });
 
-// ---------------- restock (index.html mini glue) ----------------
-// POST /api/restock { productId, grams }
-app.post("/api/restock", async (req, res) => {
-  try {
-    const productId = String(req.body?.productId || "").trim();
-    const grams = Number(req.body?.grams || 0);
-    if (!productId || !Number.isFinite(grams) || grams <= 0) return apiError(res, 400, "Paramètres invalides");
+// ---- Ajuster total (ton front POST /api/products/:id/adjust-total)
+app.post("/api/products/:productId/adjust-total", (req, res) => {
+  safeJson(res, async () => {
+    const shop = getShop(req);
+    const productId = String(req.params.productId);
+    const gramsDelta = Number(req.body?.gramsDelta);
 
-    const before = stock.PRODUCT_CONFIG?.[productId]?.totalGrams ?? null;
-    const updated = await stock.restockProduct(productId, grams);
-    if (!updated) return apiError(res, 404, "Produit introuvable");
+    if (!Number.isFinite(gramsDelta) || gramsDelta === 0) {
+      return apiError(res, 400, "gramsDelta invalide (ex: 50 ou -50)");
+    }
 
-    addMovementFor(req, {
-      source: "restock",
-      productId,
-      productName: updated.name,
-      gramsDelta: grams,
-      gramsBefore: before,
-      totalAfter: updated.totalGrams,
-    });
+    if (typeof stock.restockProduct !== "function") {
+      return apiError(res, 500, "stock.restockProduct introuvable");
+    }
 
-    res.json({ success: true, product: updated });
-  } catch (e) {
-    console.error("POST restock error:", e);
-    return apiError(res, 500, e.message);
-  }
-});
-
-// ---------------- adjust total ----------------
-// POST /api/products/:id/adjust-total { gramsDelta }
-app.post("/api/products/:id/adjust-total", async (req, res) => {
-  try {
-    const productId = String(req.params.id);
-    const gramsDelta = Number(req.body?.gramsDelta ?? 0);
-    if (!Number.isFinite(gramsDelta) || gramsDelta === 0) return apiError(res, 400, "gramsDelta invalide");
-
-    const before = stock.PRODUCT_CONFIG?.[productId]?.totalGrams ?? null;
     const updated = await stock.restockProduct(productId, gramsDelta);
     if (!updated) return apiError(res, 404, "Produit introuvable");
 
-    addMovementFor(req, {
-      source: "adjust_total",
-      productId,
-      productName: updated.name,
-      gramsDelta,
-      gramsBefore: before,
-      totalAfter: updated.totalGrams,
-    });
+    try {
+      await pushProductInventoryToShopify(updated);
+    } catch (e) {
+      logEvent("inventory_push_error", { productId, message: e?.message }, "error");
+    }
+
+    if (movementStore.addMovement) {
+      movementStore.addMovement(
+        {
+          source: "adjust_total",
+          productId,
+          productName: updated.name,
+          gramsDelta,
+          totalAfter: updated.totalGrams,
+        },
+        shop
+      );
+    }
 
     res.json({ success: true, product: updated });
-  } catch (e) {
-    console.error("POST adjust-total error:", e);
-    return apiError(res, 500, e.message);
-  }
+  });
 });
 
-// ---------------- delete product (config only) ----------------
-// DELETE /api/products/:id
-app.delete("/api/products/:id", (req, res) => {
-  try {
-    const productId = String(req.params.id);
-    const name = stock.PRODUCT_CONFIG?.[productId]?.name || productId;
+// ---- Assigner catégories produit (ton front POST /api/products/:id/categories)
+app.post("/api/products/:productId/categories", (req, res) => {
+  safeJson(res, () => {
+    const shop = getShop(req);
+    const productId = String(req.params.productId);
+    const categoryIds = Array.isArray(req.body?.categoryIds) ? req.body.categoryIds.map(String) : [];
 
-    const ok = stock.removeProduct(productId);
-    if (!ok) return apiError(res, 404, "Produit introuvable");
-
-    addMovementFor(req, { source: "delete_product", productId, productName: name, gramsDelta: 0 });
-    res.json({ success: true });
-  } catch (e) {
-    console.error("DELETE product error:", e);
-    return apiError(res, 500, e.message);
-  }
-});
-
-// ---------------- save product categories ----------------
-// POST /api/products/:id/categories { categoryIds: [] }
-app.post("/api/products/:id/categories", (req, res) => {
-  try {
-    const productId = String(req.params.id);
-    const categoryIds = Array.isArray(req.body?.categoryIds) ? req.body.categoryIds : [];
+    if (typeof stock.setProductCategories !== "function") {
+      return apiError(res, 500, "stock.setProductCategories introuvable");
+    }
 
     const ok = stock.setProductCategories(productId, categoryIds);
-    if (!ok) return apiError(res, 404, "Produit introuvable");
+    if (!ok) return apiError(res, 404, "Produit introuvable (non configuré)");
 
-    addMovementFor(req, { source: "set_categories", productId, gramsDelta: 0, meta: { categoryIds } });
-    res.json({ success: true });
-  } catch (e) {
-    console.error("POST product categories error:", e);
-    return apiError(res, 500, e.message);
-  }
+    if (movementStore.addMovement) {
+      movementStore.addMovement(
+        { source: "product_set_categories", productId, gramsDelta: 0, meta: { categoryIds } },
+        shop
+      );
+    }
+
+    res.json({ success: true, productId, categoryIds });
+  });
 });
 
-// ---------------- movements (global) ----------------
-// attendu par app.js: { data: [...] }
-app.get("/api/movements", (req, res) => {
-  try {
-    const days = Number(req.query.days ?? 7);
-    const limit = Number(req.query.limit ?? 300);
-    const data = listMovementsFor(req, { days, limit });
-    res.json({ data });
-  } catch (e) {
-    console.error("GET movements error:", e);
-    return apiError(res, 500, e.message);
-  }
-});
-
-// ---------------- movements CSV ----------------
-app.get("/api/movements.csv", (req, res) => {
-  try {
-    const days = Number(req.query.days ?? 30);
-    const limit = Number(req.query.limit ?? 10000);
-    const rows = listMovementsFor(req, { days, limit });
-    const csv = movementStore.toCSV(rows);
-
-    res.setHeader("Content-Type", "text/csv; charset=utf-8");
-    res.setHeader("Content-Disposition", 'attachment; filename="movements.csv"');
-    return res.status(200).send(csv);
-  } catch (e) {
-    console.error("GET movements.csv error:", e);
-    return apiError(res, 500, e.message);
-  }
-});
-
-// ---------------- product history ----------------
-// GET /api/products/:id/history?limit=200  -> { data:[...] }
-app.get("/api/products/:id/history", (req, res) => {
-  try {
-    const productId = String(req.params.id);
-    const limit = Math.max(1, Math.min(Number(req.query.limit ?? 200), 2000));
-
-    // On lit large (30j) puis filtre
-    const rows = listMovementsFor(req, { days: 30, limit: 10000 })
-      .filter((m) => String(m.productId || "") === productId)
-      .slice(0, limit);
-
-    res.json({ data: rows });
-  } catch (e) {
-    console.error("GET product history error:", e);
-    return apiError(res, 500, e.message);
-  }
-});
-
-// ---------------- Shopify list products ----------------
-// support ?query=... côté UI
-app.get("/api/shopify/products", async (req, res) => {
-  try {
+// ---- Shopify : lister produits (import UI)
+app.get("/api/shopify/products", (req, res) => {
+  safeJson(res, async () => {
     const limit = Math.min(Number(req.query.limit || 50), 250);
-    const query = String(req.query.query || "").trim().toLowerCase();
+    const q = String(req.query.query || "").trim().toLowerCase();
 
     const products = await shopify.product.list({ limit });
-    const filtered = query
-      ? (products || []).filter((p) => String(p.title || "").toLowerCase().includes(query))
-      : (products || []);
+    let out = (products || []).map((p) => ({
+      id: String(p.id),
+      title: String(p.title || ""),
+      variantsCount: Array.isArray(p.variants) ? p.variants.length : 0,
+    }));
 
-    res.json({
-      products: (filtered || []).map((p) => ({
-        id: String(p.id),
-        title: String(p.title || ""),
-        variantsCount: Array.isArray(p.variants) ? p.variants.length : 0,
-      })),
-    });
-  } catch (e) {
-    console.error("GET shopify products error:", e);
-    return apiError(res, 500, e.message);
-  }
+    if (q) out = out.filter((p) => p.title.toLowerCase().includes(q));
+    out.sort((a, b) => a.title.localeCompare(b.title, "fr", { sensitivity: "base" }));
+
+    res.json({ products: out });
+  });
 });
 
-// ---- Import un produit Shopify vers ton app
-function parseGrams(v) {
-  const candidates = [v?.option1, v?.option2, v?.option3, v?.title, v?.sku].filter(Boolean);
-  for (const c of candidates) {
-    const m = String(c).match(/([\d.,]+)/);
-    if (!m) continue;
-    const g = parseFloat(m[1].replace(",", "."));
-    if (Number.isFinite(g) && g > 0) return g;
-  }
-  return null;
-}
+// ---- Import 1 produit Shopify -> upsert config
+app.post("/api/import/product", (req, res) => {
+  safeJson(res, async () => {
+    const shop = getShop(req);
 
-app.post("/api/import/product", async (req, res) => {
-  try {
     const productId = req.body?.productId ?? req.body?.id;
     const categoryIds = Array.isArray(req.body?.categoryIds) ? req.body.categoryIds : [];
 
@@ -466,8 +412,9 @@ app.post("/api/import/product", async (req, res) => {
 
     const variants = {};
     for (const v of p.variants || []) {
-      const grams = parseGrams(v);
+      const grams = parseGramsFromVariant(v);
       if (!grams) continue;
+
       variants[String(grams)] = {
         gramsPerUnit: grams,
         inventoryItemId: Number(v.inventory_item_id),
@@ -478,8 +425,8 @@ app.post("/api/import/product", async (req, res) => {
       return apiError(res, 400, "Aucune variante avec grammage détecté (option/title/sku).");
     }
 
-    if (typeof stock?.upsertImportedProductConfig !== "function") {
-      return apiError(res, 500, "upsertImportedProductConfig introuvable dans stockManager.js");
+    if (typeof stock.upsertImportedProductConfig !== "function") {
+      return apiError(res, 500, "stock.upsertImportedProductConfig introuvable");
     }
 
     const imported = stock.upsertImportedProductConfig({
@@ -489,43 +436,21 @@ app.post("/api/import/product", async (req, res) => {
       categoryIds,
     });
 
-    addMovementFor(req, { source: "import_shopify", productId: String(p.id), productName: imported.name, gramsDelta: 0 });
+    if (movementStore.addMovement) {
+      movementStore.addMovement(
+        {
+          source: "import_shopify_product",
+          productId: String(p.id),
+          productName: imported.name,
+          gramsDelta: 0,
+          meta: { categoryIds },
+        },
+        shop
+      );
+    }
 
     res.json({ success: true, product: imported });
-  } catch (e) {
-    console.error("POST import product error:", e);
-    return apiError(res, 500, e.message);
-  }
-});
-
-// ---------------- test-order ----------------
-// POST /api/test-order (attendu par app.js)
-app.post("/api/test-order", async (req, res) => {
-  try {
-    const ids = Object.keys(stock?.PRODUCT_CONFIG || {});
-    if (!ids.length) return apiError(res, 400, "Aucun produit configuré");
-
-    const productId = ids[0];
-    const gramsToSubtract = 1;
-
-    const before = stock.PRODUCT_CONFIG?.[productId]?.totalGrams ?? null;
-    const updated = await stock.applyOrderToProduct(productId, gramsToSubtract);
-    if (!updated) return apiError(res, 404, "Produit introuvable");
-
-    addMovementFor(req, {
-      source: "test_order",
-      productId,
-      productName: updated.name,
-      gramsDelta: -gramsToSubtract,
-      gramsBefore: before,
-      totalAfter: updated.totalGrams,
-    });
-
-    res.json({ success: true, product: updated });
-  } catch (e) {
-    console.error("POST test-order error:", e);
-    return apiError(res, 500, e.message);
-  }
+  });
 });
 
 // ✅ IMPORTANT : si une route /api n’existe pas => JSON 404 (pas HTML)
@@ -534,23 +459,21 @@ app.use("/api", (req, res) => apiError(res, 404, "Route API non trouvée"));
 // ✅ IMPORTANT : handler erreurs => JSON (pas HTML)
 app.use((err, req, res, next) => {
   if (req.path.startsWith("/api")) {
-    console.error("API uncaught error:", err);
+    logEvent("api_uncaught_error", { message: err?.message }, "error");
     return apiError(res, 500, "Erreur serveur API");
   }
   next(err);
 });
 
 // =========================
-// 4) FRONT (après l’API)
+// 4) FRONT
 // =========================
 app.use(express.static(PUBLIC_DIR));
 
 app.get("/", (req, res) => res.sendFile(INDEX_HTML));
 
 // Catch-all SPA : EXCLUT /api et /webhooks et /health (Express 5 safe)
-app.get(/^\/(?!api\/|webhooks\/|health).*/, (req, res) => {
-  res.sendFile(INDEX_HTML);
-});
+app.get(/^\/(?!api\/|webhooks\/|health).*/, (req, res) => res.sendFile(INDEX_HTML));
 
 // =========================
 app.listen(PORT, "0.0.0.0", () => {
