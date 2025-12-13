@@ -1,58 +1,49 @@
 // movementStore.js
 // ============================================
-// Persist movements to Render Disk (NDJSON/day)
-// - BASE_DIR: /var/data/movements (default)
-// - addMovement: append 1 JSON per line
-// - listMovements: read last N days, return newest first
-// - purgeOld: delete files older than N days
-// - toCSV: export rows to CSV
+// Persist movements to Render Disk (NDJSON/day) — multi-boutique
+// - BASE_DIR: /var/data/shops/<shop>/movements
 // ============================================
 
 const fs = require("fs");
 const path = require("path");
+const { sanitizeShop, shopDir } = require("./stockState");
 
-const BASE_DIR = process.env.MOVEMENTS_DIR || "/var/data/movements";
-
-// ---------------- utils ----------------
-function ensureDir() {
-  if (!fs.existsSync(BASE_DIR)) fs.mkdirSync(BASE_DIR, { recursive: true });
+function baseDirForShop(shop) {
+  return path.join(shopDir(shop), "movements");
 }
 
-function fileForDate(date) {
-  const day = date.toISOString().slice(0, 10); // YYYY-MM-DD
-  return path.join(BASE_DIR, `${day}.ndjson`);
+function ensureDir(dir) {
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+}
+
+function fileForDate(dir, date) {
+  const day = date.toISOString().slice(0, 10);
+  return path.join(dir, `${day}.ndjson`);
 }
 
 function safeJsonParse(line) {
-  try {
-    return JSON.parse(line);
-  } catch {
-    return null;
-  }
+  try { return JSON.parse(line); } catch { return null; }
 }
 
-// ---------------- write ----------------
-function addMovement(movement = {}) {
-  ensureDir();
+function addMovement(shop = "default", movement = {}) {
+  const dir = baseDirForShop(shop);
+  ensureDir(dir);
 
   const m = {
     id: movement.id || `${Date.now()}_${Math.random().toString(16).slice(2)}`,
-    ts: movement.ts || new Date().toISOString(), // ✅ date/heure
+    ts: movement.ts || new Date().toISOString(),
+    shop: sanitizeShop(shop),
     ...movement,
   };
 
-  const file = fileForDate(new Date());
+  const file = fileForDate(dir, new Date());
   fs.appendFileSync(file, JSON.stringify(m) + "\n", "utf8");
   return m;
 }
 
-// ---------------- read ----------------
-// Returns newest first
-// Options:
-// - days: how many days back to read
-// - limit: max items returned
-function listMovements({ days = 7, limit = 2000 } = {}) {
-  ensureDir();
+function listMovements(shop = "default", { days = 7, limit = 2000 } = {}) {
+  const dir = baseDirForShop(shop);
+  ensureDir(dir);
 
   const now = new Date();
   const out = [];
@@ -64,7 +55,7 @@ function listMovements({ days = 7, limit = 2000 } = {}) {
     const d = new Date(now);
     d.setDate(now.getDate() - i);
 
-    const file = fileForDate(d);
+    const file = fileForDate(dir, d);
     if (!fs.existsSync(file)) continue;
 
     const content = fs.readFileSync(file, "utf8");
@@ -76,79 +67,65 @@ function listMovements({ days = 7, limit = 2000 } = {}) {
       if (obj) out.push(obj);
     }
 
-    // Early stop: we already have more than needed (sorting later)
     if (out.length >= max * 3) break;
   }
 
-  // ✅ Sort by timestamp DESC (newest first)
   out.sort((a, b) => {
     const ta = Date.parse(a?.ts || "");
     const tb = Date.parse(b?.ts || "");
     if (Number.isFinite(tb) && Number.isFinite(ta)) return tb - ta;
-    // fallback if ts is missing/invalid
     return String(b?.ts || "").localeCompare(String(a?.ts || ""));
   });
 
   return out.slice(0, max);
 }
 
-// ---------------- maintenance ----------------
-function purgeOld(daysToKeep = 14) {
-  ensureDir();
+function purgeOld(shop = "default", daysToKeep = 14) {
+  const dir = baseDirForShop(shop);
+  ensureDir(dir);
 
   const keep = Math.max(1, Math.min(Number(daysToKeep) || 14, 3650));
-  const files = fs.readdirSync(BASE_DIR);
+  const files = fs.readdirSync(dir);
 
   const limit = new Date();
   limit.setDate(limit.getDate() - keep);
 
   for (const f of files) {
     if (!f.endsWith(".ndjson")) continue;
-
     const dateStr = f.replace(".ndjson", "");
     const d = new Date(dateStr);
-
     if (Number.isNaN(d.getTime())) continue;
     if (d < limit) {
-      try {
-        fs.unlinkSync(path.join(BASE_DIR, f));
-      } catch {
-        // ignore
-      }
+      try { fs.unlinkSync(path.join(dir, f)); } catch {}
     }
   }
 }
 
-// ---------------- CSV ----------------
+function clearMovements(shop = "default") {
+  const dir = baseDirForShop(shop);
+  ensureDir(dir);
+  const files = fs.readdirSync(dir);
+  for (const f of files) {
+    if (!f.endsWith(".ndjson")) continue;
+    try { fs.unlinkSync(path.join(dir, f)); } catch {}
+  }
+}
+
 function csvEscape(v) {
   const s = v === null || v === undefined ? "" : String(v);
   if (/[,"\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
   return s;
 }
 
-// Supports old + new fields (gramsDelta / totalAfter, etc.)
 function toCSV(rows = []) {
   const cols = [
-    "ts",
-    "type",
-    "source",
-    "orderId",
-    "orderName",
-    "productId",
-    "productName",
-    "deltaGrams",
-    "gramsDelta",
-    "gramsBefore",
-    "gramsAfter",
-    "totalAfter",
-    "variantTitle",
-    "lineTitle",
-    "requestId",
+    "ts","type","source","orderId","orderName","productId","productName",
+    "deltaGrams","gramsDelta","gramsBefore","gramsAfter","totalAfter",
+    "variantTitle","lineTitle","requestId","shop",
   ];
-
   const header = cols.join(",");
   const lines = rows.map((r) => cols.map((c) => csvEscape(r?.[c])).join(","));
   return [header, ...lines].join("\n");
 }
 
-module.exports = { addMovement, listMovements, purgeOld, toCSV };
+module.exports = { addMovement, listMovements, purgeOld, clearMovements, toCSV };

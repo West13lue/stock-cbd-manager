@@ -2,51 +2,46 @@
 // ============================================
 // Stock persistence (Render Persistent Disk)
 // - DATA_DIR default: /var/data
-// - STATE_FILE default: /var/data/stock-state.json
-// - loadState(): SYNC (boot safe)
-// - saveState(): ASYNC + atomic write
+// - Per-shop files (multi-boutique):
+//     /var/data/shops/<shop>/stock-state.json
+// - loadState(shop): SYNC (boot safe)
+// - saveState(shop,state): ASYNC + atomic write
 // ============================================
 
 const fs = require("fs");
 const fsp = fs.promises;
 const path = require("path");
-const { logEvent } = require("./utils/logger");
+const { logEvent } = require("./logger");
 
-// ============================
-// CONFIG
-// ============================
 const DATA_DIR = process.env.DATA_DIR || "/var/data";
-const STATE_FILE =
-  process.env.STOCK_STATE_FILE || path.join(DATA_DIR, "stock-state.json");
+const SHOPS_DIR = path.join(DATA_DIR, "shops");
 
-// ============================
-// Utils
-// ============================
+function sanitizeShop(shop) {
+  const s = String(shop || "").trim().toLowerCase();
+  return s.replace(/[^a-z0-9._-]/g, "_") || "default";
+}
+
+function shopDir(shop) {
+  return path.join(SHOPS_DIR, sanitizeShop(shop));
+}
+
+function stateFile(shop) {
+  return path.join(shopDir(shop), "stock-state.json");
+}
+
 function ensureDirSync(dir) {
   try {
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   } catch (e) {
-    logEvent(
-      "stock_state_ensure_dir_error",
-      { dir, message: e.message },
-      "error"
-    );
+    logEvent("stock_state_ensure_dir_error", { dir, message: e.message }, "error");
   }
 }
 
 async function ensureDir(dir) {
   try {
-    if (!fs.existsSync(dir)) {
-      await fsp.mkdir(dir, { recursive: true });
-    }
+    if (!fs.existsSync(dir)) await fsp.mkdir(dir, { recursive: true });
   } catch (e) {
-    logEvent(
-      "stock_state_ensure_dir_error",
-      { dir, message: e.message },
-      "error"
-    );
+    logEvent("stock_state_ensure_dir_error", { dir, message: e.message }, "error");
   }
 }
 
@@ -60,24 +55,22 @@ function safeParseJSON(raw) {
   }
 }
 
-// ============================
-// LOAD (SYNC) — boot safe
-// ============================
-function loadState() {
+function loadState(shop = "default") {
+  const file = stateFile(shop);
   try {
-    const dir = path.dirname(STATE_FILE);
-    ensureDirSync(dir);
+    ensureDirSync(path.dirname(file));
 
-    if (!fs.existsSync(STATE_FILE)) {
-      logEvent("stock_state_missing", { file: STATE_FILE });
+    if (!fs.existsSync(file)) {
+      logEvent("stock_state_missing", { shop: sanitizeShop(shop), file });
       return {};
     }
 
-    const raw = fs.readFileSync(STATE_FILE, "utf8");
+    const raw = fs.readFileSync(file, "utf8");
     const parsed = safeParseJSON(raw);
 
     logEvent("stock_state_loaded", {
-      file: STATE_FILE,
+      shop: sanitizeShop(shop),
+      file,
       products: parsed?.products
         ? Object.keys(parsed.products).length
         : Object.keys(parsed || {}).length,
@@ -85,41 +78,31 @@ function loadState() {
 
     return parsed;
   } catch (e) {
-    logEvent(
-      "stock_state_load_error",
-      { file: STATE_FILE, message: e.message },
-      "error"
-    );
+    logEvent("stock_state_load_error", { shop: sanitizeShop(shop), file, message: e.message }, "error");
     return {};
   }
 }
 
-// ============================
-// SAVE (ASYNC) — atomic write
-// ============================
-async function saveState(state) {
+async function saveState(shop = "default", state = {}) {
+  const file = stateFile(shop);
   try {
-    const dir = path.dirname(STATE_FILE);
-    await ensureDir(dir);
+    await ensureDir(path.dirname(file));
 
-    const tmpFile = STATE_FILE + ".tmp";
+    const tmpFile = file + ".tmp";
     const payload = JSON.stringify(state || {}, null, 2);
 
     await fsp.writeFile(tmpFile, payload, "utf8");
-    await fsp.rename(tmpFile, STATE_FILE);
+    await fsp.rename(tmpFile, file);
 
     logEvent("stock_state_saved", {
-      file: STATE_FILE,
+      shop: sanitizeShop(shop),
+      file,
       size: payload.length,
     });
 
     return true;
   } catch (e) {
-    logEvent(
-      "stock_state_save_error",
-      { file: STATE_FILE, message: e.message },
-      "error"
-    );
+    logEvent("stock_state_save_error", { shop: sanitizeShop(shop), file, message: e.message }, "error");
     return false;
   }
 }
@@ -127,6 +110,9 @@ async function saveState(state) {
 module.exports = {
   loadState,
   saveState,
-  STATE_FILE,
+  sanitizeShop,
+  shopDir,
+  stateFile,
   DATA_DIR,
+  SHOPS_DIR,
 };

@@ -1,6 +1,7 @@
 // public/js/app.js
 // ============================================
 // BULK STOCK MANAGER - Front (Admin UI)
+// ✅ FIX multi-shop: ajoute automatiquement ?shop=... à toutes les routes /api
 // - Produits groupés par catégorie
 // - Modals avec backdrop (lisibilité)
 // - Catégories : assignation produit OK
@@ -11,6 +12,30 @@
 // ============================================
 
 (() => {
+  // ---------------- SHOP CONTEXT (Shopify) ----------------
+  // Shopify App iframe URL contient généralement ?shop=xxx.myshopify.com
+  const SHOP = new URLSearchParams(window.location.search).get("shop") || "";
+
+  function apiPath(path) {
+    // path attendu: "/api/...." (ou déjà avec query)
+    if (!SHOP) return path;
+
+    const hasQuery = String(path).includes("?");
+    const sep = hasQuery ? "&" : "?";
+    return `${path}${sep}shop=${encodeURIComponent(SHOP)}`;
+  }
+
+  function apiUrl(path) {
+    // Retourne un "pathname + search" pour fetch
+    const u = new URL(window.location.origin + path);
+    if (SHOP) u.searchParams.set("shop", SHOP);
+    return u.pathname + u.search;
+  }
+
+  async function apiFetch(path, options) {
+    return fetch(apiPath(path), options);
+  }
+
   // ---------------- DOM / state ----------------
   const result = document.getElementById("result");
 
@@ -130,14 +155,15 @@
     el("btnImport")?.addEventListener("click", openImportModal);
     el("btnCategories")?.addEventListener("click", openCategoriesModal);
 
-    el("btnExportStock")?.addEventListener("click", () => (window.location.href = "/api/stock.csv"));
-    el("btnExportMovements")?.addEventListener("click", () => (window.location.href = "/api/movements.csv"));
+    // ✅ export avec shop
+    el("btnExportStock")?.addEventListener("click", () => (window.location.href = apiPath("/api/stock.csv")));
+    el("btnExportMovements")?.addEventListener("click", () => (window.location.href = apiPath("/api/movements.csv")));
   }
 
   // ---------------- server info ----------------
   async function getServerInfo() {
     try {
-      const res = await fetch("/api/server-info");
+      const res = await apiFetch("/api/server-info");
       const data = await safeJson(res);
 
       serverInfo = data || {};
@@ -161,7 +187,7 @@
   // ---------------- categories ----------------
   async function loadCategories() {
     try {
-      const res = await fetch("/api/categories");
+      const res = await apiFetch("/api/categories");
       const data = await safeJson(res);
       categories = Array.isArray(data.categories) ? data.categories : [];
       updateCategoryFilterOptions();
@@ -205,11 +231,12 @@
     log("⏳ Actualisation du stock...", "info");
 
     try {
-      const url = new URL(window.location.origin + "/api/stock");
-      if (sortAlpha) url.searchParams.set("sort", "alpha");
-      if (currentCategoryFilter) url.searchParams.set("category", currentCategoryFilter);
+      const u = new URL(window.location.origin + "/api/stock");
+      if (SHOP) u.searchParams.set("shop", SHOP);
+      if (sortAlpha) u.searchParams.set("sort", "alpha");
+      if (currentCategoryFilter) u.searchParams.set("category", currentCategoryFilter);
 
-      const res = await fetch(url.pathname + url.search);
+      const res = await fetch(u.pathname + u.search);
       const data = await safeJson(res);
 
       if (data && Array.isArray(data.products)) {
@@ -355,11 +382,12 @@
     box.innerHTML = `<div class="muted" style="padding:10px;">Chargement...</div>`;
 
     try {
-      const url = new URL(window.location.origin + "/api/movements");
-      url.searchParams.set("limit", "300");
-      url.searchParams.set("days", String(days));
+      const u = new URL(window.location.origin + "/api/movements");
+      if (SHOP) u.searchParams.set("shop", SHOP);
+      u.searchParams.set("limit", "300");
+      u.searchParams.set("days", String(days));
 
-      const res = await fetch(url.pathname + url.search);
+      const res = await fetch(u.pathname + u.search);
       const data = await safeJson(res);
       if (!res.ok) throw new Error(data?.error || "Erreur /api/movements");
 
@@ -403,7 +431,7 @@
   async function testOrder() {
     log("⏳ Traitement de la commande test en cours...", "info");
     try {
-      const res = await fetch("/api/test-order", { method: "POST" });
+      const res = await apiFetch("/api/test-order", { method: "POST" });
       const data = await safeJson(res);
       if (!res.ok) throw new Error(data?.error || "Erreur test-order");
 
@@ -551,7 +579,7 @@
     const gramsDelta = sign * grams;
 
     try {
-      const res = await fetch(`/api/products/${encodeURIComponent(currentProductId)}/adjust-total`, {
+      const res = await apiFetch(`/api/products/${encodeURIComponent(currentProductId)}/adjust-total`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ gramsDelta }),
@@ -587,7 +615,7 @@
     if (!confirm(`Supprimer "${name}" de l'interface ? (cela ne supprime PAS le produit Shopify)`)) return;
 
     try {
-      const res = await fetch(`/api/products/${encodeURIComponent(currentProductId)}`, { method: "DELETE" });
+      const res = await apiFetch(`/api/products/${encodeURIComponent(currentProductId)}`, { method: "DELETE" });
       const data = await safeJson(res);
       if (!res.ok) throw new Error(data?.error || "Erreur suppression");
 
@@ -638,7 +666,7 @@
     const categoryIds = Array.from(sel.selectedOptions).map((o) => o.value);
 
     try {
-      const res = await fetch(`/api/products/${encodeURIComponent(currentProductId)}/categories`, {
+      const res = await apiFetch(`/api/products/${encodeURIComponent(currentProductId)}/categories`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ categoryIds }),
@@ -688,7 +716,7 @@
     list.innerHTML = `<div class="muted" style="padding:10px;">Chargement...</div>`;
 
     try {
-      const res = await fetch(`/api/products/${encodeURIComponent(productId)}/history?limit=200`);
+      const res = await apiFetch(`/api/products/${encodeURIComponent(productId)}/history?limit=200`);
       const data = await safeJson(res);
       if (!res.ok) throw new Error(data?.error || "Erreur history");
 
@@ -766,7 +794,7 @@
         if (!name) return;
 
         try {
-          const res = await fetch("/api/categories", {
+          const res = await apiFetch("/api/categories", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ name }),
@@ -825,7 +853,7 @@
             const name = prompt("Nouveau nom de la catégorie ?");
             if (!name) return;
 
-            const res = await fetch(`/api/categories/${encodeURIComponent(id)}`, {
+            const res = await apiFetch(`/api/categories/${encodeURIComponent(id)}`, {
               method: "PUT",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ name: name.trim() }),
@@ -837,7 +865,7 @@
           if (act === "delete") {
             if (!confirm("Supprimer cette catégorie ?")) return;
 
-            const res = await fetch(`/api/categories/${encodeURIComponent(id)}`, { method: "DELETE" });
+            const res = await apiFetch(`/api/categories/${encodeURIComponent(id)}`, { method: "DELETE" });
             const data = await safeJson(res);
             if (!res.ok) throw new Error(data?.error || "Erreur");
           }
@@ -919,11 +947,12 @@
     results.innerHTML = `<div class="muted" style="padding:10px;">⏳ Recherche en cours...</div>`;
 
     try {
-      const url = new URL(window.location.origin + "/api/shopify/products");
-      url.searchParams.set("limit", "100");
-      if (q) url.searchParams.set("query", q);
+      const u = new URL(window.location.origin + "/api/shopify/products");
+      if (SHOP) u.searchParams.set("shop", SHOP);
+      u.searchParams.set("limit", "100");
+      if (q) u.searchParams.set("query", q);
 
-      const res = await fetch(url.pathname + url.search);
+      const res = await fetch(u.pathname + u.search);
       const data = await safeJson(res);
       if (!res.ok) throw new Error(data?.error || "Erreur");
 
@@ -963,7 +992,7 @@
     log(`⏳ Import du produit Shopify ${productId}...`, "info");
 
     try {
-      const res = await fetch("/api/import/product", {
+      const res = await apiFetch("/api/import/product", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ productId, categoryIds }),

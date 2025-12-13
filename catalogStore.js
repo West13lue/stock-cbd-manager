@@ -1,86 +1,95 @@
 // catalogStore.js
+// ============================================
+// Catégories (multi-boutique)
+// - Persist per-shop on Render Disk:
+//     /var/data/shops/<shop>/categories.json
+// ============================================
+
 const fs = require("fs");
-const fsp = require("fs").promises;
 const path = require("path");
 const crypto = require("crypto");
-const { logEvent } = require("./utils/logger");
+const { logEvent } = require("./logger");
+const { sanitizeShop, shopDir } = require("./stockState");
 
-const DATA_DIR = process.env.DATA_DIR || "/var/data";
-const FILE = path.join(DATA_DIR, "categories.json");
-
-function ensureDir() {
-  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+function fileForShop(shop) {
+  return path.join(shopDir(shop), "categories.json");
 }
 
-function load() {
+function ensureDir(dir) {
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+}
+
+function load(shop) {
+  const file = fileForShop(shop);
   try {
-    ensureDir();
-    if (!fs.existsSync(FILE)) return [];
-    const raw = fs.readFileSync(FILE, "utf8");
+    ensureDir(path.dirname(file));
+    if (!fs.existsSync(file)) return [];
+    const raw = fs.readFileSync(file, "utf8");
     const parsed = JSON.parse(raw);
     return Array.isArray(parsed) ? parsed : [];
   } catch (e) {
-    logEvent("categories_load_error", { message: e.message }, "error");
+    logEvent("categories_load_error", { shop: sanitizeShop(shop), message: e.message }, "error");
     return [];
   }
 }
 
-function save(categories) {
-  ensureDir();
-  const tmp = FILE + ".tmp";
+function save(shop, categories) {
+  const file = fileForShop(shop);
+  ensureDir(path.dirname(file));
+  const tmp = file + ".tmp";
   fs.writeFileSync(tmp, JSON.stringify(categories, null, 2), "utf8");
-  fs.renameSync(tmp, FILE);
+  fs.renameSync(tmp, file);
 }
 
-let categories = load();
+const cache = new Map();
 
-function listCategories() {
-  return categories.slice();
+function getShopCategories(shop) {
+  const key = sanitizeShop(shop);
+  if (!cache.has(key)) cache.set(key, load(key));
+  return cache.get(key);
 }
 
-function createCategory(name) {
+function listCategories(shop = "default") {
+  return getShopCategories(shop).slice();
+}
+
+function createCategory(shop = "default", name) {
   const n = String(name || "").trim();
   if (!n) throw new Error("Nom de catégorie invalide");
 
-  if (categories.some(c => c.name.toLowerCase() === n.toLowerCase())) {
+  const categories = getShopCategories(shop);
+  if (categories.some((c) => c.name.toLowerCase() === n.toLowerCase())) {
     throw new Error("Catégorie déjà existante");
   }
 
-  const cat = {
-    id: crypto.randomUUID(),
-    name: n,
-    createdAt: new Date().toISOString(),
-  };
-
+  const cat = { id: crypto.randomUUID(), name: n, createdAt: new Date().toISOString() };
   categories.push(cat);
-  save(categories);
+  save(shop, categories);
 
-  logEvent("category_created", { id: cat.id, name: cat.name });
+  logEvent("category_created", { shop: sanitizeShop(shop), id: cat.id, name: cat.name });
   return cat;
 }
 
-function renameCategory(id, name) {
+function renameCategory(shop = "default", id, name) {
   const n = String(name || "").trim();
   if (!n) throw new Error("Nom invalide");
 
-  const cat = categories.find(c => c.id === id);
+  const categories = getShopCategories(shop);
+  const cat = categories.find((c) => c.id === id);
   if (!cat) throw new Error("Catégorie introuvable");
 
   cat.name = n;
-  save(categories);
+  save(shop, categories);
   return cat;
 }
 
-function deleteCategory(id) {
+function deleteCategory(shop = "default", id) {
+  const categories = getShopCategories(shop);
   const before = categories.length;
-  categories = categories.filter(c => c.id !== id);
-  if (categories.length === before) throw new Error("Catégorie introuvable");
-  save(categories);
+  const next = categories.filter((c) => c.id !== id);
+  if (next.length === before) throw new Error("Catégorie introuvable");
+  cache.set(sanitizeShop(shop), next);
+  save(shop, next);
 }
 
-module.exports = {
-  listCategories,
-  createCategory,
-  renameCategory,
-  deleteCategory,
-};
+module.exports = { listCategories, createCategory, renameCategory, deleteCategory };
