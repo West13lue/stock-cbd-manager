@@ -1,5 +1,6 @@
 const express = require("express");
 const path = require("path");
+const fs = require("fs");
 const bodyParser = require("body-parser");
 const cors = require("cors");
 
@@ -48,11 +49,6 @@ app.delete("/api/categories/:id", (req, res) => {
   try {
     const ok = deleteCategory(req.params.id);
     if (!ok) return res.status(404).json({ error: "Catégorie introuvable" });
-
-    try {
-      addMovement({ type: "CATEGORY_DELETE", id: req.params.id });
-    } catch {}
-
     res.json({ success: true });
   } catch (e) {
     console.error("DELETE category error:", e);
@@ -60,13 +56,23 @@ app.delete("/api/categories/:id", (req, res) => {
   }
 });
 
-// ===== Front static
-app.use(express.static(path.join(__dirname)));
+// ===== Front: folder auto-detect
+const ROOT_DIR = __dirname;
+const PUBLIC_DIR = path.join(ROOT_DIR, "public");
+const STATIC_DIR = fs.existsSync(PUBLIC_DIR) ? PUBLIC_DIR : ROOT_DIR;
 
-// ✅ Catch-all SAFE (Express 5) : RegExp au lieu de "*" ou "/*"
-// On évite d’attraper /api/... pour ne pas casser l’API.
+const INDEX_PATH = path.join(STATIC_DIR, "index.html");
+if (!fs.existsSync(INDEX_PATH)) {
+  console.warn("⚠️ index.html introuvable dans:", STATIC_DIR);
+  console.warn("⚠️ Vérifie où est ton front (public/, client/, etc.)");
+}
+
+app.use(express.static(STATIC_DIR));
+
+// ✅ Catch-all SAFE Express 5 (évite /api)
 app.get(/^\/(?!api\/).*/, (req, res) => {
-  res.sendFile(path.join(__dirname, "index.html"));
+  if (fs.existsSync(INDEX_PATH)) return res.sendFile(INDEX_PATH);
+  return res.status(500).send("index.html introuvable sur le serveur");
 });
 
 app.listen(PORT, () => {
