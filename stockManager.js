@@ -2,8 +2,9 @@
 // ============================================
 // Bulk Stock Manager - Stock côté serveur
 // - Source de vérité = app (écrase Shopify)
-// - Persistance complète dans /var/data via stockState.js
+// - Persistance complète via stockState.js (Render disk /var/data)
 // - Queue pour éviter race conditions
+// - Support suppression persistée (deletedProductIds) => les produits BASE ne reviennent plus
 // ============================================
 
 const { loadState, saveState } = require("./stockState");
@@ -16,7 +17,7 @@ const stockQueue = queueMod?.add ? queueMod : queueMod?.stockQueue;
 
 // --------------------------------------------
 // CONFIG PRODUITS "BASE" (hardcodée)
-// -> Mets ici tous tes produits fixes (ceux que tu avais)
+// -> Mets ici tous tes produits fixes
 // -> Les produits importés Shopify seront ajoutés automatiquement
 // --------------------------------------------
 const BASE_PRODUCT_CONFIG = {
@@ -72,6 +73,10 @@ function normalizeCategoryIds(categoryIds) {
   return Array.isArray(categoryIds) ? categoryIds.map(String) : [];
 }
 
+function normalizeDeletedIds(arr) {
+  return Array.isArray(arr) ? arr.map(String) : [];
+}
+
 function buildProductView(config) {
   const total = clampMin0(config.totalGrams);
   const out = {};
@@ -110,12 +115,17 @@ function snapshotProduct(productId) {
 //   updatedAt: "...",
 //   products: {
 //     "id": { name,totalGrams,categoryIds,variants:{label:{gramsPerUnit,inventoryItemId}} }
-//   }
+//   },
+//   deletedProductIds: ["..."]   // ✅ IMPORTANT
 // }
 // --------------------------------------------
-function persistState() {
-  const products = {};
+function persistState(extra = {}) {
+  const prev = loadState() || {};
+  const deletedProductIds = normalizeDeletedIds(
+    extra.deletedProductIds ?? prev.deletedProductIds
+  );
 
+  const products = {};
   for (const [pid, p] of Object.entries(PRODUCT_CONFIG)) {
     products[pid] = {
       name: String(p.name || pid),
@@ -125,11 +135,12 @@ function persistState() {
     };
   }
 
-  // saveState est async dans ton stockState.js, mais on n’a pas besoin d’attendre ici
+  // saveState est async dans ton stockState.js, mais pas besoin d'attendre ici
   saveState({
     version: 2,
     updatedAt: new Date().toISOString(),
     products,
+    deletedProductIds,
   });
 }
 
@@ -139,6 +150,8 @@ function persistState() {
   // v2
   if (saved.version === 2 && saved.products && typeof saved.products === "object") {
     const restoredIds = Object.keys(saved.products);
+
+    // 1) restore produits (remplace/ajoute)
     for (const [pid, p] of Object.entries(saved.products)) {
       PRODUCT_CONFIG[pid] = {
         name: String(p?.name || pid),
@@ -148,9 +161,16 @@ function persistState() {
       };
     }
 
+    // 2) applique les suppressions persistées (tombstones)
+    const deleted = normalizeDeletedIds(saved.deletedProductIds);
+    for (const pid of deleted) {
+      if (PRODUCT_CONFIG[pid]) delete PRODUCT_CONFIG[pid];
+    }
+
     logEvent("stock_state_restore", {
       mode: "v2",
       products: restoredIds.length,
+      deleted: deleted.length,
     });
 
     return;
@@ -166,7 +186,11 @@ function persistState() {
       applied++;
     }
 
-    logEvent("stock_state_restore", { mode: "legacy", applied, base: Object.keys(PRODUCT_CONFIG).length });
+    logEvent("stock_state_restore", {
+      mode: "legacy",
+      applied,
+      base: Object.keys(PRODUCT_CONFIG).length,
+    });
   }
 })();
 
@@ -175,7 +199,6 @@ function persistState() {
 // --------------------------------------------
 function enqueue(fn) {
   if (stockQueue && typeof stockQueue.add === "function") return stockQueue.add(fn);
-  // fallback (si jamais la queue n’est pas dispo)
   return Promise.resolve().then(fn);
 }
 
@@ -193,7 +216,6 @@ async function applyOrderToProduct(productId, gramsToSubtract) {
     cfg.totalGrams = clampMin0(clampMin0(cfg.totalGrams) - g);
 
     persistState();
-
     return snapshotProduct(pid);
   });
 }
@@ -209,7 +231,6 @@ async function restockProduct(productId, gramsDelta) {
     cfg.totalGrams = clampMin0(clampMin0(cfg.totalGrams) + delta);
 
     persistState();
-
     return snapshotProduct(pid);
   });
 }
@@ -232,7 +253,9 @@ function setProductCategories(productId, categoryIds) {
 
   // (optionnel) filtre seulement les catégories existantes
   const existing = new Set((listCategories?.() || []).map((c) => String(c.id)));
-  const ids = normalizeCategoryIds(categoryIds).filter((id) => existing.size === 0 || existing.has(String(id)));
+  const ids = normalizeCategoryIds(categoryIds).filter(
+    (id) => existing.size === 0 || existing.has(String(id))
+  );
 
   cfg.categoryIds = ids;
   persistState();
@@ -276,21 +299,25 @@ function upsertImportedProductConfig({ productId, name, totalGrams, variants, ca
 // --------------------------------------------
 function getCatalogSnapshot() {
   const categories = listCategories ? listCategories() : [];
-
   const products = Object.keys(PRODUCT_CONFIG).map((pid) => snapshotProduct(pid));
-
   return { products, categories };
 }
 
 // --------------------------------------------
-// Suppression produit (supprime la config locale)
+// Suppression produit (supprime la config locale + tombstone persisté)
 // --------------------------------------------
 function removeProduct(productId) {
   const pid = String(productId);
   if (!PRODUCT_CONFIG[pid]) return false;
 
   delete PRODUCT_CONFIG[pid];
-  persistState();
+
+  // ✅ tombstone persisté : empêche les produits BASE de revenir
+  const prev = loadState() || {};
+  const deleted = new Set(normalizeDeletedIds(prev.deletedProductIds));
+  deleted.add(pid);
+
+  persistState({ deletedProductIds: Array.from(deleted) });
   return true;
 }
 
