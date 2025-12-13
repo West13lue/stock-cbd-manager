@@ -1,7 +1,10 @@
 // movementStore.js
 // ============================================
-// Persist movements to Render Disk (NDJSON/day) — multi-boutique
+// Persist movements to Render Disk (NDJSON/day)
 // - BASE_DIR: /var/data/shops/<shop>/movements
+// - Backward compatible:
+//     addMovement(movement)
+//     addMovement(shop, movement)
 // ============================================
 
 const fs = require("fs");
@@ -22,10 +25,26 @@ function fileForDate(dir, date) {
 }
 
 function safeJsonParse(line) {
-  try { return JSON.parse(line); } catch { return null; }
+  try {
+    return JSON.parse(line);
+  } catch {
+    return null;
+  }
 }
 
-function addMovement(shop = "default", movement = {}) {
+// Backward compat signature handler
+function normalizeArgs(arg1, arg2) {
+  // addMovement(movementObject)
+  if (arg1 && typeof arg1 === "object" && !Array.isArray(arg1)) {
+    return { shop: "default", movement: arg1 };
+  }
+  // addMovement(shop, movementObject)
+  return { shop: arg1 || "default", movement: arg2 || {} };
+}
+
+function addMovement(arg1, arg2) {
+  const { shop, movement } = normalizeArgs(arg1, arg2);
+
   const dir = baseDirForShop(shop);
   ensureDir(dir);
 
@@ -70,13 +89,7 @@ function listMovements(shop = "default", { days = 7, limit = 2000 } = {}) {
     if (out.length >= max * 3) break;
   }
 
-  out.sort((a, b) => {
-    const ta = Date.parse(a?.ts || "");
-    const tb = Date.parse(b?.ts || "");
-    if (Number.isFinite(tb) && Number.isFinite(ta)) return tb - ta;
-    return String(b?.ts || "").localeCompare(String(a?.ts || ""));
-  });
-
+  out.sort((a, b) => Date.parse(b?.ts || "") - Date.parse(a?.ts || ""));
   return out.slice(0, max);
 }
 
@@ -96,7 +109,9 @@ function purgeOld(shop = "default", daysToKeep = 14) {
     const d = new Date(dateStr);
     if (Number.isNaN(d.getTime())) continue;
     if (d < limit) {
-      try { fs.unlinkSync(path.join(dir, f)); } catch {}
+      try {
+        fs.unlinkSync(path.join(dir, f));
+      } catch {}
     }
   }
 }
@@ -107,7 +122,9 @@ function clearMovements(shop = "default") {
   const files = fs.readdirSync(dir);
   for (const f of files) {
     if (!f.endsWith(".ndjson")) continue;
-    try { fs.unlinkSync(path.join(dir, f)); } catch {}
+    try {
+      fs.unlinkSync(path.join(dir, f));
+    } catch {}
   }
 }
 
