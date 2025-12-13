@@ -8,7 +8,7 @@
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
-const { logEvent } = require("./logger");
+const { logEvent } = require("./utils/logger");
 const { sanitizeShop, shopDir } = require("./stockState");
 
 function fileForShop(shop) {
