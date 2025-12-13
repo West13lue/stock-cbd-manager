@@ -1,118 +1,112 @@
-// stockState.js
+// catalogStore.js
 // ============================================
-// Stock persistence (Render Persistent Disk)
-// - DATA_DIR default: /var/data
-// - Per-shop files (multi-boutique):
-//     /var/data/shops/<shop>/stock-state.json
-// - loadState(shop): SYNC (boot safe)
-// - saveState(shop,state): ASYNC + atomic write
+// Catégories (multi-boutique)
+// Persist par shop:
+//   /var/data/shops/<shop>/categories.json
 // ============================================
 
 const fs = require("fs");
-const fsp = fs.promises;
 const path = require("path");
+const crypto = require("crypto");
 
-// ✅ logger dans /utils/logger.js
 const { logEvent } = require("./utils/logger");
+const { sanitizeShop, shopDir } = require("./stockState");
 
-const DATA_DIR = process.env.DATA_DIR || "/var/data";
-const SHOPS_DIR = path.join(DATA_DIR, "shops");
-
-function sanitizeShop(shop) {
-  const s = String(shop || "").trim().toLowerCase();
-  return s.replace(/[^a-z0-9._-]/g, "_") || "default";
-}
-
-function shopDir(shop) {
-  return path.join(SHOPS_DIR, sanitizeShop(shop));
-}
-
-function stateFile(shop) {
-  return path.join(shopDir(shop), "stock-state.json");
+function categoriesFile(shop) {
+  return path.join(shopDir(shop), "categories.json");
 }
 
 function ensureDirSync(dir) {
-  try {
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  } catch (e) {
-    logEvent("stock_state_ensure_dir_error", { dir, message: e.message }, "error");
-  }
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 }
 
-async function ensureDir(dir) {
-  try {
-    if (!fs.existsSync(dir)) await fsp.mkdir(dir, { recursive: true });
-  } catch (e) {
-    logEvent("stock_state_ensure_dir_error", { dir, message: e.message }, "error");
-  }
-}
-
-function safeParseJSON(raw) {
-  try {
-    if (!raw || !String(raw).trim()) return {};
-    const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === "object" ? parsed : {};
-  } catch {
-    return {};
-  }
-}
-
-function loadState(shop = "default") {
-  const file = stateFile(shop);
+function load(shop = "default") {
+  const file = categoriesFile(shop);
   try {
     ensureDirSync(path.dirname(file));
-
-    if (!fs.existsSync(file)) {
-      logEvent("stock_state_missing", { shop: sanitizeShop(shop), file });
-      return {};
-    }
-
+    if (!fs.existsSync(file)) return [];
     const raw = fs.readFileSync(file, "utf8");
-    const parsed = safeParseJSON(raw);
-
-    logEvent("stock_state_loaded", {
-      shop: sanitizeShop(shop),
-      file,
-      products: parsed?.products ? Object.keys(parsed.products).length : Object.keys(parsed || {}).length,
-    });
-
-    return parsed;
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
   } catch (e) {
-    logEvent("stock_state_load_error", { shop: sanitizeShop(shop), file, message: e.message }, "error");
-    return {};
+    logEvent("categories_load_error", { shop: sanitizeShop(shop), file, message: e.message }, "error");
+    return [];
   }
 }
 
-async function saveState(shop = "default", state = {}) {
-  const file = stateFile(shop);
-  try {
-    await ensureDir(path.dirname(file));
+function save(shop, categories) {
+  const file = categoriesFile(shop);
+  ensureDirSync(path.dirname(file));
+  const tmp = file + ".tmp";
+  fs.writeFileSync(tmp, JSON.stringify(categories || [], null, 2), "utf8");
+  fs.renameSync(tmp, file);
+}
 
-    const tmpFile = file + ".tmp";
-    const payload = JSON.stringify(state || {}, null, 2);
+const cache = new Map();
 
-    await fsp.writeFile(tmpFile, payload, "utf8");
-    await fsp.rename(tmpFile, file);
+function get(shop = "default") {
+  const key = sanitizeShop(shop);
+  if (!cache.has(key)) cache.set(key, load(key));
+  return cache.get(key);
+}
 
-    logEvent("stock_state_saved", {
-      shop: sanitizeShop(shop),
-      file,
-      size: payload.length,
-    });
+function listCategories(shop = "default") {
+  return get(shop).slice();
+}
 
-    return true;
-  } catch (e) {
-    logEvent("stock_state_save_error", { shop: sanitizeShop(shop), file, message: e.message }, "error");
-    return false;
+function createCategory(shop = "default", name) {
+  const n = String(name || "").trim();
+  if (!n) throw new Error("Nom de catégorie invalide");
+
+  const categories = get(shop);
+
+  if (categories.some((c) => String(c.name).toLowerCase() === n.toLowerCase())) {
+    throw new Error("Catégorie déjà existante");
   }
+
+  const cat = {
+    id: crypto.randomUUID(),
+    name: n,
+    createdAt: new Date().toISOString(),
+  };
+
+  categories.push(cat);
+  save(shop, categories);
+
+  logEvent("category_created", { shop: sanitizeShop(shop), id: cat.id, name: cat.name });
+  return cat;
+}
+
+function renameCategory(shop = "default", id, name) {
+  const n = String(name || "").trim();
+  if (!n) throw new Error("Nom invalide");
+
+  const categories = get(shop);
+  const cat = categories.find((c) => c.id === id);
+  if (!cat) throw new Error("Catégorie introuvable");
+
+  cat.name = n;
+  save(shop, categories);
+
+  logEvent("category_renamed", { shop: sanitizeShop(shop), id, name: n });
+  return cat;
+}
+
+function deleteCategory(shop = "default", id) {
+  const categories = get(shop);
+  const next = categories.filter((c) => c.id !== id);
+
+  if (next.length === categories.length) throw new Error("Catégorie introuvable");
+
+  cache.set(sanitizeShop(shop), next);
+  save(shop, next);
+
+  logEvent("category_deleted", { shop: sanitizeShop(shop), id });
 }
 
 module.exports = {
-  loadState,
-  saveState,
-  sanitizeShop,
-  shopDir,
-  stateFile,
-  DATA_DIR,
-  SHOPS_DIR,
+  listCategories,
+  createCategory,
+  renameCategory,
+  deleteCategory,
 };
