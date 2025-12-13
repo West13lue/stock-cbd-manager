@@ -38,17 +38,25 @@ const { searchProducts } = require("./shopifyClient");
 const app = express();
 app.set("trust proxy", 1);
 
-app.use(helmet());
-app.use(express.json({ limit: "2mb" }));
-
 app.use(
-  rateLimit({
-    windowMs: 60 * 1000,
-    max: 300,
-    standardHeaders: true,
-    legacyHeaders: false,
+  helmet({
+    // Shopify embed: autoriser l'admin Shopify à iframer ton app
+    contentSecurityPolicy: {
+      useDefaults: true,
+      directives: {
+        ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+        "frame-ancestors": [
+          "https://admin.shopify.com",
+          "https://*.myshopify.com",
+          "https://admin.myshopify.com",
+        ],
+      },
+    },
+    // (optionnel) si certains navigateurs utilisent encore X-Frame-Options:
+    frameguard: false,
   })
 );
+
 
 // -----------------------------
 // Helpers
