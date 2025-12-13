@@ -76,15 +76,26 @@ function getShop(req) {
 }
 
 function pickName(req) {
-  // accepte plusieurs formats
-  const raw =
+  // 1) cas standard
+  let raw =
     req.body?.name ??
     req.body?.categoryName ??
     req.body?.title ??
     req.body?.value ??
-    (typeof req.body === "string" ? req.body : "") ??
-    req.query?.name ??
     "";
+
+  // 2) si body est un objet avec une seule clé { Fleurs: "" }
+  if (!raw && req.body && typeof req.body === "object") {
+    const vals = Object.values(req.body).filter(v => typeof v === "string");
+    if (vals.length === 1) raw = vals[0];
+  }
+
+  // 3) si body est une string brute
+  if (!raw && typeof req.body === "string") raw = req.body;
+
+  // 4) fallback query
+  if (!raw && req.query?.name) raw = req.query.name;
+
   return String(raw || "").trim();
 }
 
