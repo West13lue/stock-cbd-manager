@@ -13,6 +13,8 @@
 //   - GET /api/shopify/locations
 //   - GET /api/settings
 //   - POST /api/settings/location
+// ✅ FIX CSS Shopify iframe:
+//   - Injecte /css/style.css via JS pour garantir son chargement
 // ============================================
 
 (() => {
@@ -29,6 +31,28 @@
   async function apiFetch(path, options) {
     return fetch(apiPath(path), options);
   }
+
+  // ✅ FIX: injecte ton CSS même si Shopify “ignore” le <link> dans <head>
+  function injectAppCss() {
+    const ID = "bulk-stock-manager-css";
+    if (document.getElementById(ID)) return;
+
+    const link = document.createElement("link");
+    link.id = ID;
+    link.rel = "stylesheet";
+    link.type = "text/css";
+    link.href = "/css/style.css";
+    link.crossOrigin = "anonymous";
+
+    link.addEventListener("error", () => {
+      console.error("❌ Impossible de charger /css/style.css (vérifie public/css/style.css + express.static)");
+    });
+
+    document.head.appendChild(link);
+  }
+
+  // Inject tout de suite
+  injectAppCss();
 
   // ---------------- DOM / state ----------------
   const result = document.getElementById("result");
@@ -47,12 +71,16 @@
   let currentLocationId = null;
 
   // ---------------- utils ----------------
-  function el(id) { return document.getElementById(id); }
+  function el(id) {
+    return document.getElementById(id);
+  }
 
   function escapeHtml(str) {
     return String(str ?? "")
-      .replace(/&/g, "&amp;").replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;").replace(/"/g, "&quot;")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
       .replace(/'/g, "&#039;");
   }
 
@@ -221,7 +249,6 @@
     if (currentLocationId) {
       sel.value = String(currentLocationId);
     } else {
-      // ✅ si pas de setting enregistré, on sélectionne la 1ère location active (sinon la 1ère)
       const firstActive = locs.find((l) => l.active)?.id || locs[0].id;
       sel.value = String(firstActive);
     }
@@ -360,7 +387,9 @@
       log("❌ ERREUR: " + err.message, "error");
       const list = el("productList");
       if (list) {
-        list.innerHTML = `<div style="padding:12px;color:#fca5a5;">Erreur de chargement stock: ${escapeHtml(err.message)}</div>`;
+        list.innerHTML = `<div style="padding:12px;color:#fca5a5;">Erreur de chargement stock: ${escapeHtml(
+          err.message
+        )}</div>`;
       }
     }
   }
@@ -399,25 +428,20 @@
     for (const [id, p] of entries) {
       const catIds = Array.isArray(p.categoryIds) ? p.categoryIds : [];
       const first = catIds[0] || "__uncat__";
-      const groupName =
-        first === "__uncat__" ? "Sans catégorie" : (getCategoryNameById(first) || "Sans catégorie");
+      const groupName = first === "__uncat__" ? "Sans catégorie" : getCategoryNameById(first) || "Sans catégorie";
 
       if (!groups.has(groupName)) groups.set(groupName, []);
       groups.get(groupName).push([id, p]);
     }
 
-    const groupNames = Array.from(groups.keys()).sort((a, b) =>
-      a.localeCompare(b, "fr", { sensitivity: "base" })
-    );
+    const groupNames = Array.from(groups.keys()).sort((a, b) => a.localeCompare(b, "fr", { sensitivity: "base" }));
 
     productList.innerHTML = groupNames
       .map((gName) => {
         const items = groups.get(gName) || [];
 
         if (sortAlpha) {
-          items.sort((a, b) =>
-            String(a[1].name).localeCompare(String(b[1].name), "fr", { sensitivity: "base" })
-          );
+          items.sort((a, b) => String(a[1].name).localeCompare(String(b[1].name), "fr", { sensitivity: "base" }));
         }
 
         const cards = items
@@ -493,24 +517,26 @@
         return tb - ta;
       });
 
-      box.innerHTML = items.map((m) => {
-        const when = formatDateTime(m.ts);
-        const delta = Number(m.gramsDelta ?? m.deltaGrams ?? 0);
-        const sign = delta > 0 ? "+" : "";
-        const source = m.source || m.type || "movement";
-        const pname = m.productName ? ` • ${escapeHtml(m.productName)}` : "";
-        const after = Number.isFinite(Number(m.totalAfter)) ? ` → ${Number(m.totalAfter)}g` : "";
+      box.innerHTML = items
+        .map((m) => {
+          const when = formatDateTime(m.ts);
+          const delta = Number(m.gramsDelta ?? m.deltaGrams ?? 0);
+          const sign = delta > 0 ? "+" : "";
+          const source = m.source || m.type || "movement";
+          const pname = m.productName ? ` • ${escapeHtml(m.productName)}` : "";
+          const after = Number.isFinite(Number(m.totalAfter)) ? ` → ${Number(m.totalAfter)}g` : "";
 
-        return `
-          <div class="history-item">
-            <div class="h-left">
-              <div class="h-title">${escapeHtml(source)}${pname}</div>
-              <div class="h-sub">${escapeHtml(when)}</div>
+          return `
+            <div class="history-item">
+              <div class="h-left">
+                <div class="h-title">${escapeHtml(source)}${pname}</div>
+                <div class="h-sub">${escapeHtml(when)}</div>
+              </div>
+              <div class="h-delta">${sign}${delta}g${after}</div>
             </div>
-            <div class="h-delta">${sign}${delta}g${after}</div>
-          </div>
-        `;
-      }).join("");
+          `;
+        })
+        .join("");
     } catch (e) {
       box.innerHTML = `<div style="color:#fca5a5; padding:10px;">Erreur mouvements: ${escapeHtml(e.message)}</div>`;
     }
@@ -544,12 +570,12 @@
     select.innerHTML =
       '<option value="">Sélectionnez un produit...</option>' +
       Object.entries(stockData)
-        .sort((a, b) =>
-          String(a[1]?.name || "").localeCompare(String(b[1]?.name || ""), "fr", { sensitivity: "base" })
-        )
-        .map(([id, product]) =>
-          `<option value="${escapeHtml(id)}">${escapeHtml(product.name)} (Stock: ${Number(product.totalGrams || 0)}g)</option>`
-        )
+        .sort((a, b) => String(a[1]?.name || "").localeCompare(String(b[1]?.name || ""), "fr", { sensitivity: "base" }))
+        .map(([id, product]) => {
+          return `<option value="${escapeHtml(id)}">${escapeHtml(product.name)} (Stock: ${Number(
+            product.totalGrams || 0
+          )}g)</option>`;
+        })
         .join("");
 
     openModal(modal);
@@ -908,9 +934,7 @@
     const list = el("categoriesList");
     if (!list) return;
 
-    const sorted = categories.slice().sort((a, b) =>
-      String(a.name).localeCompare(String(b.name), "fr", { sensitivity: "base" })
-    );
+    const sorted = categories.slice().sort((a, b) => String(a.name).localeCompare(String(b.name), "fr", { sensitivity: "base" }));
 
     if (!sorted.length) {
       list.innerHTML = `<div class="muted" style="padding:10px;">Aucune catégorie</div>`;
@@ -918,7 +942,8 @@
     }
 
     list.innerHTML = sorted
-      .map((c) => `
+      .map(
+        (c) => `
         <div class="category-item">
           <div class="category-name">${escapeHtml(c.name)}</div>
           <div class="category-actions">
@@ -926,7 +951,8 @@
             <button class="btn btn-secondary btn-sm" data-act="delete" data-id="${escapeHtml(c.id)}" type="button">Supprimer</button>
           </div>
         </div>
-      `)
+      `
+      )
       .join("");
 
     list.querySelectorAll("button[data-act]").forEach((btn) => {
@@ -1049,7 +1075,8 @@
       }
 
       results.innerHTML = items
-        .map((p) => `
+        .map(
+          (p) => `
           <div class="import-item">
             <div class="import-main">
               <div class="import-title">${escapeHtml(p.title)}</div>
@@ -1057,7 +1084,8 @@
             </div>
             <button class="btn btn-primary btn-sm" data-import="${escapeHtml(p.id)}" type="button">Importer</button>
           </div>
-        `)
+        `
+        )
         .join("");
 
       results.querySelectorAll("button[data-import]").forEach((btn) => {
@@ -1098,6 +1126,9 @@
   // ---------------- init ----------------
   window.addEventListener("load", async () => {
     document.body.classList.add("full-width");
+
+    // ✅ re-inject au load (au cas où Shopify remplace head tardivement)
+    injectAppCss();
 
     ensureCatalogControls();
 
