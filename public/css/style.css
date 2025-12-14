@@ -1,6 +1,5 @@
 /* ============================
    Base UI — CBD Stock Manager
-   (restaure le style global)
 ============================ */
 
 :root {
@@ -31,18 +30,21 @@ body {
 
 a { color: inherit; }
 
+/* ✅ Pleine largeur (app.js ajoute body.full-width) */
 .container {
   max-width: 1200px;
   margin: 0 auto;
   padding: 18px;
 }
+body.full-width .container {
+  max-width: none;
+  width: 100%;
+}
 
 .muted { color: var(--muted); }
 .hint { font-size: 12px; color: var(--muted2); line-height: 1.35; }
 
-.header {
-  padding: 10px 0 6px;
-}
+.header { padding: 10px 0 6px; }
 
 .header-main {
   display: flex;
@@ -147,23 +149,15 @@ h1 {
   font-size: 13px;
   line-height: 1;
 }
-
-.btn:hover {
-  background: rgba(255,255,255,0.09);
-}
-
-.btn:active {
-  transform: translateY(1px);
-}
+.btn:hover { background: rgba(255,255,255,0.09); }
+.btn:active { transform: translateY(1px); }
 
 .btn-primary {
   background: rgba(130,110,196,0.22);
   border-color: rgba(130,110,196,0.35);
 }
 
-.btn-close {
-  padding: 8px 10px;
-}
+.btn-close { padding: 8px 10px; }
 
 select, input {
   border: 1px solid var(--border);
@@ -172,10 +166,7 @@ select, input {
   border-radius: 12px;
   outline: none;
 }
-
-select:focus, input:focus {
-  border-color: rgba(130,110,196,0.55);
-}
+select:focus, input:focus { border-color: rgba(130,110,196,0.55); }
 
 /* Listes */
 .product-list {
@@ -197,27 +188,47 @@ select:focus, input:focus {
   min-height: 70px;
 }
 
-/* Modals */
+/* ============================
+   Modals
+   ✅ FIX CRITIQUE : app.js utilise .active (pas .open)
+============================ */
+
 .modal {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.62);
-  display: none; /* app.js doit gérer l'ouverture */
+  display: none;                 /* fermé par défaut */
   align-items: center;
   justify-content: center;
   padding: 18px;
   z-index: 9999;
 }
 
-.modal.open { display: flex; }
+.modal.active,
+.modal.open {                     /* on supporte les 2 */
+  display: flex;
+}
+
+/* Backdrop injecté par app.js */
+.modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.62);
+}
 
 .modal-panel {
+  position: relative;
   width: min(760px, 96vw);
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: var(--radius2);
   box-shadow: 0 25px 70px rgba(0,0,0,0.55);
   overflow: hidden;
+  z-index: 1;
+}
+
+/* Modale large (Import) */
+.modal-wide {
+  width: min(980px, 96vw);
 }
 
 .modal-head {
@@ -234,9 +245,7 @@ select:focus, input:focus {
   font-size: 14px;
 }
 
-.modal-body {
-  padding: 14px;
-}
+.modal-body { padding: 14px; }
 
 .modal-actions {
   display: flex;
@@ -273,13 +282,9 @@ select:focus, input:focus {
 
 /* ============================
    Header controls (app.js inject)
-   - Responsive layout
-   - Shopify Location select clean
 ============================ */
 
-.catalog-controls {
-  margin-top: 12px;
-}
+.catalog-controls { margin-top: 12px; }
 
 .catalog-row {
   display: flex;
@@ -315,35 +320,15 @@ select:focus, input:focus {
   margin-left: auto;
 }
 
-/* La colonne "Location Shopify" reste lisible */
-#locationSelect {
-  min-width: 240px;
-}
+#locationSelect { min-width: 240px; }
 
-/* Mobile: tout stack proprement */
 @media (max-width: 860px) {
-  .catalog-row {
-    align-items: stretch;
-  }
-
-  .catalog-actions {
-    margin-left: 0;
-    width: 100%;
-  }
-
-  .catalog-row .field {
-    min-width: 0;
-    flex: 1 1 220px;
-  }
-
-  #locationSelect {
-    min-width: 0;
-  }
+  .catalog-row { align-items: stretch; }
+  .catalog-actions { margin-left: 0; width: 100%; }
+  .catalog-row .field { min-width: 0; flex: 1 1 220px; }
+  #locationSelect { min-width: 0; }
 }
 
-/* Petit mobile: actions en full width */
 @media (max-width: 520px) {
-  .catalog-actions .btn {
-    flex: 1 1 auto;
-  }
+  .catalog-actions .btn { flex: 1 1 auto; }
 }
