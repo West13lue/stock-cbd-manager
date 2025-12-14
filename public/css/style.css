@@ -1,36 +1,19 @@
 /* ============================
-   Base UI — CBD Stock Manager (UX Optimisée)
+   Base UI — CBD Stock Manager
 ============================ */
 
 :root {
-  --bg: #0b0d12;
-  --panel: #121622;
-  --panel-2: #0f1420;
-  --panel-3: #0c101a;
-
+  --bg: #0f1115;
+  --panel: #141823;
+  --panel-2: #101421;
   --border: rgba(255,255,255,0.10);
-  --border-2: rgba(255,255,255,0.14);
-
   --text: rgba(255,255,255,0.92);
   --muted: rgba(255,255,255,0.70);
   --muted2: rgba(255,255,255,0.55);
-
-  --accent: rgba(130,110,196,0.95);
-  --accent-soft: rgba(130,110,196,0.22);
-  --accent-border: rgba(130,110,196,0.40);
-
-  --success: rgba(74,222,128,0.95);
-  --warning: rgba(251,191,36,0.95);
-  --danger: rgba(248,113,113,0.95);
-
-  --shadow: 0 10px 30px rgba(0,0,0,0.38);
-  --shadow-2: 0 25px 70px rgba(0,0,0,0.58);
-
+  --shadow: 0 10px 30px rgba(0,0,0,0.35);
   --radius: 14px;
   --radius2: 18px;
   --pad: 14px;
-
-  --ring: 0 0 0 4px rgba(130,110,196,0.22);
 }
 
 * { box-sizing: border-box; }
@@ -40,18 +23,12 @@ body {
   margin: 0;
   font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji";
   color: var(--text);
-  background:
-    radial-gradient(1200px 600px at 18% 0%, rgba(130,110,196,0.18), transparent 60%),
-    radial-gradient(900px 450px at 92% 10%, rgba(117,68,103,0.16), transparent 55%),
-    linear-gradient(180deg, rgba(255,255,255,0.02), transparent 35%),
-    var(--bg);
+  background: radial-gradient(1200px 600px at 20% 0%, rgba(130,110,196,0.18), transparent 60%),
+              radial-gradient(900px 450px at 90% 10%, rgba(117,68,103,0.16), transparent 55%),
+              var(--bg);
 }
 
-a { color: inherit; text-decoration: none; }
-a:hover { text-decoration: underline; }
-
-.muted { color: var(--muted); }
-.hint { font-size: 12px; color: var(--muted2); line-height: 1.35; }
+a { color: inherit; }
 
 /* ✅ Pleine largeur (app.js ajoute body.full-width) */
 .container {
@@ -64,8 +41,11 @@ body.full-width .container {
   width: 100%;
 }
 
-/* ---------------- Header ---------------- */
+.muted { color: var(--muted); }
+.hint { font-size: 12px; color: var(--muted2); line-height: 1.35; }
+
 .header { padding: 10px 0 6px; }
+
 .header-main {
   display: flex;
   align-items: flex-end;
@@ -98,26 +78,22 @@ h1 {
   font-size: 12px;
   white-space: nowrap;
 }
-.server-badge.online { border-color: rgba(74,222,128,0.30); background: rgba(74,222,128,0.08); }
-.server-badge.dev { border-color: rgba(251,191,36,0.30); background: rgba(251,191,36,0.08); }
 
 .server-meta {
   font-size: 12px;
   color: var(--muted);
 }
 
-/* ---------------- Cards / Layout ---------------- */
 .card {
-  background: linear-gradient(180deg, rgba(255,255,255,0.055), rgba(255,255,255,0.03));
+  background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.03));
   border: 1px solid var(--border);
   border-radius: var(--radius2);
   padding: var(--pad);
   box-shadow: var(--shadow);
-  overflow: hidden;
 }
 
 .card-title {
-  font-weight: 750;
+  font-weight: 650;
   font-size: 14px;
   margin-bottom: 4px;
 }
@@ -130,7 +106,7 @@ h1 {
 
 .card-value {
   font-size: 26px;
-  font-weight: 800;
+  font-weight: 750;
   letter-spacing: 0.4px;
 }
 
@@ -154,7 +130,6 @@ h1 {
   margin-top: 12px;
 }
 
-/* ---------------- Buttons ---------------- */
 .actions-row {
   display: flex;
   flex-wrap: wrap;
@@ -167,329 +142,61 @@ h1 {
   border: 1px solid var(--border);
   background: rgba(255,255,255,0.06);
   color: var(--text);
-  padding: 10px 12px;
+  padding: 9px 12px;
   border-radius: 12px;
   cursor: pointer;
-  font-weight: 750;
+  font-weight: 650;
   font-size: 13px;
   line-height: 1;
-  transition: transform .06s ease, background .12s ease, border-color .12s ease, box-shadow .12s ease;
-  user-select: none;
 }
-.btn:hover { background: rgba(255,255,255,0.09); border-color: var(--border-2); }
+.btn:hover { background: rgba(255,255,255,0.09); }
 .btn:active { transform: translateY(1px); }
-.btn:disabled { opacity: 0.55; cursor: not-allowed; }
-
-.btn:focus { outline: none; }
-.btn:focus-visible { box-shadow: var(--ring); border-color: rgba(130,110,196,0.55); }
-
-.btn-sm { padding: 9px 11px; border-radius: 11px; font-size: 12.5px; }
 
 .btn-primary {
-  background: var(--accent-soft);
-  border-color: var(--accent-border);
+  background: rgba(130,110,196,0.22);
+  border-color: rgba(130,110,196,0.35);
 }
-.btn-primary:hover { background: rgba(130,110,196,0.28); border-color: rgba(130,110,196,0.52); }
 
-.btn-secondary { background: rgba(255,255,255,0.05); }
-.btn-info { background: rgba(56,189,248,0.14); border-color: rgba(56,189,248,0.26); }
-.btn-info:hover { background: rgba(56,189,248,0.18); border-color: rgba(56,189,248,0.34); }
+.btn-close { padding: 8px 10px; }
 
-.btn-close { padding: 8px 10px; border-radius: 10px; }
-
-/* ---------------- Inputs / Selects (dropdowns lisibles en dark) ---------------- */
-select, input, textarea {
+select, input {
   border: 1px solid var(--border);
-  background: rgba(0,0,0,0.22); /* ✅ fond sombre partout */
+  background: rgba(255,255,255,0.05);
   color: var(--text);
   border-radius: 12px;
   outline: none;
-  transition: border-color .12s ease, box-shadow .12s ease, background .12s ease;
+}
+select:focus, input:focus { border-color: rgba(130,110,196,0.55); }
+
+/* Listes */
+.product-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
-select:hover, input:hover, textarea:hover {
-  border-color: var(--border-2);
-  background: rgba(0,0,0,0.26);
-}
-
-select:focus, input:focus, textarea:focus {
-  border-color: rgba(130,110,196,0.55);
-  box-shadow: var(--ring);
-}
-
-/* ✅ Fix “texte blanc sur fond blanc” dans certains navigateurs : options du select */
-select option, select optgroup {
-  background: #0a0d14;
-  color: #ffffff;
-}
-
-/* multi-select plus lisible */
-select[multiple] {
-  padding: 8px 10px;
-  border-radius: 12px;
-  background: rgba(0,0,0,0.26);
-}
-
-/* Placeholder */
-input::placeholder, textarea::placeholder { color: rgba(255,255,255,0.35); }
-
-/* Scrollbar (WebKit) */
-*::-webkit-scrollbar { width: 10px; height: 10px; }
-*::-webkit-scrollbar-thumb {
-  background: rgba(255,255,255,0.14);
-  border-radius: 999px;
-  border: 2px solid rgba(0,0,0,0.30);
-}
-*::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.18); }
-*::-webkit-scrollbar-track { background: rgba(0,0,0,0.22); }
-
-/* ---------------- Console ---------------- */
 .result-content {
   white-space: pre-wrap;
   word-break: break-word;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   font-size: 12px;
-  color: rgba(255,255,255,0.90);
-  background: rgba(0,0,0,0.34); /* plus contrasté */
+  color: rgba(255,255,255,0.85);
+  background: rgba(0,0,0,0.22);
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 10px;
   min-height: 70px;
 }
 
-.result-content.success { border-color: rgba(74,222,128,0.25); }
-.result-content.error { border-color: rgba(248,113,113,0.25); }
-.result-content.info { border-color: rgba(130,110,196,0.25); }
-
-/* ============================
-   Catalog Controls (app.js inject)
-============================ */
-
-.catalog-controls { margin-top: 12px; }
-
-.catalog-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  align-items: flex-end;
-  padding: 12px;
-  border-radius: var(--radius2);
-  border: 1px solid var(--border);
-  background: linear-gradient(180deg, rgba(255,255,255,0.035), rgba(0,0,0,0.15));
-}
-
-.catalog-row .field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 160px;
-}
-
-.catalog-row .field label {
-  font-size: 12px;
-  opacity: 0.9;
-}
-
-.catalog-row select,
-.catalog-row input {
-  width: 100%;
-  min-height: 40px;
-  padding: 9px 10px;
-  border-radius: 12px;
-}
-
-.catalog-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-left: auto;
-}
-
-#locationSelect { min-width: 240px; }
-
-/* ============================
-   Produits (UI depuis app.js)
-============================ */
-
-.product-list {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.category-section { display: flex; flex-direction: column; gap: 10px; }
-
-.category-title {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 10px 12px;
-  border-radius: 14px;
-  border: 1px solid var(--border);
-  background: rgba(0,0,0,0.22);
-  font-weight: 800;
-  letter-spacing: 0.2px;
-}
-.category-count {
-  font-size: 12px;
-  font-weight: 750;
-  color: var(--muted);
-  padding: 6px 10px;
-  border-radius: 999px;
-  border: 1px solid var(--border);
-  background: rgba(255,255,255,0.05);
-}
-
-.product-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.product-item {
-  text-align: left;
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  padding: 12px;
-  cursor: pointer;
-  background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(0,0,0,0.18));
-  color: var(--text);
-  box-shadow: 0 8px 20px rgba(0,0,0,0.18);
-  transition: transform .06s ease, border-color .12s ease, background .12s ease, box-shadow .12s ease;
-}
-.product-item:hover {
-  border-color: var(--border-2);
-  background: linear-gradient(180deg, rgba(255,255,255,0.055), rgba(0,0,0,0.22));
-  box-shadow: 0 10px 26px rgba(0,0,0,0.24);
-}
-.product-item:active { transform: translateY(1px); }
-.product-item:focus { outline: none; }
-.product-item:focus-visible { box-shadow: var(--ring); border-color: rgba(130,110,196,0.55); }
-
-.product-item.low {
-  border-color: rgba(248,113,113,0.26);
-  background: linear-gradient(180deg, rgba(248,113,113,0.06), rgba(0,0,0,0.18));
-}
-
-.product-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.product-name {
-  font-weight: 850;
-  font-size: 13.5px;
-  letter-spacing: 0.2px;
-  line-height: 1.2;
-}
-
-.product-stock {
-  font-weight: 900;
-  font-size: 13.5px;
-  padding: 7px 10px;
-  border-radius: 999px;
-  border: 1px solid var(--border);
-  background: rgba(0,0,0,0.22);
-  white-space: nowrap;
-}
-
-/* stock bar */
-.stock-bar {
-  margin-top: 10px;
-  height: 10px;
-  border-radius: 999px;
-  background: rgba(255,255,255,0.08);
-  border: 1px solid rgba(255,255,255,0.06);
-  overflow: hidden;
-}
-.stock-bar-fill {
-  height: 100%;
-  border-radius: 999px;
-  background: linear-gradient(90deg, rgba(130,110,196,0.95), rgba(56,189,248,0.75));
-}
-
-/* ============================
-   Variantes (modal produit)
-============================ */
-
-.variants-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.variant-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 10px 12px;
-  border-radius: 14px;
-  border: 1px solid var(--border);
-  background: rgba(0,0,0,0.20);
-}
-
-.variant-label {
-  font-weight: 850;
-  letter-spacing: 0.2px;
-}
-
-.variant-stock {
-  font-size: 12.5px;
-  color: var(--muted);
-  padding: 6px 10px;
-  border-radius: 999px;
-  border: 1px solid var(--border);
-  background: rgba(255,255,255,0.05);
-}
-
-.variant-item.high { border-color: rgba(74,222,128,0.18); }
-.variant-item.medium { border-color: rgba(251,191,36,0.18); }
-.variant-item.low { border-color: rgba(248,113,113,0.22); }
-
-/* ============================
-   Historique (global + produit)
-============================ */
-
-.history-list { margin-top: 10px; display: flex; flex-direction: column; gap: 8px; }
-
-.history-item {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 10px 12px;
-  border-radius: 14px;
-  border: 1px solid var(--border);
-  background: rgba(0,0,0,0.20);
-}
-
-.h-left { display: flex; flex-direction: column; gap: 3px; }
-.h-title { font-weight: 850; font-size: 12.8px; letter-spacing: 0.2px; }
-.h-sub { font-size: 12px; color: var(--muted2); }
-
-.h-delta {
-  font-weight: 900;
-  font-size: 13px;
-  white-space: nowrap;
-  padding: 6px 10px;
-  border-radius: 999px;
-  border: 1px solid var(--border);
-  background: rgba(0,0,0,0.24);
-}
-
 /* ============================
    Modals
-   ✅ FIX : app.js utilise .active (pas .open)
+   ✅ FIX CRITIQUE : app.js utilise .active (pas .open)
 ============================ */
 
 .modal {
   position: fixed;
   inset: 0;
-  display: none;
+  display: none;                 /* fermé par défaut */
   align-items: center;
   justify-content: center;
   padding: 18px;
@@ -497,10 +204,11 @@ input::placeholder, textarea::placeholder { color: rgba(255,255,255,0.35); }
 }
 
 .modal.active,
-.modal.open {
+.modal.open {                     /* on supporte les 2 */
   display: flex;
 }
 
+/* Backdrop injecté par app.js */
 .modal-backdrop {
   position: absolute;
   inset: 0;
@@ -510,19 +218,57 @@ input::placeholder, textarea::placeholder { color: rgba(255,255,255,0.35); }
 .modal-panel {
   position: relative;
   width: min(760px, 96vw);
+  max-height: 90vh;              /* ✅ empêche de sortir de l’écran */
+  display: flex;                 /* ✅ permet scroll interne */
+  flex-direction: column;
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: var(--radius2);
-  box-shadow: var(--shadow-2);
-  overflow: hidden;
+  box-shadow: 0 25px 70px rgba(0,0,0,0.55);
+  overflow: hidden;              /* ✅ contenu ne déborde plus */
   z-index: 1;
 }
 
-/* Modale large (Import) */
-.modal-wide { width: min(980px, 96vw); }
+/* ✅ le contenu d'une modale doit scroller dans le panneau, pas sortir du cadre */
+.modal-content {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;                 /* ✅ IMPORTANT pour overflow dans flex */
+  flex: 1 1 auto;
+  overflow: hidden;
+}
 
-/* app.js a parfois .modal-content à l’intérieur */
-.modal-content { padding: 0; }
+/* body de modale scrollable */
+.modal-body {
+  padding: 14px;
+  overflow: auto;                /* ✅ scroll interne */
+  min-height: 0;
+}
+
+/* si tu as .modal-actions en bas, on garde fixe */
+.modal-actions {
+  flex: 0 0 auto;
+}
+
+/* ✅ Empêche le body de scroller derrière une modale */
+body.modal-open {
+  overflow: hidden;
+}
+
+/* ✅ Import results : évite que la liste explose la modale */
+.import-results {
+  margin-top: 12px;
+  overflow: auto;
+  max-height: 55vh;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: rgba(0,0,0,0.14);
+}
+
+/* Modale large (Import) */
+.modal-wide {
+  width: min(980px, 96vw);
+}
 
 .modal-head {
   display: flex;
@@ -534,7 +280,7 @@ input::placeholder, textarea::placeholder { color: rgba(255,255,255,0.35); }
 }
 
 .modal-title {
-  font-weight: 900;
+  font-weight: 750;
   font-size: 14px;
 }
 
@@ -567,82 +313,53 @@ input::placeholder, textarea::placeholder { color: rgba(255,255,255,0.35); }
   padding: 9px 10px;
 }
 
-/* petits blocs info (Categories modal) */
-.info-box {
-  margin-top: 12px;
-  padding: 10px 12px;
-  border-radius: 14px;
-  border: 1px solid rgba(56,189,248,0.18);
-  background: rgba(56,189,248,0.08);
-  color: rgba(255,255,255,0.88);
-  font-size: 12.5px;
-  line-height: 1.35;
-}
-
-/* ============================
-   Catégories modal
-============================ */
-
-.categories-list {
-  margin-top: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.category-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 10px 12px;
-  border-radius: 14px;
-  border: 1px solid var(--border);
-  background: rgba(0,0,0,0.20);
-}
-
-.category-name {
-  font-weight: 850;
-  letter-spacing: 0.2px;
-}
-
-.category-actions { display: flex; gap: 10px; flex-wrap: wrap; }
-
-/* ============================
-   Import modal
-============================ */
-
-.import-results {
-  margin-top: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.import-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 10px 12px;
-  border-radius: 14px;
-  border: 1px solid var(--border);
-  background: rgba(0,0,0,0.20);
-}
-
-.import-main { display: flex; flex-direction: column; gap: 4px; }
-.import-title { font-weight: 900; letter-spacing: 0.2px; }
-.import-sub { font-size: 12px; color: var(--muted2); }
-
-/* ============================
-   Responsive
-============================ */
-
+/* Responsive */
 @media (max-width: 980px) {
   .stats-grid { grid-template-columns: 1fr; }
   .main-grid { grid-template-columns: 1fr; }
-  .product-grid { grid-template-columns: 1fr; }
 }
+
+/* ============================
+   Header controls (app.js inject)
+============================ */
+
+.catalog-controls { margin-top: 12px; }
+
+.catalog-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+}
+
+.catalog-row .field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 160px;
+}
+
+.catalog-row .field label {
+  font-size: 12px;
+  opacity: 0.85;
+}
+
+.catalog-row select,
+.catalog-row input {
+  width: 100%;
+  min-height: 38px;
+  padding: 8px 10px;
+  border-radius: 10px;
+}
+
+.catalog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-left: auto;
+}
+
+#locationSelect { min-width: 240px; }
 
 @media (max-width: 860px) {
   .catalog-row { align-items: stretch; }
@@ -653,6 +370,4 @@ input::placeholder, textarea::placeholder { color: rgba(255,255,255,0.35); }
 
 @media (max-width: 520px) {
   .catalog-actions .btn { flex: 1 1 auto; }
-  .btn { width: 100%; }
-  .actions-row .btn { width: auto; }
 }

@@ -9,24 +9,26 @@
 //   - POST /api/settings/location
 // ✅ FIX CSS Shopify iframe:
 //   - Injecte le CSS via JS + href prefix-safe (APP_PREFIX)
+// ✅ FIX MODALS UI:
+//   - Empêche le contenu de "sortir du cadre" (scroll interne)
+//   - ESC pour fermer la modale active
 // ============================================
 
 (() => {
   // ---------------- SHOP CONTEXT (Shopify) ----------------
-function shopFromHost() {
-  try {
-    const host = new URLSearchParams(window.location.search).get("host") || "";
-    if (!host) return "";
-    const decoded = atob(host); // "xxx.myshopify.com/admin"
-    const domain = decoded.split("/")[0].trim();
-    return domain || "";
-  } catch {
-    return "";
+  function shopFromHost() {
+    try {
+      const host = new URLSearchParams(window.location.search).get("host") || "";
+      if (!host) return "";
+      const decoded = atob(host); // "xxx.myshopify.com/admin"
+      const domain = decoded.split("/")[0].trim();
+      return domain || "";
+    } catch {
+      return "";
+    }
   }
-}
 
-const SHOP = new URLSearchParams(window.location.search).get("shop") || shopFromHost() || "";
-
+  const SHOP = new URLSearchParams(window.location.search).get("shop") || shopFromHost() || "";
 
   // ✅ Si la page tourne sous /apps/<nom-app>/..., on doit préfixer tous les chemins
   const APP_PREFIX = (() => {
@@ -134,6 +136,42 @@ const SHOP = new URLSearchParams(window.location.search).get("shop") || shopFrom
     return res.json();
   }
 
+  // ---------------- modal layout fix (NO overflow) ----------------
+  function ensureModalLayout(modalEl) {
+    if (!modalEl) return;
+    const panel = modalEl.querySelector(".modal-panel");
+    if (!panel) return;
+
+    // Empêche le panel de dépasser l'écran (iframe Shopify inclus)
+    panel.style.maxHeight = "92vh";
+    panel.style.overflow = "hidden";
+
+    // Rend le contenu scrollable (sinon ça pousse le HTML hors du cadre)
+    const content =
+      panel.querySelector(".modal-content") ||
+      panel.querySelector(".modal-body");
+
+    if (content) {
+      content.style.overflowY = "auto";
+      content.style.webkitOverflowScrolling = "touch";
+      // On laisse un peu de place aux headers/actions
+      content.style.maxHeight = "calc(92vh - 60px)";
+    }
+  }
+
+  function closeTopmostModal() {
+    // ferme la dernière modale active trouvée
+    const actives = Array.from(document.querySelectorAll(".modal.active"));
+    if (!actives.length) return;
+    const top = actives[actives.length - 1];
+    top.classList.remove("active");
+  }
+
+  // ESC pour fermer une modale (utile en iframe)
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") closeTopmostModal();
+  });
+
   // ---------------- modal backdrop ----------------
   function ensureModalBackdrop(modalEl) {
     if (!modalEl) return;
@@ -148,6 +186,7 @@ const SHOP = new URLSearchParams(window.location.search).get("shop") || shopFrom
   function openModal(modalEl) {
     if (!modalEl) return;
     ensureModalBackdrop(modalEl);
+    ensureModalLayout(modalEl); // ✅ FIX: pas de débordement
     modalEl.classList.add("active");
   }
 
@@ -923,6 +962,7 @@ const SHOP = new URLSearchParams(window.location.search).get("shop") || shopFrom
       `;
       document.body.appendChild(modal);
       ensureModalBackdrop(modal);
+      ensureModalLayout(modal); // ✅ FIX
 
       el("btnCloseCategories")?.addEventListener("click", () => closeModal(modal));
       el("btnAddCategory")?.addEventListener("click", async () => {
@@ -1054,6 +1094,7 @@ const SHOP = new URLSearchParams(window.location.search).get("shop") || shopFrom
       `;
       document.body.appendChild(modal);
       ensureModalBackdrop(modal);
+      ensureModalLayout(modal); // ✅ FIX
 
       el("btnCloseImport")?.addEventListener("click", () => closeModal(modal));
       el("btnSearchShopify")?.addEventListener("click", () => searchShopifyProducts());
