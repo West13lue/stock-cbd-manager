@@ -1,4 +1,4 @@
-// server.js — FIX "Réponse non-JSON du serveur" + Multi-shop safe + Express 5 safe
+// server.js — STATIC FIX + JSON API SAFE + Multi-shop safe + Express 5 safe
 
 if (process.env.NODE_ENV !== "production") {
   require("dotenv").config();
@@ -7,6 +7,7 @@ if (process.env.NODE_ENV !== "production") {
 const express = require("express");
 const path = require("path");
 const crypto = require("crypto");
+const fs = require("fs");
 
 // --- logger (compat : ./utils/logger OU ./logger)
 let logEvent = (event, data = {}, level = "info") =>
@@ -38,8 +39,23 @@ const settingsStore = require("./settingsStore");
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-const PUBLIC_DIR = path.join(__dirname, "public");
-const INDEX_HTML = path.join(PUBLIC_DIR, "index.html");
+// =========================
+// Paths (supporte public/ OU racine)
+// =========================
+const ROOT_DIR = __dirname;
+const PUBLIC_DIR = path.join(ROOT_DIR, "public");
+
+function fileExists(p) {
+  try {
+    return fs.existsSync(p);
+  } catch {
+    return false;
+  }
+}
+
+const INDEX_HTML = fileExists(path.join(PUBLIC_DIR, "index.html"))
+  ? path.join(PUBLIC_DIR, "index.html")
+  : path.join(ROOT_DIR, "index.html");
 
 // =========================
 // Helpers
@@ -97,7 +113,7 @@ function parseGramsFromVariant(v) {
 }
 
 // =========================
-// Shopify inventory sync — MULTI SHOP (Option 2B)
+// Shopify inventory sync (Option 2B)
 // =========================
 const _cachedLocationIdByShop = new Map(); // shopKey -> locationId
 
@@ -106,7 +122,7 @@ async function getLocationIdForShop(shop) {
 
   if (_cachedLocationIdByShop.has(sh)) return _cachedLocationIdByShop.get(sh);
 
-  // 1) settingsStore
+  // 1) settingsStore (option 2B)
   const settings = settingsStore.loadSettings(sh) || {};
   if (settings.locationId) {
     const id = Number(settings.locationId);
@@ -170,8 +186,11 @@ function findGramsPerUnitByInventoryItemId(productView, inventoryItemId) {
 // =========================
 // 1) MIDDLEWARES
 // =========================
+
+// JSON API
 app.use("/api", express.json({ limit: "2mb" }));
 
+// CORS
 app.use((req, res, next) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
@@ -183,6 +202,7 @@ app.use((req, res, next) => {
   next();
 });
 
+// CSP Shopify iframe
 app.use((req, res, next) => {
   const envShopName = String(process.env.SHOP_NAME || "").trim();
   const shopDomain = envShopName
@@ -196,6 +216,37 @@ app.use((req, res, next) => {
 });
 
 app.get("/health", (req, res) => res.status(200).send("ok"));
+
+// =========================
+// ✅ 1bis) STATIC FIX (IMPORTANT)
+// - Sert public/ si présent
+// - Sert aussi la racine (sans exposer index automatiquement)
+// - Ajoute alias /css/style.css et /js/app.js
+// =========================
+if (fileExists(PUBLIC_DIR)) {
+  app.use(express.static(PUBLIC_DIR));
+}
+
+// Sert aussi les fichiers racine (style.css/app.js) si pas de public/
+app.use(express.static(ROOT_DIR, { index: false }));
+
+// Alias CSS : /css/style.css -> (public/css/style.css) ou (root/style.css)
+app.get("/css/style.css", (req, res) => {
+  const p1 = path.join(PUBLIC_DIR, "css", "style.css");
+  const p2 = path.join(ROOT_DIR, "style.css");
+  const target = fileExists(p1) ? p1 : p2;
+  if (!fileExists(target)) return res.status(404).send("style.css not found");
+  res.type("text/css").sendFile(target);
+});
+
+// Alias JS : /js/app.js -> (public/js/app.js) ou (root/app.js)
+app.get("/js/app.js", (req, res) => {
+  const p1 = path.join(PUBLIC_DIR, "js", "app.js");
+  const p2 = path.join(ROOT_DIR, "app.js");
+  const target = fileExists(p1) ? p1 : p2;
+  if (!fileExists(target)) return res.status(404).send("app.js not found");
+  res.type("application/javascript").sendFile(target);
+});
 
 // =========================
 // 2) WEBHOOKS (RAW BODY)
@@ -274,7 +325,7 @@ app.get("/api/settings", (req, res) => {
   safeJson(res, () => {
     const shop = getShop(req);
     const settings = settingsStore.loadSettings(shop) || {};
-    return res.json({ shop, settings });
+    res.json({ shop, settings });
   });
 });
 
@@ -290,7 +341,7 @@ app.get("/api/shopify/locations", (req, res) => {
       city: l.city || "",
       country: l.country || "",
     }));
-    return res.json({ locations: out });
+    res.json({ locations: out });
   });
 });
 
@@ -307,7 +358,7 @@ app.post("/api/settings/location", (req, res) => {
     const saved = settingsStore.setLocationId(shop, locationId);
     _cachedLocationIdByShop.delete(String(shop || "default").trim().toLowerCase());
 
-    return res.json({ success: true, shop, settings: saved });
+    res.json({ success: true, shop, settings: saved });
   });
 });
 
@@ -316,7 +367,7 @@ app.get("/api/server-info", (req, res) => {
     const shop = getShop(req);
     const snap = stock.getCatalogSnapshot ? stock.getCatalogSnapshot(shop) : { products: [], categories: [] };
 
-    return res.json({
+    res.json({
       mode: process.env.NODE_ENV || "development",
       port: PORT,
       productCount: Array.isArray(snap.products) ? snap.products.length : 0,
@@ -326,15 +377,15 @@ app.get("/api/server-info", (req, res) => {
   });
 });
 
-// ---- Stock (front attend : { products:[...], categories:[...] })
+// ---- Stock
 app.get("/api/stock", (req, res) => {
   safeJson(res, () => {
     const shop = getShop(req);
     const { sort = "alpha", category = "" } = req.query;
 
     const snapshot = stock.getCatalogSnapshot ? stock.getCatalogSnapshot(shop) : { products: [], categories: [] };
-    const categories = catalogStore.listCategories ? catalogStore.listCategories(shop) : [];
 
+    const categories = catalogStore.listCategories ? catalogStore.listCategories(shop) : [];
     let products = Array.isArray(snapshot.products) ? snapshot.products.slice() : [];
 
     if (category) {
@@ -347,7 +398,7 @@ app.get("/api/stock", (req, res) => {
       );
     }
 
-    return res.json({ products, categories });
+    res.json({ products, categories });
   });
 });
 
@@ -370,7 +421,7 @@ app.get("/api/stock.csv", (req, res) => {
 
     res.setHeader("Content-Type", "text/csv; charset=utf-8");
     res.setHeader("Content-Disposition", 'attachment; filename="stock.csv"');
-    return res.send([header, ...lines].join("\n"));
+    res.send([header, ...lines].join("\n"));
   });
 });
 
@@ -379,7 +430,7 @@ app.get("/api/categories", (req, res) => {
   safeJson(res, () => {
     const shop = getShop(req);
     const categories = catalogStore.listCategories ? catalogStore.listCategories(shop) : [];
-    return res.json({ categories });
+    res.json({ categories });
   });
 });
 
@@ -398,7 +449,7 @@ app.post("/api/categories", (req, res) => {
       );
     }
 
-    return res.json({ success: true, category: created });
+    res.json({ success: true, category: created });
   });
 });
 
@@ -418,7 +469,7 @@ app.put("/api/categories/:id", (req, res) => {
       );
     }
 
-    return res.json({ success: true, category: updated });
+    res.json({ success: true, category: updated });
   });
 });
 
@@ -433,7 +484,7 @@ app.delete("/api/categories/:id", (req, res) => {
       movementStore.addMovement({ source: "category_delete", gramsDelta: 0, meta: { categoryId: id }, shop }, shop);
     }
 
-    return res.json({ success: true });
+    res.json({ success: true });
   });
 });
 
@@ -445,7 +496,7 @@ app.get("/api/movements", (req, res) => {
     const days = Math.min(Math.max(Number(req.query.days || 7), 1), 365);
 
     const rows = movementStore.listMovements ? movementStore.listMovements({ shop, days, limit }) : [];
-    return res.json({ count: rows.length, data: rows });
+    res.json({ count: rows.length, data: rows });
   });
 });
 
@@ -460,11 +511,11 @@ app.get("/api/movements.csv", (req, res) => {
 
     res.setHeader("Content-Type", "text/csv; charset=utf-8");
     res.setHeader("Content-Disposition", 'attachment; filename="stock-movements.csv"');
-    return res.send(csv);
+    res.send(csv);
   });
 });
 
-// ---- Historique produit
+// ---- Historique d’un produit
 app.get("/api/products/:productId/history", (req, res) => {
   safeJson(res, () => {
     const shop = getShop(req);
@@ -516,49 +567,7 @@ app.post("/api/products/:productId/adjust-total", (req, res) => {
       );
     }
 
-    return res.json({ success: true, product: updated });
-  });
-});
-
-// ✅ FIX: endpoint utilisé par index.html (mini glue modal restock)
-app.post("/api/restock", (req, res) => {
-  safeJson(res, async () => {
-    const shop = getShop(req);
-    const productId = String(req.body?.productId || "");
-    const grams = Number(req.body?.grams);
-
-    if (!productId) return apiError(res, 400, "productId manquant");
-    if (!Number.isFinite(grams) || grams <= 0) return apiError(res, 400, "grams invalide (ex: 50)");
-
-    if (typeof stock.restockProduct !== "function") {
-      return apiError(res, 500, "stock.restockProduct introuvable");
-    }
-
-    // on réutilise restockProduct (delta positif)
-    const updated = await stock.restockProduct(shop, productId, Math.abs(grams));
-    if (!updated) return apiError(res, 404, "Produit introuvable");
-
-    try {
-      await pushProductInventoryToShopify(shop, updated);
-    } catch (e) {
-      logEvent("inventory_push_error", { shop, productId, message: e?.message }, "error");
-    }
-
-    if (movementStore.addMovement) {
-      movementStore.addMovement(
-        {
-          source: "restock_modal",
-          productId,
-          productName: updated.name,
-          gramsDelta: Math.abs(grams),
-          totalAfter: updated.totalGrams,
-          shop,
-        },
-        shop
-      );
-    }
-
-    return res.json({ success: true, product: updated });
+    res.json({ success: true, product: updated });
   });
 });
 
@@ -583,7 +592,7 @@ app.post("/api/products/:productId/categories", (req, res) => {
       );
     }
 
-    return res.json({ success: true, productId, categoryIds });
+    res.json({ success: true, productId, categoryIds });
   });
 });
 
@@ -604,7 +613,7 @@ app.delete("/api/products/:productId", (req, res) => {
       movementStore.addMovement({ source: "product_deleted", productId, gramsDelta: 0, shop }, shop);
     }
 
-    return res.json({ success: true });
+    res.json({ success: true });
   });
 });
 
@@ -624,7 +633,7 @@ app.get("/api/shopify/products", (req, res) => {
     if (q) out = out.filter((p) => p.title.toLowerCase().includes(q));
     out.sort((a, b) => a.title.localeCompare(b.title, "fr", { sensitivity: "base" }));
 
-    return res.json({ products: out });
+    res.json({ products: out });
   });
 });
 
@@ -687,7 +696,7 @@ app.post("/api/import/product", (req, res) => {
       );
     }
 
-    return res.json({ success: true, product: imported });
+    res.json({ success: true, product: imported });
   });
 });
 
@@ -730,14 +739,14 @@ app.post("/api/test-order", (req, res) => {
       );
     }
 
-    return res.json({ success: true, tested: { productId, grams }, product: updated });
+    res.json({ success: true, tested: { productId, grams }, product: updated });
   });
 });
 
-// ✅ si une route /api n’existe pas => JSON 404 (pas HTML)
+// ✅ si une route /api n’existe pas => JSON 404
 app.use("/api", (req, res) => apiError(res, 404, "Route API non trouvée"));
 
-// ✅ handler erreurs => JSON (pas HTML)
+// ✅ handler erreurs => JSON
 app.use((err, req, res, next) => {
   if (req.path.startsWith("/api")) {
     logEvent("api_uncaught_error", { message: err?.message }, "error");
@@ -749,14 +758,14 @@ app.use((err, req, res, next) => {
 // =========================
 // 4) FRONT
 // =========================
-app.use(express.static(PUBLIC_DIR));
 app.get("/", (req, res) => res.sendFile(INDEX_HTML));
 
 // Catch-all SPA : EXCLUT /api et /webhooks et /health (Express 5 safe)
-app.get(/^\/(?!api\/|webhooks\/|health).*/, (req, res) => res.sendFile(INDEX_HTML));
+// ✅ IMPORTANT : on exclut AUSSI css/ et js/ pour ne jamais renvoyer index.html à la place des assets
+app.get(/^\/(?!api\/|webhooks\/|health|css\/|js\/).*/, (req, res) => res.sendFile(INDEX_HTML));
 
 // =========================
 app.listen(PORT, "0.0.0.0", () => {
-  logEvent("server_started", { port: PORT, publicDir: PUBLIC_DIR });
+  logEvent("server_started", { port: PORT, indexHtml: INDEX_HTML });
   console.log("✅ Server running on port", PORT);
 });
