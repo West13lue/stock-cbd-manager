@@ -1,27 +1,18 @@
-// public/js/app.js
-// ============================================
-// BULK STOCK MANAGER - Front (Admin UI)
-// ✅ FIX multi-shop: ajoute automatiquement ?shop=... à toutes les routes /api
-// ✅ FIX Shopify iframe /apps/<app>/... : prefix-safe pour /api, /css, /js
-// ✅ Option 2B: UI Location Shopify par boutique (settingsStore)
-//   - GET /api/shopify/locations
-//   - GET /api/settings
-//   - POST /api/settings/location
-// ✅ FIX CSS Shopify iframe:
-//   - Injecte le CSS via JS + href prefix-safe (APP_PREFIX)
-// ✅ FIX MODALS UI:
-//   - Scroll interne (modal-body) + panel maxHeight
-//   - ESC ferme la modale active (topmost)
-//   - body.modal-open géré correctement
-// ============================================
+// public/js/app.js - ENRICHI
+// ✅ NOUVEAUTÉS :
+//    - Carte "Valeur totale du stock"
+//    - Barre de répartition par catégorie
+//    - Formulaire restock avec prix d'achat (CMP)
+//    - Feedback visuel coloré selon type de mouvement
+//    - Affichage du CMP dans les produits
 
 (() => {
-  // ---------------- SHOP CONTEXT (Shopify) ----------------
+  // ---------------- SHOP CONTEXT ----------------
   function shopFromHost() {
     try {
       const host = new URLSearchParams(window.location.search).get("host") || "";
       if (!host) return "";
-      const decoded = atob(host); // "xxx.myshopify.com/admin"
+      const decoded = atob(host);
       const domain = decoded.split("/")[0].trim();
       return domain || "";
     } catch {
@@ -31,7 +22,6 @@
 
   const SHOP = new URLSearchParams(window.location.search).get("shop") || shopFromHost() || "";
 
-  // ✅ Si la page tourne sous /apps/<nom-app>/..., on doit préfixer tous les chemins
   const APP_PREFIX = (() => {
     const m = window.location.pathname.match(/^(\/apps\/[^/]+)/);
     return m ? m[1] : "";
@@ -44,7 +34,6 @@
     return (APP_PREFIX || "") + normalized;
   }
 
-  // Ajoute ?shop=... + préfixe /apps/<app>
   function apiPath(path) {
     const base = withPrefix(path);
     if (!SHOP) return base;
@@ -57,11 +46,9 @@
     return fetch(apiPath(path), options);
   }
 
-  // ✅ FIX: injecte ton CSS même si Shopify “ignore” le <link> dans <head>
   function injectAppCss() {
     const ID = "bulk-stock-manager-css";
-    const existing = document.getElementById(ID);
-    if (existing) return;
+    if (document.getElementById(ID)) return;
 
     const link = document.createElement("link");
     link.id = ID;
@@ -71,25 +58,15 @@
     link.crossOrigin = "anonymous";
 
     link.addEventListener("error", () => {
-      console.error(
-        "❌ Impossible de charger style.css. Vérifie: public/css/style.css + static express + chemins prefix-safe."
-      );
+      console.error("❌ Impossible de charger style.css");
     });
 
     document.head.appendChild(link);
   }
 
-  // Shopify peut “remplacer” le head => on surveille et on ré-injecte si besoin
-  function keepCssAlive() {
-    injectAppCss();
-    const obs = new MutationObserver(() => injectAppCss());
-    obs.observe(document.documentElement, { childList: true, subtree: true });
-  }
+  injectAppCss();
 
-  // Inject tout de suite + keep-alive
-  keepCssAlive();
-
-  // ---------------- DOM / state ----------------
+  // ---------------- STATE ----------------
   const result = document.getElementById("result");
 
   let stockData = {};
@@ -101,11 +78,14 @@
   let sortAlpha = true;
   let categories = [];
 
-  // Location settings (Option 2B)
   let shopifyLocations = [];
   let currentLocationId = null;
 
-  // ---------------- utils ----------------
+  // ✅ NOUVEAU : État pour valeur stock et stats catégories
+  let stockValue = { totalValue: 0, currency: "EUR", products: [] };
+  let categoryStats = { totalGrams: 0, categories: [] };
+
+  // ---------------- UTILS ----------------
   function el(id) {
     return document.getElementById(id);
   }
@@ -123,7 +103,13 @@
     const timestamp = new Date().toLocaleTimeString("fr-FR");
     if (!result) return;
     result.textContent = `[${timestamp}] ${message}`;
-    result.className = "result-content " + type;
+    
+    // ✅ NOUVEAU : Feedback visuel coloré
+    result.className = "result-content";
+    if (type === "success") result.classList.add("success");
+    if (type === "error") result.classList.add("error");
+    if (type === "info") result.classList.add("info");
+    
     result.scrollTop = result.scrollHeight;
   }
 
@@ -132,6 +118,13 @@
     const d = new Date(ts);
     if (Number.isNaN(d.getTime())) return "";
     return d.toLocaleString("fr-FR");
+  }
+
+  function formatCurrency(value) {
+    return new Intl.NumberFormat("fr-FR", {
+      style: "currency",
+      currency: "EUR",
+    }).format(value);
   }
 
   async function safeJson(res) {
@@ -145,42 +138,19 @@
     return res.json();
   }
 
-  // ---------------- modal helpers ----------------
-  function updateBodyModalOpen() {
-    const anyActive = document.querySelector(".modal.active");
-    document.body.classList.toggle("modal-open", !!anyActive);
-  }
-
-  // ---------------- modal layout fix (NO overflow) ----------------
+  // ---------------- MODALS ----------------
   function ensureModalLayout(modalEl) {
     if (!modalEl) return;
-
     const panel = modalEl.querySelector(".modal-panel");
     if (!panel) return;
 
-    // Empêche le panel de dépasser l'écran (iframe Shopify inclus)
     panel.style.maxHeight = "92vh";
     panel.style.overflow = "hidden";
-    panel.style.display = "flex";
-    panel.style.flexDirection = "column";
 
-    // ✅ IMPORTANT : ton CSS est basé sur .modal-body (scroll interne)
-    // On cible d'abord .modal-body, sinon fallback sur .modal-content
-    const body = modalEl.querySelector(".modal-body");
-    if (body) {
-      body.style.overflowY = "auto";
-      body.style.webkitOverflowScrolling = "touch";
-      body.style.minHeight = "0";
-      // on laisse respirer le head + actions
-      body.style.maxHeight = "calc(92vh - 120px)";
-      return;
-    }
-
-    const content = modalEl.querySelector(".modal-content");
+    const content = panel.querySelector(".modal-content") || panel.querySelector(".modal-body");
     if (content) {
       content.style.overflowY = "auto";
       content.style.webkitOverflowScrolling = "touch";
-      content.style.minHeight = "0";
       content.style.maxHeight = "calc(92vh - 60px)";
     }
   }
@@ -190,15 +160,13 @@
     if (!actives.length) return;
     const top = actives[actives.length - 1];
     top.classList.remove("active");
-    updateBodyModalOpen();
+    document.body.classList.remove("modal-open");
   }
 
-  // ESC pour fermer une modale (utile en iframe)
   window.addEventListener("keydown", (e) => {
     if (e.key === "Escape") closeTopmostModal();
   });
 
-  // ---------------- modal backdrop ----------------
   function ensureModalBackdrop(modalEl) {
     if (!modalEl) return;
     if (modalEl.querySelector(".modal-backdrop")) return;
@@ -207,7 +175,7 @@
     backdrop.className = "modal-backdrop";
     backdrop.addEventListener("click", () => {
       modalEl.classList.remove("active");
-      updateBodyModalOpen();
+      document.body.classList.remove("modal-open");
     });
     modalEl.prepend(backdrop);
   }
@@ -217,16 +185,16 @@
     ensureModalBackdrop(modalEl);
     ensureModalLayout(modalEl);
     modalEl.classList.add("active");
-    updateBodyModalOpen();
+    document.body.classList.add("modal-open");
   }
 
   function closeModal(modalEl) {
     if (!modalEl) return;
     modalEl.classList.remove("active");
-    updateBodyModalOpen();
+    document.body.classList.remove("modal-open");
   }
 
-  // ---------------- header controls ----------------
+  // ---------------- HEADER CONTROLS ----------------
   function ensureCatalogControls() {
     const header = document.querySelector(".header");
     if (!header) return;
@@ -257,11 +225,11 @@
           <select id="locationSelect">
             <option value="">Chargement...</option>
           </select>
-          <div class="hint muted" style="margin-top:4px;">Stock Shopify écrasé sur cette location.</div>
+          <div class="hint">Stock Shopify écrasé sur cette location.</div>
         </div>
 
         <div class="catalog-actions">
-          <button class="btn btn-secondary btn-sm" id="btnCategories" type="button">📁 Catégories</button>
+          <button class="btn btn-secondary btn-sm" id="btnCategories" type="button">🏷️ Catégories</button>
           <button class="btn btn-primary btn-sm" id="btnImport" type="button">➕ Import Shopify</button>
           <button class="btn btn-info btn-sm" id="btnExportStock" type="button">⬇️ Stock CSV</button>
           <button class="btn btn-secondary btn-sm" id="btnExportMovements" type="button">⬇️ Mouvements CSV</button>
@@ -293,7 +261,135 @@
     });
   }
 
-  // ---------------- server info ----------------
+  // ---------------- ✅ NOUVEAU : VALEUR TOTALE DU STOCK ----------------
+  async function refreshStockValue() {
+    try {
+      const res = await apiFetch("/api/stock/value");
+      const data = await safeJson(res);
+      if (!res.ok) throw new Error(data?.error || "Erreur /api/stock/value");
+
+      stockValue = data || { totalValue: 0, currency: "EUR", products: [] };
+      displayStockValue();
+    } catch (e) {
+      console.error("Erreur chargement valeur stock:", e.message);
+    }
+  }
+
+  function displayStockValue() {
+    let card = el("stockValueCard");
+    if (!card) {
+      const statsGrid = document.querySelector(".stats-grid");
+      if (!statsGrid) return;
+
+      card = document.createElement("div");
+      card.id = "stockValueCard";
+      card.className = "card";
+      card.style.gridColumn = "span 3"; // Prend toute la largeur
+      statsGrid.appendChild(card);
+    }
+
+    const value = stockValue.totalValue || 0;
+    const currency = stockValue.currency || "EUR";
+
+    card.innerHTML = `
+      <div class="card-title">💰 Valeur totale du stock</div>
+      <div class="card-sub">Coût réel de l'inventaire (CMP)</div>
+      <div class="card-value" style="color: var(--success);">${formatCurrency(value)}</div>
+      <div class="card-foot">
+        Basé sur le coût moyen pondéré de ${stockValue.products?.length || 0} produit(s)
+      </div>
+    `;
+  }
+
+  // ---------------- ✅ NOUVEAU : BARRE DE RÉPARTITION PAR CATÉGORIE ----------------
+  async function refreshCategoryStats() {
+    try {
+      const res = await apiFetch("/api/stats/categories");
+      const data = await safeJson(res);
+      if (!res.ok) throw new Error(data?.error || "Erreur /api/stats/categories");
+
+      categoryStats = data || { totalGrams: 0, categories: [] };
+      displayCategoryBar();
+    } catch (e) {
+      console.error("Erreur chargement stats catégories:", e.message);
+    }
+  }
+
+  function displayCategoryBar() {
+    let container = el("categoryBarContainer");
+    if (!container) {
+      const statsGrid = document.querySelector(".stats-grid");
+      if (!statsGrid) return;
+
+      container = document.createElement("div");
+      container.id = "categoryBarContainer";
+      container.className = "card";
+      container.style.gridColumn = "span 3";
+      statsGrid.appendChild(container);
+    }
+
+    const cats = categoryStats.categories || [];
+    const total = categoryStats.totalGrams || 0;
+
+    if (!cats.length || total === 0) {
+      container.innerHTML = `
+        <div class="card-title">📊 Répartition du stock par catégorie</div>
+        <div class="hint" style="margin-top: 12px;">Aucune donnée disponible</div>
+      `;
+      return;
+    }
+
+    // Palette de couleurs pour les catégories
+    const colors = [
+      "#8b7fc8", // violet
+      "#10b981", // vert
+      "#f59e0b", // orange
+      "#ef4444", // rouge
+      "#3b82f6", // bleu
+      "#ec4899", // rose
+      "#14b8a6", // turquoise
+      "#f97316", // orange foncé
+    ];
+
+    const legend = cats
+      .map((cat, i) => {
+        const color = colors[i % colors.length];
+        const percent = cat.percentage || 0;
+        return `
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <div style="width: 16px; height: 16px; background: ${color}; border-radius: 4px;"></div>
+            <span style="font-size: 13px; font-weight: 600;">${escapeHtml(cat.categoryName)}</span>
+            <span style="font-size: 12px; color: var(--text-secondary); margin-left: auto;">${percent.toFixed(1)}% (${cat.totalGrams}g)</span>
+          </div>
+        `;
+      })
+      .join("");
+
+    const barSegments = cats
+      .map((cat, i) => {
+        const color = colors[i % colors.length];
+        const percent = cat.percentage || 0;
+        return `<div style="width: ${percent}%; background: ${color}; height: 100%; transition: var(--transition);" title="${escapeHtml(cat.categoryName)}: ${percent.toFixed(1)}%"></div>`;
+      })
+      .join("");
+
+    container.innerHTML = `
+      <div class="card-title">📊 Répartition du stock par catégorie</div>
+      <div class="card-sub">Total: ${total}g répartis en ${cats.length} catégorie(s)</div>
+      
+      <div style="margin: 16px 0;">
+        <div style="height: 32px; border-radius: var(--radius-md); overflow: hidden; display: flex; background: var(--surface);">
+          ${barSegments}
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-top: 16px;">
+        ${legend}
+      </div>
+    `;
+  }
+
+  // ---------------- SERVER INFO ----------------
   async function getServerInfo() {
     try {
       const res = await apiFetch("/api/server-info");
@@ -317,7 +413,7 @@
     }
   }
 
-  // ---------------- settings / locations (Option 2B) ----------------
+  // ---------------- SETTINGS / LOCATIONS ----------------
   function renderLocationSelect() {
     const sel = el("locationSelect");
     if (!sel) return;
@@ -371,7 +467,6 @@
     } catch (e) {
       currentLocationId = null;
       renderLocationSelect();
-      // pas bloquant
     }
   }
 
@@ -394,7 +489,7 @@
     }
   }
 
-  // ---------------- categories ----------------
+  // ---------------- CATEGORIES ----------------
   async function loadCategories() {
     try {
       const res = await apiFetch("/api/categories");
@@ -435,7 +530,7 @@
       .join("");
   }
 
-  // ---------------- stock ----------------
+  // ---------------- STOCK ----------------
   async function refreshStock() {
     ensureCatalogControls();
     log("⏳ Actualisation du stock...", "info");
@@ -460,6 +555,7 @@
           map[p.productId] = {
             name: p.name,
             totalGrams: p.totalGrams,
+            averageCostPerGram: p.averageCostPerGram || 0, // ✅ NOUVEAU
             variants: p.variants || {},
             categoryIds: p.categoryIds || [],
           };
@@ -470,6 +566,10 @@
         displayProductsGrouped(stockData);
         updateStats(stockData);
 
+        // ✅ NOUVEAU : Rafraîchir valeur et stats
+        await refreshStockValue();
+        await refreshCategoryStats();
+
         log("✅ Stock actualisé", "success");
         return;
       }
@@ -477,6 +577,10 @@
       stockData = data || {};
       displayProductsGrouped(stockData);
       updateStats(stockData);
+      
+      await refreshStockValue();
+      await refreshCategoryStats();
+      
       log("✅ Stock actualisé", "success");
     } catch (err) {
       log("❌ ERREUR: " + err.message, "error");
@@ -503,7 +607,7 @@
     if (lastEl) lastEl.textContent = new Date().toLocaleString("fr-FR");
   }
 
-  // ---------------- grouped display ----------------
+  // ---------------- GROUPED DISPLAY ----------------
   function getCategoryNameById(id) {
     return categories.find((c) => String(c.id) === String(id))?.name || null;
   }
@@ -542,14 +646,21 @@
         const cards = items
           .map(([id, product]) => {
             const total = Number(product.totalGrams || 0);
+            const avgCost = Number(product.averageCostPerGram || 0);
             const percent = Math.max(0, Math.min(100, Math.round((total / 200) * 100)));
             const lowClass = total <= Number(serverInfo?.lowStockThreshold || 10) ? " low" : "";
+
+            // ✅ NOUVEAU : Affichage du CMP
+            const costBadge = avgCost > 0 
+              ? `<div style="font-size: 11px; color: var(--text-tertiary); margin-top: 4px;">CMP: ${avgCost.toFixed(2)}€/g</div>`
+              : "";
 
             return `
               <button class="product-item${lowClass}" type="button" data-open-product="${escapeHtml(id)}">
                 <div class="product-header">
                   <div>
                     <div class="product-name">${escapeHtml(product.name)}</div>
+                    ${costBadge}
                   </div>
                   <div class="product-stock">${total}g</div>
                 </div>
@@ -581,7 +692,7 @@
     });
   }
 
-  // ---------------- mouvements (global) ----------------
+  // ---------------- MOVEMENTS ----------------
   async function refreshMovements() {
     const box = el("movementsList");
     if (!box) return;
@@ -621,13 +732,16 @@
           const pname = m.productName ? ` • ${escapeHtml(m.productName)}` : "";
           const after = Number.isFinite(Number(m.totalAfter)) ? ` → ${Number(m.totalAfter)}g` : "";
 
+          // ✅ NOUVEAU : Classe de couleur selon le delta
+          const deltaClass = delta > 0 ? "positive" : "negative";
+
           return `
             <div class="history-item">
               <div class="h-left">
                 <div class="h-title">${escapeHtml(source)}${pname}</div>
                 <div class="h-sub">${escapeHtml(when)}</div>
               </div>
-              <div class="h-delta">${sign}${delta}g${after}</div>
+              <div class="h-delta ${deltaClass}">${sign}${delta}g${after}</div>
             </div>
           `;
         })
@@ -637,7 +751,7 @@
     }
   }
 
-  // ---------------- test order ----------------
+  // ---------------- TEST ORDER ----------------
   async function testOrder() {
     log("⏳ Traitement de la commande test en cours...", "info");
     try {
@@ -654,7 +768,7 @@
     }
   }
 
-  // ---------------- restock modal ----------------
+  // ---------------- ✅ ENRICHI : RESTOCK MODAL AVEC PRIX D'ACHAT ----------------
   function openRestockModal() {
     const modal = el("restockModal");
     const select = el("productSelect");
@@ -667,9 +781,11 @@
       Object.entries(stockData)
         .sort((a, b) => String(a[1]?.name || "").localeCompare(String(b[1]?.name || ""), "fr", { sensitivity: "base" }))
         .map(([id, product]) => {
-          return `<option value="${escapeHtml(id)}">${escapeHtml(product.name)} (Stock: ${Number(
+          const avgCost = Number(product.averageCostPerGram || 0);
+          const costInfo = avgCost > 0 ? ` (CMP: ${avgCost.toFixed(2)}€/g)` : "";
+          return `<option value="${escapeHtml(id)}">${escapeHtml(product.name)} - Stock: ${Number(
             product.totalGrams || 0
-          )}g)</option>`;
+          )}g${costInfo}</option>`;
         })
         .join("");
 
@@ -683,7 +799,7 @@
     if (f) f.reset();
   }
 
-  // ---------------- product modal ----------------
+  // ---------------- PRODUCT MODAL ----------------
   function openProductModal(productId) {
     const pid = String(productId);
     currentProductId = pid;
@@ -751,7 +867,7 @@
       .join("");
   }
 
-  // ---------------- product controls: adjust total + delete ----------------
+  // ---------------- PRODUCT CONTROLS ----------------
   function ensureProductControlsUI() {
     const modalContent = document.querySelector("#productModal .modal-content");
     if (!modalContent) return;
@@ -762,14 +878,21 @@
     block.className = "form-group";
     block.innerHTML = `
       <label>Stock total (ajouter / enlever en grammes)</label>
-      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
-        <input id="adjustTotalGrams" type="number" min="1" step="1" placeholder="Ex: 50" style="max-width:180px;" />
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
+        <div style="flex: 1; min-width: 120px;">
+          <input id="adjustTotalGrams" type="number" min="1" step="1" placeholder="Grammes" style="width:100%;" />
+        </div>
+        <div style="flex: 1; min-width: 120px;">
+          <input id="adjustPurchasePrice" type="number" min="0" step="0.01" placeholder="Prix €/g (opt.)" style="width:100%;" />
+        </div>
         <button type="button" class="btn btn-primary btn-sm" id="btnAddTotal">➕ Ajouter</button>
         <button type="button" class="btn btn-secondary btn-sm" id="btnRemoveTotal">➖ Enlever</button>
         <div style="flex:1"></div>
-        <button type="button" class="btn btn-secondary btn-sm" id="btnDeleteProduct">🗑️ Supprimer produit</button>
+        <button type="button" class="btn btn-danger btn-sm" id="btnDeleteProduct">🗑️ Supprimer produit</button>
       </div>
-      <div class="hint muted">Ici on ajuste directement le stock total (pas par variante).</div>
+      <div class="hint">
+        💡 Si vous renseignez le prix d'achat lors d'un ajout, le CMP sera recalculé automatiquement.
+      </div>
     `;
 
     modalContent.appendChild(block);
@@ -783,21 +906,35 @@
     if (!currentProductId) return;
 
     const grams = Number(el("adjustTotalGrams")?.value || 0);
+    const purchasePrice = Number(el("adjustPurchasePrice")?.value || 0);
+
     if (!grams || grams <= 0) return alert("Entre une quantité de grammes valide");
 
     const gramsDelta = sign * grams;
 
     try {
+      const body = { gramsDelta };
+      
+      // ✅ NOUVEAU : Inclure le prix d'achat si fourni et ajout positif
+      if (sign > 0 && purchasePrice > 0) {
+        body.purchasePricePerGram = purchasePrice;
+      }
+
       const res = await apiFetch(`/api/products/${encodeURIComponent(currentProductId)}/adjust-total`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ gramsDelta }),
+        body: JSON.stringify(body),
       });
 
       const data = await safeJson(res);
       if (!res.ok) throw new Error(data?.error || "Erreur ajustement total");
 
-      log(`✅ Stock total mis à jour (${gramsDelta > 0 ? "+" : ""}${gramsDelta}g)`, "success");
+      // ✅ NOUVEAU : Message différent si CMP mis à jour
+      const message = data.cmpUpdated 
+        ? `✅ Stock mis à jour (${gramsDelta > 0 ? "+" : ""}${gramsDelta}g) - CMP recalculé: ${data.product.averageCostPerGram?.toFixed(2)}€/g`
+        : `✅ Stock mis à jour (${gramsDelta > 0 ? "+" : ""}${gramsDelta}g)`;
+
+      log(message, "success");
 
       await refreshStock();
       await refreshMovements();
@@ -809,6 +946,13 @@
         displayVariants(updated.variants);
         loadProductHistory(currentProductId);
       }
+
+      // Reset les champs
+      const gramsInput = el("adjustTotalGrams");
+      const priceInput = el("adjustPurchasePrice");
+      if (gramsInput) gramsInput.value = "";
+      if (priceInput) priceInput.value = "";
+
     } catch (e) {
       log("❌ Erreur ajustement total: " + e.message, "error");
       alert("Erreur: " + e.message);
@@ -848,7 +992,7 @@
     block.innerHTML = `
       <label>Catégories</label>
       <select id="productCategoriesSelect" multiple size="6"></select>
-      <div class="hint muted">Ctrl (Windows) / Cmd (Mac) pour sélectionner plusieurs. (Aucune sélection = Sans catégorie)</div>
+      <div class="hint">Ctrl (Windows) / Cmd (Mac) pour sélectionner plusieurs. (Aucune sélection = Sans catégorie)</div>
       <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;">
         <button type="button" class="btn btn-secondary btn-sm" id="btnClearCategories">🧹 Tout enlever</button>
         <button type="button" class="btn btn-primary btn-sm" id="btnSaveCategories">💾 Enregistrer</button>
@@ -910,8 +1054,8 @@
       block.id = "productHistoryBlock";
       block.className = "product-history";
       block.innerHTML = `
-        <div class="card-title">🕒 Historique du produit</div>
-        <div class="muted" style="margin-top:6px;">Derniers mouvements liés à ce produit (récents en haut).</div>
+        <div class="card-title">🕐 Historique du produit</div>
+        <div class="hint" style="margin-top:6px;">Derniers mouvements liés à ce produit (récents en haut).</div>
         <div id="productHistoryList" class="history-list"></div>
       `;
       modalContent.appendChild(block);
@@ -946,6 +1090,7 @@
           const sign = delta > 0 ? "+" : "";
           const source = m.source || "movement";
           const totalAfter = Number(m.totalAfter ?? NaN);
+          const deltaClass = delta > 0 ? "positive" : "negative";
 
           return `
             <div class="history-item">
@@ -953,7 +1098,7 @@
                 <div class="h-title">${escapeHtml(source)}</div>
                 <div class="h-sub">${escapeHtml(when)}</div>
               </div>
-              <div class="h-delta">${sign}${delta}g ${Number.isFinite(totalAfter) ? `→ ${totalAfter}g` : ""}</div>
+              <div class="h-delta ${deltaClass}">${sign}${delta}g ${Number.isFinite(totalAfter) ? `→ ${totalAfter}g` : ""}</div>
             </div>
           `;
         })
@@ -963,7 +1108,7 @@
     }
   }
 
-  // ---------------- Categories modal ----------------
+  // ---------------- CATEGORIES MODAL ----------------
   function openCategoriesModal() {
     let modal = el("categoriesModal");
     if (!modal) {
@@ -974,7 +1119,7 @@
         <div class="modal-panel">
           <div class="modal-content">
             <div class="modal-head">
-              <div class="modal-title">📁 Catégories</div>
+              <div class="modal-title">🏷️ Catégories</div>
               <button class="btn btn-close" type="button" id="btnCloseCategories">✖</button>
             </div>
 
@@ -983,9 +1128,9 @@
                 Crée des catégories pour trier tes produits (ex: Fleurs, Résines, Gummies…).
               </div>
 
-              <div style="display:flex; gap:10px; margin-top:12px; flex-wrap:wrap;">
+              <div style="display:flex; gap:10px; margin-top:16px; flex-wrap:wrap;">
                 <input id="newCategoryName" placeholder="Nom de catégorie (ex: Fleurs)" style="flex:1; min-width:220px;" />
-                <button class="btn btn-primary btn-sm" id="btnAddCategory" type="button">Ajouter</button>
+                <button class="btn btn-primary btn-sm" id="btnAddCategory" type="button">➕ Ajouter</button>
               </div>
 
               <div id="categoriesList" class="categories-list"></div>
@@ -995,6 +1140,7 @@
       `;
       document.body.appendChild(modal);
       ensureModalBackdrop(modal);
+      ensureModalLayout(modal);
 
       el("btnCloseCategories")?.addEventListener("click", () => closeModal(modal));
       el("btnAddCategory")?.addEventListener("click", async () => {
@@ -1016,6 +1162,7 @@
           await refreshStock();
           renderCategoriesList();
           await refreshMovements();
+          log(`✅ Catégorie créée: ${name}`, "success");
         } catch (e) {
           log("❌ Erreur création catégorie: " + e.message, "error");
           alert("Erreur: " + e.message);
@@ -1046,8 +1193,8 @@
         <div class="category-item">
           <div class="category-name">${escapeHtml(c.name)}</div>
           <div class="category-actions">
-            <button class="btn btn-secondary btn-sm" data-act="rename" data-id="${escapeHtml(c.id)}" type="button">Renommer</button>
-            <button class="btn btn-secondary btn-sm" data-act="delete" data-id="${escapeHtml(c.id)}" type="button">Supprimer</button>
+            <button class="btn btn-secondary btn-sm" data-act="rename" data-id="${escapeHtml(c.id)}" type="button">✏️ Renommer</button>
+            <button class="btn btn-danger btn-sm" data-act="delete" data-id="${escapeHtml(c.id)}" type="button">🗑️ Supprimer</button>
           </div>
         </div>
       `
@@ -1071,6 +1218,7 @@
             });
             const data = await safeJson(res);
             if (!res.ok) throw new Error(data?.error || "Erreur");
+            log(`✅ Catégorie renommée: ${name}`, "success");
           }
 
           if (act === "delete") {
@@ -1079,6 +1227,7 @@
             const res = await apiFetch(`/api/categories/${encodeURIComponent(id)}`, { method: "DELETE" });
             const data = await safeJson(res);
             if (!res.ok) throw new Error(data?.error || "Erreur");
+            log(`✅ Catégorie supprimée`, "success");
           }
 
           await loadCategories();
@@ -1093,7 +1242,7 @@
     });
   }
 
-  // ---------------- Import modal ----------------
+  // ---------------- IMPORT MODAL ----------------
   function openImportModal() {
     let modal = el("importModal");
     if (!modal) {
@@ -1101,17 +1250,17 @@
       modal.id = "importModal";
       modal.className = "modal";
       modal.innerHTML = `
-<div class="modal-panel modal-wide">
-  <div class="modal-content">
+        <div class="modal-panel modal-wide">
+          <div class="modal-content">
             <div class="modal-head">
               <div class="modal-title">➕ Import depuis Shopify</div>
               <button class="btn btn-close" type="button" id="btnCloseImport">✖</button>
             </div>
 
             <div class="modal-body">
-              <div class="import-toolbar" style="display:flex;gap:10px;flex-wrap:wrap;">
+              <div class="import-toolbar">
                 <input id="importQuery" placeholder="Rechercher un produit (ex: amnesia)" style="flex:1;min-width:260px;" />
-                <button class="btn btn-info btn-sm" id="btnSearchShopify" type="button">Rechercher</button>
+                <button class="btn btn-info btn-sm" id="btnSearchShopify" type="button">🔍 Rechercher</button>
 
                 <div class="field" style="min-width:220px;">
                   <label>Catégorie (optionnel)</label>
@@ -1128,6 +1277,7 @@
       `;
       document.body.appendChild(modal);
       ensureModalBackdrop(modal);
+      ensureModalLayout(modal);
 
       el("btnCloseImport")?.addEventListener("click", () => closeModal(modal));
       el("btnSearchShopify")?.addEventListener("click", () => searchShopifyProducts());
@@ -1183,7 +1333,7 @@
               <div class="import-title">${escapeHtml(p.title)}</div>
               <div class="import-sub">ID: ${escapeHtml(p.id)} • Variantes: ${escapeHtml(p.variantsCount ?? "?")}</div>
             </div>
-            <button class="btn btn-primary btn-sm" data-import="${escapeHtml(p.id)}" type="button">Importer</button>
+            <button class="btn btn-primary btn-sm" data-import="${escapeHtml(p.id)}" type="button">➕ Importer</button>
           </div>
         `
         )
@@ -1224,13 +1374,11 @@
     }
   }
 
-  // ---------------- init ----------------
+  // ---------------- INIT ----------------
   window.addEventListener("load", async () => {
     document.body.classList.add("full-width");
 
-    // ✅ keep-alive déjà actif, mais on réassure au load
     injectAppCss();
-
     ensureCatalogControls();
 
     await getServerInfo();
@@ -1241,15 +1389,13 @@
     await refreshStock();
     await refreshMovements();
 
-    // expose functions used by index.html buttons
+    // Expose global functions
     window.openProductModal = openProductModal;
     window.openRestockModal = openRestockModal;
     window.closeRestockModal = closeRestockModal;
     window.closeProductModal = closeProductModal;
     window.testOrder = testOrder;
     window.refreshMovements = refreshMovements;
-
-    // expose refreshStock for glue
     window.refreshStock = refreshStock;
   });
 })();

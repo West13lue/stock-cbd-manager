@@ -135,6 +135,12 @@
           <span class="hint">Entrez la quantité en grammes à ajouter au stock</span>
         </div>
 
+        <div class="form-group">
+          <label>Prix d'achat unitaire (€/g) - Optionnel</label>
+          <input id="restockPurchasePrice" type="number" min="0" step="0.01" placeholder="Ex: 4.50" />
+          <span class="hint">💡 Si renseigné, le Coût Moyen Pondéré (CMP) sera recalculé automatiquement</span>
+        </div>
+
         <div class="modal-actions">
           <button class="btn" type="button" onclick="closeRestockModal()">Annuler</button>
           <button class="btn btn-primary" type="submit">✓ Valider</button>
@@ -218,20 +224,35 @@
 
         const productId = document.getElementById("productSelect").value;
         const grams = Number(document.getElementById("restockGrams").value);
+        const purchasePricePerGram = Number(document.getElementById("restockPurchasePrice")?.value || 0);
 
         if (!productId || !grams || grams <= 0) return;
 
         try {
+          const body = { productId, grams };
+          
+          // ✅ NOUVEAU : Inclure le prix d'achat si fourni
+          if (purchasePricePerGram > 0) {
+            body.purchasePricePerGram = purchasePricePerGram;
+          }
+
           const res = await fetch(apiPath("/api/restock"), {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ productId, grams })
+            body: JSON.stringify(body)
           });
 
           const ct = res.headers.get("content-type") || "";
           const data = ct.includes("application/json") ? await res.json() : { error: await res.text() };
 
           if (!res.ok) throw new Error(data?.error || "Erreur restock");
+
+          // ✅ NOUVEAU : Message de succès avec info CMP
+          const message = data.cmpUpdated 
+            ? `✅ Stock réapprovisionné (+${grams}g) - CMP mis à jour`
+            : `✅ Stock réapprovisionné (+${grams}g)`;
+          
+          if (window.log) window.log(message, "success");
 
           if (window.closeRestockModal) window.closeRestockModal();
 
@@ -240,6 +261,7 @@
           else location.reload();
         } catch (err) {
           alert("Erreur: " + err.message);
+          if (window.log) window.log("❌ Erreur restock: " + err.message, "error");
         }
       });
     })();

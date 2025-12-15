@@ -1,6 +1,7 @@
 // server.js — PREFIX-SAFE (/apps/<slug>/...), STATIC FIX, JSON API SAFE, Multi-shop safe, Express 5 safe
 // ✅ ENRICHI avec CMP, Valeur stock, Stats catégories, Suppression mouvements
 // ✅ + OAuth Shopify (Partner) : /api/auth/start + /api/auth/callback
+// ✅ + SECURE /api/* (App Store) via Shopify Session Token (JWT HS256)
 
 if (process.env.NODE_ENV !== "production") {
   require("dotenv").config();
@@ -53,6 +54,12 @@ const SHOPIFY_API_KEY = String(process.env.SHOPIFY_API_KEY || "").trim();
 const SHOPIFY_API_SECRET = String(process.env.SHOPIFY_API_SECRET || "").trim();
 const OAUTH_SCOPES = String(process.env.SHOPIFY_SCOPES || "").trim();
 
+// ✅ API auth switch (en prod => ON par défaut)
+const API_AUTH_REQUIRED =
+  String(process.env.API_AUTH_REQUIRED || "").trim() === ""
+    ? process.env.NODE_ENV === "production"
+    : String(process.env.API_AUTH_REQUIRED).trim().toLowerCase() !== "false";
+
 // state anti-CSRF simple en mémoire (ok pour 1 instance Render)
 const _oauthStateByShop = new Map();
 
@@ -97,6 +104,10 @@ function shopFromHostParam(hostParam) {
 }
 
 function getShop(req) {
+  // ✅ priorité: shop déterminé par middleware auth (session token)
+  const fromAuth = String(req.shopDomain || "").trim();
+  if (fromAuth) return normalizeShopDomain(fromAuth);
+
   const q = String(req.query?.shop || "").trim();
   if (q) return normalizeShopDomain(q);
 
@@ -154,6 +165,118 @@ function requireOAuthEnv(res) {
     return apiError(res, 500, "RENDER_PUBLIC_URL manquant (ex: https://stock-cbd-manager-1.onrender.com)");
   }
   return null;
+}
+
+// ===============================
+// ✅ Shopify Session Token (JWT)
+// ===============================
+function base64UrlToBuffer(str) {
+  const s = String(str || "")
+    .replace(/-/g, "+")
+    .replace(/_/g, "/")
+    .padEnd(Math.ceil(String(str || "").length / 4) * 4, "=");
+  return Buffer.from(s, "base64");
+}
+
+function parseShopFromDestOrIss(payload) {
+  // dest: "https://xxx.myshopify.com"
+  const dest = String(payload?.dest || "").trim();
+  if (dest) return normalizeShopDomain(dest);
+
+  // iss: "https://xxx.myshopify.com/admin"
+  const iss = String(payload?.iss || "").trim();
+  if (iss) {
+    const noProto = iss.replace(/^https?:\/\//i, "");
+    const domain = noProto.split("/")[0].trim();
+    return normalizeShopDomain(domain);
+  }
+  return "";
+}
+
+function verifySessionToken(token) {
+  if (!SHOPIFY_API_SECRET) return { ok: false, error: "SHOPIFY_API_SECRET manquant (JWT verify)" };
+
+  const t = String(token || "").trim();
+  const parts = t.split(".");
+  if (parts.length !== 3) return { ok: false, error: "Session token JWT invalide" };
+
+  const [h64, p64, s64] = parts;
+
+  let header = null;
+  let payload = null;
+  try {
+    header = JSON.parse(base64UrlToBuffer(h64).toString("utf8"));
+    payload = JSON.parse(base64UrlToBuffer(p64).toString("utf8"));
+  } catch {
+    return { ok: false, error: "JWT illisible" };
+  }
+
+  // Shopify session tokens are HS256
+  if (String(header?.alg || "") !== "HS256") return { ok: false, error: "JWT alg non supporté" };
+
+  // Signature check
+  const signingInput = `${h64}.${p64}`;
+  const expected = crypto.createHmac("sha256", SHOPIFY_API_SECRET).update(signingInput).digest(); // Buffer
+  const got = base64UrlToBuffer(s64);
+
+  if (got.length !== expected.length) return { ok: false, error: "JWT signature invalide" };
+  try {
+    if (!crypto.timingSafeEqual(expected, got)) return { ok: false, error: "JWT signature invalide" };
+  } catch {
+    return { ok: false, error: "JWT signature invalide" };
+  }
+
+  // Basic claims checks
+  const now = Math.floor(Date.now() / 1000);
+
+  const exp = Number(payload?.exp);
+  if (Number.isFinite(exp) && exp <= now) return { ok: false, error: "Session token expiré" };
+
+  const nbf = Number(payload?.nbf);
+  if (Number.isFinite(nbf) && nbf > now) return { ok: false, error: "Session token pas encore valide" };
+
+  // aud check (should match API key)
+  if (SHOPIFY_API_KEY) {
+    const aud = payload?.aud;
+    const audOk = Array.isArray(aud) ? aud.includes(SHOPIFY_API_KEY) : String(aud || "") === SHOPIFY_API_KEY;
+    if (!audOk) return { ok: false, error: "JWT audience invalide" };
+  }
+
+  return { ok: true, payload, header };
+}
+
+function extractBearerToken(req) {
+  const auth = String(req.get("Authorization") || "").trim();
+  if (auth.toLowerCase().startsWith("bearer ")) return auth.slice(7).trim();
+
+  // fallback header (pratique côté fetch)
+  const x = String(req.get("X-Shopify-Session-Token") || "").trim();
+  if (x) return x;
+
+  return "";
+}
+
+function requireApiAuth(req, res, next) {
+  // Bypass dev optionnel
+  if (!API_AUTH_REQUIRED) return next();
+
+  // Laisse passer l’OAuth install/callback
+  if (req.path === "/api/auth/start" || req.path === "/api/auth/callback") return next();
+
+  const token = extractBearerToken(req);
+  if (!token) return apiError(res, 401, "Session token manquant");
+
+  const verified = verifySessionToken(token);
+  if (!verified.ok) return apiError(res, 401, verified.error);
+
+  const shop = parseShopFromDestOrIss(verified.payload);
+  if (!shop) return apiError(res, 401, "Shop introuvable dans le session token");
+
+  // ✅ inject shop + payload (utile partout)
+  req.shopDomain = shop;
+  req.sessionTokenPayload = verified.payload;
+
+  next();
 }
 
 function extractShopifyError(e) {
@@ -287,7 +410,7 @@ router.use((req, res, next) => {
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
   res.setHeader(
     "Access-Control-Allow-Headers",
-    "Content-Type, Authorization, X-Shopify-Hmac-Sha256, X-Shopify-Shop-Domain"
+    "Content-Type, Authorization, X-Shopify-Hmac-Sha256, X-Shopify-Shop-Domain, X-Shopify-Session-Token"
   );
   if (req.method === "OPTIONS") return res.sendStatus(204);
   next();
@@ -299,6 +422,9 @@ router.use((req, res, next) => {
   res.setHeader("Content-Security-Policy", `frame-ancestors https://admin.shopify.com ${shopDomain};`);
   next();
 });
+
+// ✅ SECURE TOUTES LES ROUTES /api/*
+router.use("/api", requireApiAuth);
 
 router.get("/health", (req, res) => res.status(200).send("ok"));
 
