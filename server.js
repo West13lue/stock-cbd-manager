@@ -367,25 +367,6 @@ async function getLocationIdForShop(shop) {
   return id;
 }
 
-  const envLoc = process.env.SHOPIFY_LOCATION_ID || process.env.LOCATION_ID;
-  if (envLoc) {
-    const id = Number(envLoc);
-    if (Number.isFinite(id) && id > 0) {
-      _cachedLocationIdByShop.set(sh, id);
-      return id;
-    }
-  }
-
-  const client = shopifyFor(shop);
-  const locations = await client.location.list({ limit: 10 });
-  const first = Array.isArray(locations) ? locations[0] : null;
-  if (!first?.id) throw new Error("Aucune location Shopify trouvée");
-
-  const id = Number(first.id);
-  _cachedLocationIdByShop.set(sh, id);
-  return id;
-}
-
 async function pushProductInventoryToShopify(shop, productView) {
   if (!productView?.variants) return;
 
@@ -420,10 +401,8 @@ function findGramsPerUnitByInventoryItemId(productView, inventoryItemId) {
 
 // =====================================================
 // ✅ DURCISSEMENT #1 : Anti-spoof multi-shop (API)
-// - Empêche un client de forcer ?shop=autre-boutique si son JWT dit autre chose
 // =====================================================
 function getShopRequestedByClient(req) {
-  // IMPORTANT : on ne prend PAS req.shopDomain ici (c'est justement la vérité JWT)
   const q = String(req.query?.shop || "").trim();
   if (q) return normalizeShopDomain(q);
 
@@ -438,7 +417,6 @@ function getShopRequestedByClient(req) {
 }
 
 function enforceAuthShopMatch(req, res, next) {
-  // seulement si auth active et qu'on a un shop JWT
   const authShop = String(req.shopDomain || "").trim();
   if (!API_AUTH_REQUIRED || !authShop) return next();
 
@@ -456,22 +434,17 @@ function enforceAuthShopMatch(req, res, next) {
 
 // =====================================================
 // ✅ DURCISSEMENT #2 : Webhooks shop + HMAC strict
-// - shop déduit du header Shopify (ou payload fallback)
-// - HMAC vérifié dès que SHOPIFY_WEBHOOK_SECRET est défini (pas seulement prod)
 // =====================================================
 function getShopFromWebhook(req, payloadObj) {
   const headerShop = String(req.get("X-Shopify-Shop-Domain") || "").trim();
-  const payloadShop = String(
-    payloadObj?.myshopify_domain || payloadObj?.shop_domain || payloadObj?.domain || ""
-  ).trim();
-
+  const payloadShop = String(payloadObj?.myshopify_domain || payloadObj?.shop_domain || payloadObj?.domain || "").trim();
   const shop = normalizeShopDomain(headerShop || payloadShop || "");
   return shop || "";
 }
 
 function requireVerifiedWebhook(req, res) {
   const secret = String(process.env.SHOPIFY_WEBHOOK_SECRET || "").trim();
-  if (!secret) return true; // si pas configuré, on ne bloque pas (dev)
+  if (!secret) return true;
   const hmac = req.get("X-Shopify-Hmac-Sha256");
   if (!hmac) return false;
   return verifyShopifyWebhook(req.body, hmac);
@@ -1085,7 +1058,14 @@ router.post("/api/import/product", (req, res) => {
 
     if (movementStore.addMovement) {
       movementStore.addMovement(
-        { source: "import_shopify_product", productId: String(p.id), productName: imported.name, gramsDelta: 0, meta: { categoryIds }, shop },
+        {
+          source: "import_shopify_product",
+          productId: String(p.id),
+          productName: imported.name,
+          gramsDelta: 0,
+          meta: { categoryIds },
+          shop,
+        },
         shop
       );
     }
@@ -1170,7 +1150,14 @@ router.post("/api/test-order", (req, res) => {
 
     if (movementStore.addMovement) {
       movementStore.addMovement(
-        { source: "test_order", productId, productName: updated.name, gramsDelta: -Math.abs(grams), totalAfter: updated.totalGrams, shop },
+        {
+          source: "test_order",
+          productId,
+          productName: updated.name,
+          gramsDelta: -Math.abs(grams),
+          totalAfter: updated.totalGrams,
+          shop,
+        },
         shop
       );
     }
@@ -1224,7 +1211,6 @@ router.get("/api/auth/callback", (req, res) => {
     const code = String(req.query?.code || "");
     if (!code) return apiError(res, 400, "Code OAuth manquant");
 
-    // Node 18+ : fetch global. Sinon, tu peux installer node-fetch.
     const doFetch = typeof fetch === "function" ? fetch : null;
     if (!doFetch) return apiError(res, 500, "fetch non disponible (Node < 18). Installe node-fetch ou upgrade Node.");
 
@@ -1273,8 +1259,6 @@ router.get(/^\/(?!api\/|webhooks\/|health|css\/|js\/).*/, (req, res) => res.send
 // WEBHOOKS
 // =====================================================
 
-// Ajout dans la section Webhooks
-
 // ✅ DURCISSEMENT #3 : purge complète + cache (et hooks optionnels stock/catalog)
 async function purgeShopData(shop) {
   const s = normalizeShopDomain(String(shop || "").trim());
@@ -1316,15 +1300,12 @@ async function purgeShopData(shop) {
 // Webhook pour la désinstallation de l'application
 app.post("/webhooks/app/uninstalled", express.raw({ type: "application/json" }), async (req, res) => {
   try {
-    // ✅ DURCISSEMENT #2 : HMAC strict si secret défini
     if (!requireVerifiedWebhook(req, res)) return res.sendStatus(401);
 
-    // ✅ DURCISSEMENT #2 : shop depuis header/payload (pas getShop(req))
     const payload = JSON.parse(req.body.toString("utf8") || "{}");
     const shop = getShopFromWebhook(req, payload);
     if (!shop) return res.sendStatus(200);
 
-    // Suppression des données du shop
     await purgeShopData(shop);
 
     res.sendStatus(200);
@@ -1337,15 +1318,11 @@ app.post("/webhooks/app/uninstalled", express.raw({ type: "application/json" }),
 // Webhook pour la demande de données clients
 app.post("/webhooks/customers/data_request", express.raw({ type: "application/json" }), async (req, res) => {
   try {
-    // ✅ DURCISSEMENT #2 : HMAC strict si secret défini
     if (!requireVerifiedWebhook(req, res)) return res.sendStatus(401);
 
-    // ✅ DURCISSEMENT #2 : shop depuis header/payload
     const payload = JSON.parse(req.body.toString("utf8") || "{}");
     const shop = getShopFromWebhook(req, payload);
     if (!shop) return res.sendStatus(200);
-
-    // Action à prendre ici : fournir les données à Shopify si nécessaire
 
     res.sendStatus(200);
   } catch (err) {
@@ -1357,15 +1334,11 @@ app.post("/webhooks/customers/data_request", express.raw({ type: "application/js
 // Webhook pour la demande de suppression des données clients
 app.post("/webhooks/customers/redact", express.raw({ type: "application/json" }), async (req, res) => {
   try {
-    // ✅ DURCISSEMENT #2 : HMAC strict si secret défini
     if (!requireVerifiedWebhook(req, res)) return res.sendStatus(401);
 
-    // ✅ DURCISSEMENT #2 : shop depuis header/payload
     const payload = JSON.parse(req.body.toString("utf8") || "{}");
     const shop = getShopFromWebhook(req, payload);
     if (!shop) return res.sendStatus(200);
-
-    // Action à prendre ici : supprimer les données clients de ta base de données
 
     res.sendStatus(200);
   } catch (err) {
@@ -1377,15 +1350,12 @@ app.post("/webhooks/customers/redact", express.raw({ type: "application/json" })
 // Webhook pour la suppression des données du shop
 app.post("/webhooks/shop/redact", express.raw({ type: "application/json" }), async (req, res) => {
   try {
-    // ✅ DURCISSEMENT #2 : HMAC strict si secret défini
     if (!requireVerifiedWebhook(req, res)) return res.sendStatus(401);
 
-    // ✅ DURCISSEMENT #2 : shop depuis header/payload
     const payload = JSON.parse(req.body.toString("utf8") || "{}");
     const shop = getShopFromWebhook(req, payload);
     if (!shop) return res.sendStatus(200);
 
-    // Suppression des données du shop (token, mouvements, etc.)
     await purgeShopData(shop);
 
     res.sendStatus(200);
@@ -1397,14 +1367,12 @@ app.post("/webhooks/shop/redact", express.raw({ type: "application/json" }), asy
 
 app.post("/webhooks/orders/create", express.raw({ type: "application/json" }), async (req, res) => {
   try {
-    // ✅ DURCISSEMENT #2 : HMAC strict si secret défini (dev toléré si pas de secret)
     if (!requireVerifiedWebhook(req, res)) return res.sendStatus(401);
 
     const headerShop = String(req.get("X-Shopify-Shop-Domain") || "").trim();
     const payload = JSON.parse(req.body.toString("utf8") || "{}");
     const payloadShop = String(payload?.myshopify_domain || payload?.domain || payload?.shop_domain || "").trim();
 
-    // ✅ DURCISSEMENT #2 : priorité header/payload (pas de query/env ici)
     const shop = normalizeShopDomain(headerShop || payloadShop || "");
     if (!shop) {
       logEvent("webhook_no_shop", { headerShop, payloadShop }, "error");
