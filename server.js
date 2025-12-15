@@ -334,6 +334,7 @@ async function getLocationIdForShop(shop) {
 
   if (_cachedLocationIdByShop.has(sh)) return _cachedLocationIdByShop.get(sh);
 
+  // 1) Priorité : settings par boutique
   const settings = (settingsStore?.loadSettings && settingsStore.loadSettings(sh)) || {};
   if (settings.locationId) {
     const id = Number(settings.locationId);
@@ -342,6 +343,29 @@ async function getLocationIdForShop(shop) {
       return id;
     }
   }
+
+  // 2) ENV locationId (⚠️ uniquement si la boutique == SHOP_NAME)
+  const envShop = resolveShopFallback(); // SHOP_NAME normalisé
+  const envLoc = process.env.SHOPIFY_LOCATION_ID || process.env.LOCATION_ID;
+
+  if (envLoc && envShop && normalizeShopDomain(envShop) === normalizeShopDomain(sh)) {
+    const id = Number(envLoc);
+    if (Number.isFinite(id) && id > 0) {
+      _cachedLocationIdByShop.set(sh, id);
+      return id;
+    }
+  }
+
+  // 3) Sinon : on prend la 1ère location de CETTE boutique (dev/prod)
+  const client = shopifyFor(sh);
+  const locations = await client.location.list({ limit: 10 });
+  const first = Array.isArray(locations) ? locations[0] : null;
+  if (!first?.id) throw new Error("Aucune location Shopify trouvée");
+
+  const id = Number(first.id);
+  _cachedLocationIdByShop.set(sh, id);
+  return id;
+}
 
   const envLoc = process.env.SHOPIFY_LOCATION_ID || process.env.LOCATION_ID;
   if (envLoc) {
@@ -395,6 +419,65 @@ function findGramsPerUnitByInventoryItemId(productView, inventoryItemId) {
 }
 
 // =====================================================
+// ✅ DURCISSEMENT #1 : Anti-spoof multi-shop (API)
+// - Empêche un client de forcer ?shop=autre-boutique si son JWT dit autre chose
+// =====================================================
+function getShopRequestedByClient(req) {
+  // IMPORTANT : on ne prend PAS req.shopDomain ici (c'est justement la vérité JWT)
+  const q = String(req.query?.shop || "").trim();
+  if (q) return normalizeShopDomain(q);
+
+  const hostQ = String(req.query?.host || "").trim();
+  const hostShop = shopFromHostParam(hostQ);
+  if (hostShop) return hostShop;
+
+  const h = String(req.get("X-Shopify-Shop-Domain") || "").trim();
+  if (h) return normalizeShopDomain(h);
+
+  return "";
+}
+
+function enforceAuthShopMatch(req, res, next) {
+  // seulement si auth active et qu'on a un shop JWT
+  const authShop = String(req.shopDomain || "").trim();
+  if (!API_AUTH_REQUIRED || !authShop) return next();
+
+  const requested = getShopRequestedByClient(req);
+  if (requested && normalizeShopDomain(requested) !== normalizeShopDomain(authShop)) {
+    logEvent(
+      "shop_spoof_blocked",
+      { authShop: normalizeShopDomain(authShop), requestedShop: normalizeShopDomain(requested), path: req.path },
+      "warn"
+    );
+    return apiError(res, 403, "Shop mismatch (anti-spoof)");
+  }
+  next();
+}
+
+// =====================================================
+// ✅ DURCISSEMENT #2 : Webhooks shop + HMAC strict
+// - shop déduit du header Shopify (ou payload fallback)
+// - HMAC vérifié dès que SHOPIFY_WEBHOOK_SECRET est défini (pas seulement prod)
+// =====================================================
+function getShopFromWebhook(req, payloadObj) {
+  const headerShop = String(req.get("X-Shopify-Shop-Domain") || "").trim();
+  const payloadShop = String(
+    payloadObj?.myshopify_domain || payloadObj?.shop_domain || payloadObj?.domain || ""
+  ).trim();
+
+  const shop = normalizeShopDomain(headerShop || payloadShop || "");
+  return shop || "";
+}
+
+function requireVerifiedWebhook(req, res) {
+  const secret = String(process.env.SHOPIFY_WEBHOOK_SECRET || "").trim();
+  if (!secret) return true; // si pas configuré, on ne bloque pas (dev)
+  const hmac = req.get("X-Shopify-Hmac-Sha256");
+  if (!hmac) return false;
+  return verifyShopifyWebhook(req.body, hmac);
+}
+
+// =====================================================
 // ROUTER "prefix-safe"
 // =====================================================
 const router = express.Router();
@@ -432,6 +515,9 @@ router.get("/api/public/config", (req, res) => {
 
 // ✅ SECURE toutes les routes /api/*
 router.use("/api", requireApiAuth);
+
+// ✅ DURCISSEMENT #1 (suite) : anti-spoof APRES auth
+router.use("/api", enforceAuthShopMatch);
 
 router.get("/health", (req, res) => res.status(200).send("ok"));
 
@@ -791,7 +877,7 @@ router.post("/api/products/:productId/adjust-total", (req, res) => {
     try {
       await pushProductInventoryToShopify(shop, updated);
     } catch (e) {
-      logEvent("inventory_push_error", { shop, productId, message: e?.message }, "error");
+      logEvent("inventory_push_error", { shop, productId, ...extractShopifyError(e) }, "error");
     }
 
     if (movementStore.addMovement) {
@@ -1030,7 +1116,7 @@ router.post("/api/restock", (req, res) => {
     try {
       await pushProductInventoryToShopify(shop, updated);
     } catch (e) {
-      logEvent("inventory_push_error", { shop, productId, message: e?.message }, "error");
+      logEvent("inventory_push_error", { shop, productId, ...extractShopifyError(e) }, "error");
     }
 
     if (movementStore.addMovement) {
@@ -1186,19 +1272,140 @@ router.get(/^\/(?!api\/|webhooks\/|health|css\/|js\/).*/, (req, res) => res.send
 // =====================================================
 // WEBHOOKS
 // =====================================================
+
+// Ajout dans la section Webhooks
+
+// ✅ DURCISSEMENT #3 : purge complète + cache (et hooks optionnels stock/catalog)
+async function purgeShopData(shop) {
+  const s = normalizeShopDomain(String(shop || "").trim());
+  if (!s) return;
+
+  try {
+    // tokens
+    if (tokenStore?.removeToken) await tokenStore.removeToken(s);
+
+    // mouvements
+    if (movementStore?.clearShopMovements) await movementStore.clearShopMovements(s);
+
+    // settings
+    if (settingsStore?.removeSettings) await settingsStore.removeSettings(s);
+
+    // cache locationId
+    _cachedLocationIdByShop.delete(String(s).trim().toLowerCase());
+
+    // stock/catalog (optionnels selon tes modules)
+    if (typeof stock.removeShop === "function") {
+      await stock.removeShop(s);
+    } else if (typeof stock.clearShop === "function") {
+      await stock.clearShop(s);
+    }
+
+    if (typeof catalogStore.removeShop === "function") {
+      await catalogStore.removeShop(s);
+    } else if (typeof catalogStore.clearShop === "function") {
+      await catalogStore.clearShop(s);
+    }
+
+    logEvent("shop_data_purged", { shop: s }, "info");
+  } catch (err) {
+    logEvent("purge_shop_data_error", { error: err.message, shop: s }, "error");
+    throw new Error("Erreur lors de la purge des données");
+  }
+}
+
+// Webhook pour la désinstallation de l'application
+app.post("/webhooks/app/uninstalled", express.raw({ type: "application/json" }), async (req, res) => {
+  try {
+    // ✅ DURCISSEMENT #2 : HMAC strict si secret défini
+    if (!requireVerifiedWebhook(req, res)) return res.sendStatus(401);
+
+    // ✅ DURCISSEMENT #2 : shop depuis header/payload (pas getShop(req))
+    const payload = JSON.parse(req.body.toString("utf8") || "{}");
+    const shop = getShopFromWebhook(req, payload);
+    if (!shop) return res.sendStatus(200);
+
+    // Suppression des données du shop
+    await purgeShopData(shop);
+
+    res.sendStatus(200);
+  } catch (err) {
+    logEvent("webhook_app_uninstalled_error", { error: err.message }, "error");
+    res.sendStatus(500);
+  }
+});
+
+// Webhook pour la demande de données clients
+app.post("/webhooks/customers/data_request", express.raw({ type: "application/json" }), async (req, res) => {
+  try {
+    // ✅ DURCISSEMENT #2 : HMAC strict si secret défini
+    if (!requireVerifiedWebhook(req, res)) return res.sendStatus(401);
+
+    // ✅ DURCISSEMENT #2 : shop depuis header/payload
+    const payload = JSON.parse(req.body.toString("utf8") || "{}");
+    const shop = getShopFromWebhook(req, payload);
+    if (!shop) return res.sendStatus(200);
+
+    // Action à prendre ici : fournir les données à Shopify si nécessaire
+
+    res.sendStatus(200);
+  } catch (err) {
+    logEvent("webhook_data_request_error", { error: err.message }, "error");
+    res.sendStatus(500);
+  }
+});
+
+// Webhook pour la demande de suppression des données clients
+app.post("/webhooks/customers/redact", express.raw({ type: "application/json" }), async (req, res) => {
+  try {
+    // ✅ DURCISSEMENT #2 : HMAC strict si secret défini
+    if (!requireVerifiedWebhook(req, res)) return res.sendStatus(401);
+
+    // ✅ DURCISSEMENT #2 : shop depuis header/payload
+    const payload = JSON.parse(req.body.toString("utf8") || "{}");
+    const shop = getShopFromWebhook(req, payload);
+    if (!shop) return res.sendStatus(200);
+
+    // Action à prendre ici : supprimer les données clients de ta base de données
+
+    res.sendStatus(200);
+  } catch (err) {
+    logEvent("webhook_redact_error", { error: err.message }, "error");
+    res.sendStatus(500);
+  }
+});
+
+// Webhook pour la suppression des données du shop
+app.post("/webhooks/shop/redact", express.raw({ type: "application/json" }), async (req, res) => {
+  try {
+    // ✅ DURCISSEMENT #2 : HMAC strict si secret défini
+    if (!requireVerifiedWebhook(req, res)) return res.sendStatus(401);
+
+    // ✅ DURCISSEMENT #2 : shop depuis header/payload
+    const payload = JSON.parse(req.body.toString("utf8") || "{}");
+    const shop = getShopFromWebhook(req, payload);
+    if (!shop) return res.sendStatus(200);
+
+    // Suppression des données du shop (token, mouvements, etc.)
+    await purgeShopData(shop);
+
+    res.sendStatus(200);
+  } catch (err) {
+    logEvent("webhook_shop_redact_error", { error: err.message }, "error");
+    res.sendStatus(500);
+  }
+});
+
 app.post("/webhooks/orders/create", express.raw({ type: "application/json" }), async (req, res) => {
   try {
-    const hmac = req.get("X-Shopify-Hmac-Sha256");
-
-    if (process.env.NODE_ENV === "production" && process.env.SHOPIFY_WEBHOOK_SECRET) {
-      if (!hmac || !verifyShopifyWebhook(req.body, hmac)) return res.sendStatus(401);
-    }
+    // ✅ DURCISSEMENT #2 : HMAC strict si secret défini (dev toléré si pas de secret)
+    if (!requireVerifiedWebhook(req, res)) return res.sendStatus(401);
 
     const headerShop = String(req.get("X-Shopify-Shop-Domain") || "").trim();
     const payload = JSON.parse(req.body.toString("utf8") || "{}");
     const payloadShop = String(payload?.myshopify_domain || payload?.domain || payload?.shop_domain || "").trim();
 
-    const shop = normalizeShopDomain(headerShop || payloadShop || resolveShopFallback());
+    // ✅ DURCISSEMENT #2 : priorité header/payload (pas de query/env ici)
+    const shop = normalizeShopDomain(headerShop || payloadShop || "");
     if (!shop) {
       logEvent("webhook_no_shop", { headerShop, payloadShop }, "error");
       return res.sendStatus(200);

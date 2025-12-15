@@ -55,4 +55,13 @@ function setLocationId(shop, locationId) {
   return cur;
 }
 
-module.exports = { sanitizeShop, shopDir, loadSettings, saveSettings, setLocationId };
+// Ajout de la fonction pour supprimer les paramètres du shop
+function removeSettings(shop) {
+  const file = filePath(shop);
+  if (fs.existsSync(file)) {
+    fs.unlinkSync(file);
+    console.log(`Settings supprimés pour le shop: ${shop}`);
+  }
+}
+
+module.exports = { sanitizeShop, shopDir, loadSettings, saveSettings, setLocationId, removeSettings };

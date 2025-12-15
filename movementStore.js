@@ -106,4 +106,14 @@ function toCSV(rows = []) {
   return [header, ...lines].join("\n");
 }
 
-module.exports = { sanitizeShop, shopDir, addMovement, listMovements, toCSV };
+// Ajout de la fonction pour supprimer les mouvements d’un shop
+function clearShopMovements(shop) {
+  const dir = movementsDir(shop);
+  if (fs.existsSync(dir)) {
+    fs.rmdirSync(dir, { recursive: true });
+    console.log(`Mouvements supprimés pour le shop: ${shop}`);
+  }
+}
+
+module.exports = { sanitizeShop, shopDir, addMovement, listMovements, toCSV, clearShopMovements };
+

@@ -53,4 +53,14 @@ function saveToken(shop, accessToken, extra = {}) {
   return payload;
 }
 
-module.exports = { sanitizeShop, shopDir, loadToken, saveToken };
+// Ajout de la fonction pour supprimer le token du shop
+function removeToken(shop) {
+  const file = tokenFile(shop);
+  if (fs.existsSync(file)) {
+    fs.unlinkSync(file);
+    console.log(`Token supprimé pour le shop: ${shop}`);
+  }
+}
+
+module.exports = { sanitizeShop, shopDir, loadToken, saveToken, removeToken };
+
