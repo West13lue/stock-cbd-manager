@@ -1,1566 +1,670 @@
-// public/js/app.js - ENRICHI + FIXES
-// ✅ NOUVEAUTÉS :
-//    - Carte "Valeur totale du stock"
-//    - Barre de répartition par catégorie
-//    - Formulaire restock avec prix d'achat (CMP)
-//    - Feedback visuel coloré selon type de mouvement
-//    - Affichage du CMP dans les produits
-// ✅ FIXES :
-//    - injectAppCss() manquant (crash)
-//    - Auth App Bridge: ne tente pas en non-embedded (pas de host)
-//    - apiFetch centralisé + Authorization auto si token dispo
-//    - refreshMovements auto quand #movementsDays change
-//    - restockForm bind safe (n’empêche pas ton script inline)
-// ✅ FIX EXPORT CSV :
-//    - Export CSV via apiFetch + Blob (sinon token manquant avec window.location.href)
+// app-new.js — Stock Manager Pro - Main Application
+(function() {
+  'use strict';
 
-(() => {
-  // ---------------- SHOP CONTEXT ----------------
-  function shopFromHost() {
-    try {
-      const host = new URLSearchParams(window.location.search).get("host") || "";
-      if (!host) return "";
-      const decoded = atob(host);
-      const domain = decoded.split("/")[0].trim();
-      return domain || "";
-    } catch {
-      return "";
-    }
+  const API_BASE = '/api';
+  
+  const FEATURES = {
+    hasBatchTracking: { plan: 'pro', name: 'Lots & DLC', icon: '🏷️' },
+    hasSuppliers: { plan: 'pro', name: 'Fournisseurs', icon: '🏭' },
+    hasPurchaseOrders: { plan: 'business', name: 'Bons de commande', icon: '📝' },
+    hasForecast: { plan: 'business', name: 'Prévisions', icon: '🔮' },
+    hasKits: { plan: 'business', name: 'Kits & Bundles', icon: '🧩' },
+    hasAnalytics: { plan: 'pro', name: 'Analytics', icon: '📈' },
+    hasInventoryCount: { plan: 'pro', name: 'Inventaire', icon: '📋' },
+  };
+
+  const PLAN_HIERARCHY = ['free', 'starter', 'pro', 'business', 'enterprise'];
+
+  const state = {
+    currentTab: 'dashboard',
+    plan: { id: 'free', limits: { maxProducts: 2 } },
+    products: [],
+    loading: false,
+    sidebarOpen: true,
+  };
+
+  // ============================================
+  // INIT
+  // ============================================
+
+  async function init() {
+    console.log('🚀 Stock Manager Pro initializing...');
+    setupNavigation();
+    await loadPlanInfo();
+    await loadProducts();
+    renderTab('dashboard');
+    updatePlanWidget();
+    console.log('✅ Ready');
   }
 
-  const SHOP = new URLSearchParams(window.location.search).get("shop") || shopFromHost() || "";
+  // ============================================
+  // NAVIGATION
+  // ============================================
 
-  const APP_PREFIX = (() => {
-    const m = window.location.pathname.match(/^(\/apps\/[^/]+)/);
-    return m ? m[1] : "";
-  })();
-
-  function withPrefix(path) {
-    const p = String(path || "");
-    if (!p) return APP_PREFIX || "";
-    const normalized = p.startsWith("/") ? p : "/" + p;
-    return (APP_PREFIX || "") + normalized;
-  }
-
-  function apiPath(path) {
-    const base = withPrefix(path);
-    if (!SHOP) return base;
-    const hasQuery = base.includes("?");
-    const sep = hasQuery ? "&" : "?";
-    return `${base}${sep}shop=${encodeURIComponent(SHOP)}`;
-  }
-
-  // ---------------- CSS injection (FIX) ----------------
-  function injectAppCss() {
-    const id = "bulk-stock-manager-css";
-    if (document.getElementById(id)) return;
-
-    const link = document.createElement("link");
-    link.id = id;
-    link.rel = "stylesheet";
-    link.href = withPrefix("/css/style.css");
-    document.head.appendChild(link);
-  }
-
-  // ---------------- AUTH (Shopify Session Token via App Bridge) ----------------
-  let _appBridgeApp = null;
-  let _cfg = null;
-  let _tokenCache = { token: "", ts: 0 }; // cache ~20s
-
-  function getHostParam() {
-    return new URLSearchParams(window.location.search).get("host") || "";
-  }
-
-  function isEmbeddedContext() {
-    return Boolean(getHostParam());
-  }
-
-  async function loadPublicConfig() {
-    if (_cfg) return _cfg;
-    try {
-      const res = await fetch(apiPath("/api/public/config"));
-      const data = await res.json();
-      _cfg = data || {};
-    } catch {
-      _cfg = { apiKey: "", apiAuthRequired: false };
-    }
-    return _cfg;
-  }
-
-  function ensureAppBridge(apiKey) {
-    if (_appBridgeApp) return _appBridgeApp;
-
-    const host = getHostParam();
-    if (!apiKey || !host) return null;
-
-    const ABGlobal = window["app-bridge"] || window.AppBridge || window.shopifyAppBridge || null;
-
-    const createApp =
-      (ABGlobal && typeof ABGlobal.createApp === "function" && ABGlobal.createApp) ||
-      (ABGlobal && ABGlobal.default && typeof ABGlobal.default.createApp === "function" && ABGlobal.default.createApp) ||
-      null;
-
-    if (!createApp) return null;
-
-    _appBridgeApp = createApp({ apiKey, host, forceRedirect: true });
-    return _appBridgeApp;
-  }
-
-  async function getSessionTokenStrict() {
-    const now = Date.now();
-    if (_tokenCache.token && now - _tokenCache.ts < 20000) return _tokenCache.token;
-
-    const t1 = String(window.__SHOPIFY_SESSION_TOKEN__ || "").trim();
-    if (t1) return (_tokenCache = { token: t1, ts: now }).token;
-
-    const t2 = String(sessionStorage.getItem("shopify_session_token") || "").trim();
-    if (t2) return (_tokenCache = { token: t2, ts: now }).token;
-
-    if (!isEmbeddedContext()) return "";
-
-    const cfg = await loadPublicConfig();
-    const apiKey = String(cfg.apiKey || "").trim();
-    const app = ensureAppBridge(apiKey);
-    if (!app) return "";
-
-    const Utils = window["app-bridge-utils"];
-    if (!Utils || typeof Utils.getSessionToken !== "function") return "";
-
-    const token = await Utils.getSessionToken(app);
-    if (token) _tokenCache = { token, ts: now };
-    return token || "";
-  }
-
-  async function apiFetch(path, options = {}) {
-    const opts = { ...options };
-    opts.headers = new Headers(options.headers || {});
-
-    if (opts.body && !opts.headers.has("Content-Type")) {
-      opts.headers.set("Content-Type", "application/json");
-    }
-
-    const token = await getSessionTokenStrict();
-    if (token && !opts.headers.has("Authorization")) {
-      opts.headers.set("Authorization", `Bearer ${token}`);
-      if (!opts.headers.has("X-Shopify-Session-Token")) {
-        opts.headers.set("X-Shopify-Session-Token", token);
-      }
-    }
-
-    const res = await fetch(apiPath(path), opts);
-
-    if (res.status === 401) {
-      try {
-        const ct = res.headers.get("content-type") || "";
-        if (ct.includes("application/json")) {
-          const data = await res.json().catch(() => null);
-          if (data && data.reauthUrl) {
-            const target = withPrefix(String(data.reauthUrl));
-            window.top.location.href = target;
-            return new Response("", { status: 204 });
-          }
+  function setupNavigation() {
+    document.querySelectorAll('.nav-item[data-tab]').forEach(item => {
+      item.addEventListener('click', (e) => {
+        e.preventDefault();
+        const tab = item.dataset.tab;
+        const feature = item.dataset.feature;
+        if (feature && !hasFeature(feature)) {
+          showFeatureLockedModal(feature);
+          return;
         }
-      } catch {}
-    }
-
-    return res;
-  }
-
-  // ✅ FIX: Export CSV avec token (Blob download)
-  async function downloadFile(path, filename) {
-    try {
-      log("⏳ Génération du fichier...", "info");
-
-      const res = await apiFetch(path, { method: "GET" });
-
-      if (!res.ok) {
-        const txt = await res.text().catch(() => "");
-        throw new Error(txt || `Erreur téléchargement (${res.status})`);
-      }
-
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename || "export.csv";
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-
-      setTimeout(() => URL.revokeObjectURL(url), 2000);
-      log("✅ Export téléchargé", "success");
-    } catch (e) {
-      log("❌ Export échoué: " + e.message, "error");
-      alert("Export échoué: " + e.message);
-    }
-  }
-
-  // ---------------- STATE ----------------
-  const result = document.getElementById("result");
-
-  let stockData = {};
-  let catalogData = null;
-  let serverInfo = {};
-  let currentProductId = null;
-
-  let currentCategoryFilter = "";
-  let sortAlpha = true;
-  let categories = [];
-
-  let shopifyLocations = [];
-  let currentLocationId = null;
-
-  let stockValue = { totalValue: 0, currency: "EUR", products: [] };
-  let categoryStats = { totalGrams: 0, categories: [] };
-
-  // ---------------- UTILS ----------------
-  function el(id) {
-    return document.getElementById(id);
-  }
-
-  function escapeHtml(str) {
-    return String(str ?? "")
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&#039;");
-  }
-
-  function log(message, type = "info") {
-    const timestamp = new Date().toLocaleTimeString("fr-FR");
-    if (!result) return;
-
-    result.textContent = `[${timestamp}] ${message}`;
-
-    result.className = "result-content";
-    if (type === "success") result.classList.add("success");
-    if (type === "error") result.classList.add("error");
-    if (type === "info") result.classList.add("info");
-
-    result.scrollTop = result.scrollHeight;
-  }
-
-  window.log = log;
-
-  function formatDateTime(ts) {
-    if (!ts) return "";
-    const d = new Date(ts);
-    if (Number.isNaN(d.getTime())) return "";
-    return d.toLocaleString("fr-FR");
-  }
-
-  function formatCurrency(value) {
-    const n = Number(value || 0);
-    return new Intl.NumberFormat("fr-FR", {
-      style: "currency",
-      currency: "EUR",
-    }).format(n);
-  }
-
-  async function safeJson(res) {
-    const ct = res.headers.get("content-type") || "";
-    if (!ct.includes("application/json")) {
-      const txt = await res.text().catch(() => "");
-      const err = new Error("Réponse non-JSON du serveur");
-      err._raw = txt?.slice?.(0, 1000);
-      throw err;
-    }
-    return res.json();
-  }
-
-  // ---------------- MODALS ----------------
-  function ensureModalLayout(modalEl) {
-    if (!modalEl) return;
-    const panel = modalEl.querySelector(".modal-panel");
-    if (!panel) return;
-
-    panel.style.maxHeight = "92vh";
-    panel.style.overflow = "hidden";
-
-    const content = panel.querySelector(".modal-content") || panel.querySelector(".modal-body");
-    if (content) {
-      content.style.overflowY = "auto";
-      content.style.webkitOverflowScrolling = "touch";
-      content.style.maxHeight = "calc(92vh - 60px)";
-    }
-  }
-
-  function closeTopmostModal() {
-    const actives = Array.from(document.querySelectorAll(".modal.active"));
-    if (!actives.length) return;
-    const top = actives[actives.length - 1];
-    top.classList.remove("active");
-    document.body.classList.remove("modal-open");
-  }
-
-  window.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") closeTopmostModal();
-  });
-
-  function ensureModalBackdrop(modalEl) {
-    if (!modalEl) return;
-    if (modalEl.querySelector(".modal-backdrop")) return;
-
-    const backdrop = document.createElement("div");
-    backdrop.className = "modal-backdrop";
-    backdrop.addEventListener("click", () => {
-      modalEl.classList.remove("active");
-      document.body.classList.remove("modal-open");
+        navigateTo(tab);
+      });
     });
-    modalEl.prepend(backdrop);
   }
 
-  function openModal(modalEl) {
-    if (!modalEl) return;
-    ensureModalBackdrop(modalEl);
-    ensureModalLayout(modalEl);
-    modalEl.classList.add("active");
-    document.body.classList.add("modal-open");
+  function navigateTo(tab) {
+    state.currentTab = tab;
+    document.querySelectorAll('.nav-item').forEach(item => {
+      item.classList.toggle('active', item.dataset.tab === tab);
+    });
+    renderTab(tab);
   }
 
-  function closeModal(modalEl) {
-    if (!modalEl) return;
-    modalEl.classList.remove("active");
-    document.body.classList.remove("modal-open");
+  function toggleSidebar() {
+    state.sidebarOpen = !state.sidebarOpen;
+    document.getElementById('sidebar').classList.toggle('collapsed', !state.sidebarOpen);
   }
 
-  // ---------------- HEADER CONTROLS ----------------
-  function ensureCatalogControls() {
-    const header = document.querySelector(".header");
-    if (!header) return;
-    if (document.getElementById("catalogControls")) return;
+  // ============================================
+  // TAB RENDERING
+  // ============================================
 
-    const wrap = document.createElement("div");
-    wrap.id = "catalogControls";
-    wrap.className = "catalog-controls";
-    wrap.innerHTML = `
-      <div class="catalog-row">
-        <div class="field">
-          <label>Catégorie</label>
-          <select id="categoryFilter">
-            <option value="">Toutes</option>
-          </select>
+  function renderTab(tab) {
+    const content = document.getElementById('pageContent');
+    const renderers = {
+      dashboard: renderDashboard,
+      products: renderProducts,
+      batches: () => renderLockedOrContent('hasBatchTracking', renderBatches),
+      suppliers: () => renderLockedOrContent('hasSuppliers', renderSuppliers),
+      orders: () => renderLockedOrContent('hasPurchaseOrders', renderOrders),
+      forecast: () => renderLockedOrContent('hasForecast', renderForecast),
+      kits: () => renderLockedOrContent('hasKits', renderKits),
+      analytics: () => renderLockedOrContent('hasAnalytics', renderAnalytics),
+      inventory: () => renderLockedOrContent('hasInventoryCount', renderInventory),
+      settings: renderSettings,
+    };
+    
+    const renderer = renderers[tab] || renderDashboard;
+    if (typeof renderer === 'function') {
+      const result = renderer(content);
+      if (typeof result === 'string') content.innerHTML = result;
+    }
+  }
+
+  function renderLockedOrContent(featureKey, contentRenderer) {
+    const content = document.getElementById('pageContent');
+    if (!hasFeature(featureKey)) {
+      renderLockedFeature(content, featureKey);
+    } else {
+      contentRenderer(content);
+    }
+  }
+
+  // ============================================
+  // DASHBOARD
+  // ============================================
+
+  function renderDashboard(c) {
+    const totalStock = state.products.reduce((s, p) => s + (p.totalGrams || 0), 0);
+    const totalValue = state.products.reduce((s, p) => s + ((p.totalGrams || 0) * (p.averageCostPerGram || 0)), 0);
+    const lowStock = state.products.filter(p => (p.totalGrams || 0) < 100).length;
+    
+    c.innerHTML = `
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">Tableau de bord</h1>
+          <p class="page-subtitle">Vue d'ensemble de votre stock</p>
         </div>
-
-        <div class="field">
-          <label>Tri</label>
-          <select id="sortMode">
-            <option value="alpha">A → Z</option>
-            <option value="none">Par défaut</option>
-          </select>
-        </div>
-
-        <div class="field" style="min-width:240px;">
-          <label>Location Shopify</label>
-          <select id="locationSelect">
-            <option value="">Chargement...</option>
-          </select>
-          <div class="hint">Stock Shopify écrasé sur cette location.</div>
-        </div>
-
-        <div class="catalog-actions">
-          <button class="btn btn-secondary btn-sm" id="btnCategories" type="button">🏷️ Catégories</button>
-          <button class="btn btn-primary btn-sm" id="btnImport" type="button">➕ Import Shopify</button>
-          <button class="btn btn-info btn-sm" id="btnExportStock" type="button">⬇️ Stock CSV</button>
-          <button class="btn btn-secondary btn-sm" id="btnExportMovements" type="button">⬇️ Mouvements CSV</button>
+        <div class="page-actions">
+          <button class="btn btn-secondary" onclick="app.syncShopify()">🔄 Sync</button>
+          <button class="btn btn-primary" onclick="app.showAddProductModal()">➕ Produit</button>
         </div>
       </div>
+
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-icon">📦</div>
+          <div class="stat-value">${state.products.length}</div>
+          <div class="stat-label">Produits</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon">⚖️</div>
+          <div class="stat-value">${formatWeight(totalStock)}</div>
+          <div class="stat-label">Stock total</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon">💰</div>
+          <div class="stat-value">${formatCurrency(totalValue)}</div>
+          <div class="stat-label">Valeur</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon">⚠️</div>
+          <div class="stat-value ${lowStock > 0 ? 'text-warning' : ''}">${lowStock}</div>
+          <div class="stat-label">Stock bas</div>
+        </div>
+      </div>
+
+      <div class="card mt-lg">
+        <div class="card-header">
+          <h3 class="card-title">📦 Produits récents</h3>
+          <button class="btn btn-ghost btn-sm" onclick="app.navigateTo('products')">Voir tout →</button>
+        </div>
+        <div class="card-body" style="padding:0">
+          ${state.products.length > 0 ? renderProductsTable(state.products.slice(0, 5)) : renderEmptyProducts()}
+        </div>
+      </div>
+
+      ${renderLockedFeatureCards()}
     `;
-    header.appendChild(wrap);
-
-    el("categoryFilter")?.addEventListener("change", async (e) => {
-      currentCategoryFilter = e.target.value || "";
-      await refreshStock();
-    });
-
-    el("sortMode")?.addEventListener("change", async (e) => {
-      sortAlpha = e.target.value === "alpha";
-      await refreshStock();
-    });
-
-    el("btnImport")?.addEventListener("click", openImportModal);
-    el("btnCategories")?.addEventListener("click", openCategoriesModal);
-
-    // ✅ FIX: download via apiFetch (token OK)
-    el("btnExportStock")?.addEventListener("click", () => downloadFile("/api/stock.csv", "stock.csv"));
-    el("btnExportMovements")?.addEventListener("click", () => downloadFile("/api/movements.csv", "movements.csv"));
-
-    el("locationSelect")?.addEventListener("change", async (e) => {
-      const v = Number(e.target.value || 0);
-      if (!v) return;
-      await saveLocationId(v);
-    });
-
-    el("movementsDays")?.addEventListener("change", () => refreshMovements());
   }
 
-  // ---------------- ✅ VALEUR TOTALE DU STOCK ----------------
-  async function refreshStockValue() {
-    try {
-      const res = await apiFetch("/api/stock/value");
-      const data = await safeJson(res);
-      if (!res.ok) throw new Error(data?.error || "Erreur /api/stock/value");
-      stockValue = data || { totalValue: 0, currency: "EUR", products: [] };
-      displayStockValue();
-    } catch (e) {
-      console.error("Erreur chargement valeur stock:", e.message);
-    }
-  }
+  function renderLockedFeatureCards() {
+    if (state.plan.id === 'enterprise') return '';
+    const locked = Object.entries(FEATURES).filter(([k]) => !hasFeature(k));
+    if (locked.length === 0) return '';
 
-  function displayStockValue() {
-    let card = el("stockValueCard");
-    const statsGrid = document.querySelector(".stats-grid");
-    if (!statsGrid) return;
-
-    if (!card) {
-      card = document.createElement("div");
-      card.id = "stockValueCard";
-      card.className = "card";
-      card.style.gridColumn = "span 3";
-      statsGrid.appendChild(card);
-    }
-
-    const value = Number(stockValue.totalValue || 0);
-
-    card.innerHTML = `
-      <div class="card-title">💰 Valeur totale du stock</div>
-      <div class="card-sub">Coût réel de l'inventaire (CMP)</div>
-      <div class="card-value" style="color: var(--success); -webkit-text-fill-color: unset;">${formatCurrency(value)}</div>
-      <div class="card-foot">
-        Basé sur le coût moyen pondéré de ${stockValue.products?.length || 0} produit(s)
+    return `
+      <div class="mt-xl">
+        <h3 class="mb-lg text-secondary">🔓 Débloquez plus de fonctionnalités</h3>
+        <div class="stats-grid">
+          ${locked.slice(0, 3).map(([k, f]) => `
+            <div class="stat-card" style="cursor:pointer;opacity:0.7" onclick="app.showFeatureLockedModal('${k}')">
+              <div class="stat-icon">${f.icon}</div>
+              <div class="stat-value" style="font-size:16px">${f.name}</div>
+              <span class="badge badge-${f.plan === 'pro' ? 'info' : 'warning'}">${f.plan.toUpperCase()}</span>
+            </div>
+          `).join('')}
+        </div>
       </div>
     `;
   }
 
-  // ---------------- ✅ RÉPARTITION PAR CATÉGORIE ----------------
-  async function refreshCategoryStats() {
-    try {
-      const res = await apiFetch("/api/stats/categories");
-      const data = await safeJson(res);
-      if (!res.ok) throw new Error(data?.error || "Erreur /api/stats/categories");
-      categoryStats = data || { totalGrams: 0, categories: [] };
-      displayCategoryBar();
-    } catch (e) {
-      console.error("Erreur chargement stats catégories:", e.message);
-    }
+  // ============================================
+  // PRODUCTS
+  // ============================================
+
+  function renderProducts(c) {
+    c.innerHTML = `
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">Produits</h1>
+          <p class="page-subtitle">${state.products.length} produit(s)</p>
+        </div>
+        <div class="page-actions">
+          <button class="btn btn-secondary" onclick="app.importFromShopify()">📥 Import</button>
+          <button class="btn btn-primary" onclick="app.showAddProductModal()">➕ Ajouter</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-body" style="padding:0">
+          ${state.products.length > 0 ? renderProductsTable(state.products) : renderEmptyProducts()}
+        </div>
+      </div>
+    `;
   }
 
-  function displayCategoryBar() {
-    let container = el("categoryBarContainer");
-    const statsGrid = document.querySelector(".stats-grid");
-    if (!statsGrid) return;
+  function renderProductsTable(products) {
+    return `
+      <div class="table-container">
+        <table class="data-table">
+          <thead><tr><th>Produit</th><th>Stock</th><th>CMP</th><th>Valeur</th><th>Statut</th><th></th></tr></thead>
+          <tbody>
+            ${products.map(p => {
+              const stock = p.totalGrams || 0;
+              const cmp = p.averageCostPerGram || 0;
+              const status = getStockStatus(stock);
+              return `
+                <tr>
+                  <td><div class="cell-primary">${escapeHtml(p.name || p.title || 'Sans nom')}</div></td>
+                  <td class="cell-mono font-bold">${formatWeight(stock)}</td>
+                  <td class="cell-mono">${formatCurrency(cmp)}/g</td>
+                  <td class="cell-mono">${formatCurrency(stock * cmp)}</td>
+                  <td><span class="stock-badge ${status.class}">${status.icon} ${status.label}</span></td>
+                  <td class="cell-actions">
+                    <button class="btn btn-ghost btn-xs" onclick="app.showRestockModal('${p.id}')">📥</button>
+                    <button class="btn btn-ghost btn-xs" onclick="app.showAdjustModal('${p.id}')">✏️</button>
+                  </td>
+                </tr>
+              `;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+  }
 
-    if (!container) {
-      container = document.createElement("div");
-      container.id = "categoryBarContainer";
-      container.className = "card";
-      container.style.gridColumn = "span 3";
-      statsGrid.appendChild(container);
-    }
+  function renderEmptyProducts() {
+    return `
+      <div class="empty-state">
+        <div class="empty-icon">📦</div>
+        <h3 class="empty-title">Aucun produit</h3>
+        <p class="empty-description">Ajoutez votre premier produit pour commencer.</p>
+        <button class="btn btn-primary" onclick="app.showAddProductModal()">➕ Ajouter</button>
+      </div>
+    `;
+  }
 
-    const cats = categoryStats.categories || [];
-    const total = Number(categoryStats.totalGrams || 0);
+  // ============================================
+  // LOCKED FEATURES
+  // ============================================
 
-    if (!cats.length || total <= 0) {
-      container.innerHTML = `
-        <div class="card-title">📊 Répartition du stock par catégorie</div>
-        <div class="hint" style="margin-top: 12px;">Aucune donnée disponible</div>
-      `;
-      return;
-    }
+  function renderBatches(c) { c.innerHTML = renderFeaturePage('Lots & DLC', '🏷️', 'Traçabilité et DLC', 'showAddBatchModal'); }
+  function renderSuppliers(c) { c.innerHTML = renderFeaturePage('Fournisseurs', '🏭', 'Gérez vos fournisseurs', 'showAddSupplierModal'); }
+  function renderOrders(c) { c.innerHTML = renderFeaturePage('Commandes', '📝', 'Bons de commande', 'showCreateOrderModal'); }
+  function renderForecast(c) { c.innerHTML = renderFeaturePage('Prévisions', '🔮', 'Anticipez les ruptures', null); }
+  function renderKits(c) { c.innerHTML = renderFeaturePage('Kits', '🧩', 'Produits composés', 'showCreateKitModal'); }
+  function renderAnalytics(c) { c.innerHTML = renderFeaturePage('Analytics', '📈', 'Statistiques', null); }
+  function renderInventory(c) { c.innerHTML = renderFeaturePage('Inventaire', '📋', 'Comptage physique', 'startInventory'); }
 
-    const colors = [
-      "#8b7fc8",
-      "#10b981",
-      "#f59e0b",
-      "#ef4444",
-      "#3b82f6",
-      "#ec4899",
-      "#14b8a6",
-      "#f97316",
+  function renderFeaturePage(title, icon, subtitle, action) {
+    return `
+      <div class="page-header">
+        <div><h1 class="page-title">${icon} ${title}</h1><p class="page-subtitle">${subtitle}</p></div>
+        ${action ? `<button class="btn btn-primary" onclick="app.${action}()">➕ Nouveau</button>` : ''}
+      </div>
+      <div class="card"><div class="card-body">
+        <div class="empty-state" style="min-height:250px">
+          <div class="empty-icon">${icon}</div>
+          <p class="empty-description">Aucun élément pour le moment</p>
+        </div>
+      </div></div>
+    `;
+  }
+
+  function renderLockedFeature(c, featureKey) {
+    const f = FEATURES[featureKey];
+    const benefits = getFeatureBenefits(featureKey);
+
+    c.innerHTML = `
+      <div class="page-header"><h1 class="page-title">${f.icon} ${f.name}</h1></div>
+      <div class="card feature-locked" style="min-height:450px;position:relative">
+        <div style="opacity:0.1;padding:var(--space-xl)">
+          <div class="stats-grid">
+            <div class="stat-card"><div class="skeleton" style="height:50px"></div></div>
+            <div class="stat-card"><div class="skeleton" style="height:50px"></div></div>
+          </div>
+          <div class="card mt-lg"><div class="card-body"><div class="skeleton" style="height:150px"></div></div></div>
+        </div>
+        <div class="lock-overlay">
+          <div class="lock-icon">🔒</div>
+          <h2 class="lock-title">Fonctionnalité ${f.plan.toUpperCase()}</h2>
+          <p class="lock-description">${getFeatureDescription(featureKey)}</p>
+          <div class="lock-benefits">
+            ${benefits.map(b => `<span class="lock-benefit"><span class="lock-benefit-icon">✓</span>${b}</span>`).join('')}
+          </div>
+          <button class="btn btn-upgrade btn-lg" onclick="app.showUpgradeModal('${f.plan}')">⬆️ Passer au ${f.plan.toUpperCase()}</button>
+          <p class="lock-plan">À partir de <strong>${getPlanPrice(f.plan)}€/mois</strong></p>
+        </div>
+      </div>
+    `;
+  }
+
+  function hasFeature(featureKey) {
+    const planIdx = PLAN_HIERARCHY.indexOf(state.plan.id);
+    const reqIdx = PLAN_HIERARCHY.indexOf(FEATURES[featureKey]?.plan || 'free');
+    return planIdx >= reqIdx;
+  }
+
+  function getFeatureDescription(k) {
+    const d = {
+      hasBatchTracking: 'Suivez vos lots avec les dates de péremption et assurez une traçabilité complète.',
+      hasSuppliers: 'Gérez votre carnet fournisseurs, comparez les prix et l\'historique achats.',
+      hasPurchaseOrders: 'Créez des bons de commande, suivez les réceptions et créez les lots auto.',
+      hasForecast: 'L\'IA analyse vos ventes pour prédire les ruptures et suggérer les commandes.',
+      hasKits: 'Créez des produits composés avec stock et coût calculés automatiquement.',
+      hasAnalytics: 'Statistiques détaillées : CA, marges, tendances et top produits.',
+      hasInventoryCount: 'Inventaires physiques assistés avec rapport d\'écarts et ajustements auto.',
+    };
+    return d[k] || 'Fonctionnalité premium.';
+  }
+
+  function getFeatureBenefits(k) {
+    const b = {
+      hasBatchTracking: ['Traçabilité', 'Alertes DLC', 'FIFO auto'],
+      hasSuppliers: ['Comparaison prix', 'Historique', 'Contacts'],
+      hasPurchaseOrders: ['Workflow complet', 'Réceptions', 'Lots auto'],
+      hasForecast: ['Prédiction IA', 'Suggestions', 'Zéro rupture'],
+      hasKits: ['Stock calculé', 'Coût auto', 'Bundles'],
+      hasAnalytics: ['CA & marges', 'Graphiques', 'Export'],
+      hasInventoryCount: ['Comptage guidé', 'Écarts', 'Ajustements'],
+    };
+    return b[k] || ['Premium'];
+  }
+
+  // ============================================
+  // SETTINGS
+  // ============================================
+
+  function renderSettings(c) {
+    c.innerHTML = `
+      <div class="page-header"><h1 class="page-title">Paramètres</h1></div>
+      <div class="card mb-lg">
+        <div class="card-header"><h3 class="card-title">👤 Mon plan</h3></div>
+        <div class="card-body">
+          <div class="flex items-center justify-between">
+            <div>
+              <div class="font-bold">${getPlanName(state.plan.id)}</div>
+              <div class="text-secondary text-sm">${state.products.length}/${state.plan.limits.maxProducts === Infinity ? '∞' : state.plan.limits.maxProducts} produits</div>
+            </div>
+            ${state.plan.id !== 'enterprise' ? '<button class="btn btn-upgrade" onclick="app.showUpgradeModal()">⬆️ Upgrade</button>' : ''}
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><h3 class="card-title">⚙️ Général</h3></div>
+        <div class="card-body">
+          <div class="form-group">
+            <label class="form-label">Langue</label>
+            <select class="form-select" style="max-width:300px"><option>Français</option></select>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  // ============================================
+  // MODALS
+  // ============================================
+
+  function showModal(opts) {
+    closeModal();
+    const { title, content, footer, size = '' } = opts;
+    const container = document.getElementById('modalsContainer');
+    container.innerHTML = `
+      <div class="modal-backdrop active" onclick="app.closeModal()"></div>
+      <div class="modal active ${size ? `modal-${size}` : ''}">
+        <div class="modal-header">
+          <h2 class="modal-title">${title}</h2>
+          <button class="modal-close" onclick="app.closeModal()">×</button>
+        </div>
+        <div class="modal-body">${content}</div>
+        ${footer ? `<div class="modal-footer">${footer}</div>` : ''}
+      </div>
+    `;
+  }
+
+  function closeModal() {
+    document.getElementById('modalsContainer').innerHTML = '';
+  }
+
+  function showAddProductModal() {
+    showModal({
+      title: '➕ Ajouter un produit',
+      content: `
+        <div class="form-group">
+          <label class="form-label required">Nom</label>
+          <input type="text" class="form-input" id="productName" placeholder="CBD Premium">
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Stock initial</label>
+            <div class="input-group">
+              <input type="number" class="form-input" id="productStock" value="0" min="0">
+              <span class="input-suffix">g</span>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Coût</label>
+            <div class="input-group">
+              <input type="number" class="form-input" id="productCost" value="0" min="0" step="0.01">
+              <span class="input-suffix">€/g</span>
+            </div>
+          </div>
+        </div>
+      `,
+      footer: `
+        <button class="btn btn-ghost" onclick="app.closeModal()">Annuler</button>
+        <button class="btn btn-primary" onclick="app.saveProduct()">Ajouter</button>
+      `,
+    });
+  }
+
+  function showRestockModal(productId) {
+    showModal({
+      title: '📥 Réapprovisionner',
+      content: `
+        <div class="form-group">
+          <label class="form-label">Produit</label>
+          <select class="form-select" id="restockProduct">
+            ${state.products.map(p => `<option value="${p.id}" ${p.id === productId ? 'selected' : ''}>${escapeHtml(p.name || p.title)}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label required">Quantité</label>
+            <div class="input-group">
+              <input type="number" class="form-input" id="restockQty" min="1" placeholder="500">
+              <span class="input-suffix">g</span>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Prix d'achat</label>
+            <div class="input-group">
+              <input type="number" class="form-input" id="restockPrice" min="0" step="0.01" placeholder="4.50">
+              <span class="input-suffix">€/g</span>
+            </div>
+          </div>
+        </div>
+      `,
+      footer: `
+        <button class="btn btn-ghost" onclick="app.closeModal()">Annuler</button>
+        <button class="btn btn-primary" onclick="app.saveRestock()">Valider</button>
+      `,
+    });
+  }
+
+  function showAdjustModal(productId) {
+    showModal({
+      title: '✏️ Ajuster le stock',
+      content: `
+        <div class="form-group">
+          <label class="form-label">Produit</label>
+          <select class="form-select" id="adjustProduct">
+            ${state.products.map(p => `<option value="${p.id}" ${p.id === productId ? 'selected' : ''}>${escapeHtml(p.name || p.title)} (${formatWeight(p.totalGrams || 0)})</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Type</label>
+          <div style="display:flex;gap:var(--space-lg)">
+            <label><input type="radio" name="adjustType" value="add" checked> ➕ Ajouter</label>
+            <label><input type="radio" name="adjustType" value="remove"> ➖ Retirer</label>
+            <label><input type="radio" name="adjustType" value="set"> 🎯 Définir</label>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label required">Quantité</label>
+          <div class="input-group">
+            <input type="number" class="form-input" id="adjustQty" min="0" placeholder="100">
+            <span class="input-suffix">g</span>
+          </div>
+        </div>
+      `,
+      footer: `
+        <button class="btn btn-ghost" onclick="app.closeModal()">Annuler</button>
+        <button class="btn btn-primary" onclick="app.saveAdjustment()">Appliquer</button>
+      `,
+    });
+  }
+
+  function showUpgradeModal(recommended) {
+    const plans = [
+      { id: 'starter', name: 'Starter', price: 14.99, products: 15, features: ['Catégories', 'Import Shopify', 'Valeur stock'] },
+      { id: 'pro', name: 'Pro', price: 39.99, products: 75, badge: 'POPULAIRE', features: ['Lots & DLC', 'Fournisseurs', 'Analytics', 'Inventaire'] },
+      { id: 'business', name: 'Business', price: 79.99, products: '∞', badge: 'BEST', features: ['Prévisions IA', 'Kits', 'Commandes', 'Multi-users'] },
     ];
 
-    const legend = cats
-      .map((cat, i) => {
-        const color = colors[i % colors.length];
-        const percent = Number(cat.percentage || 0);
-        const grams = Number(cat.totalGrams || 0);
-        return `
-          <div style="display:flex; align-items:center; gap:8px;">
-            <div style="width:16px; height:16px; background:${color}; border-radius:4px;"></div>
-            <span style="font-size:13px; font-weight:600;">${escapeHtml(cat.categoryName)}</span>
-            <span style="font-size:12px; color: var(--text-secondary); margin-left:auto;">${percent.toFixed(
-              1
-            )}% (${grams}g)</span>
-          </div>
-        `;
-      })
-      .join("");
-
-    const barSegments = cats
-      .map((cat, i) => {
-        const color = colors[i % colors.length];
-        const percent = Number(cat.percentage || 0);
-        return `<div style="width:${percent}%; background:${color}; height:100%;" title="${escapeHtml(
-          cat.categoryName
-        )}: ${percent.toFixed(1)}%"></div>`;
-      })
-      .join("");
-
-    container.innerHTML = `
-      <div class="card-title">📊 Répartition du stock par catégorie</div>
-      <div class="card-sub">Total: ${total}g répartis en ${cats.length} catégorie(s)</div>
-
-      <div style="margin:16px 0;">
-        <div style="height:32px; border-radius: var(--radius-md); overflow:hidden; display:flex; background: var(--surface); border: 1px solid var(--border);">
-          ${barSegments}
+    showModal({
+      title: '⬆️ Choisir un plan',
+      size: 'xl',
+      content: `
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:var(--space-lg)">
+          ${plans.map(p => `
+            <div class="card" style="${p.id === recommended ? 'border:2px solid var(--accent-primary)' : ''}">
+              ${p.badge ? `<div class="badge badge-${p.badge === 'POPULAIRE' ? 'info' : 'warning'}" style="position:absolute;top:-8px;right:16px">${p.badge}</div>` : ''}
+              <div class="card-body text-center" style="position:relative">
+                <h3>${p.name}</h3>
+                <div style="font-size:28px;font-weight:700">${p.price}<span style="font-size:12px;color:var(--text-secondary)">€/mois</span></div>
+                <div class="text-secondary text-sm mb-md">${p.products} produits</div>
+                <ul style="text-align:left;list-style:none;margin-bottom:var(--space-lg)">
+                  ${p.features.map(f => `<li style="padding:4px 0"><span style="color:var(--success)">✓</span> ${f}</li>`).join('')}
+                </ul>
+                <button class="btn ${state.plan.id === p.id ? 'btn-secondary' : 'btn-primary'} btn-sm" style="width:100%" ${state.plan.id === p.id ? 'disabled' : `onclick="app.upgradeTo('${p.id}')"`}>
+                  ${state.plan.id === p.id ? 'Actuel' : 'Choisir'}
+                </button>
+              </div>
+            </div>
+          `).join('')}
         </div>
-      </div>
+      `,
+      footer: '<button class="btn btn-ghost" onclick="app.closeModal()">Fermer</button>',
+    });
+  }
 
-      <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:12px; margin-top:16px;">
-        ${legend}
+  function showFeatureLockedModal(featureKey) {
+    const f = FEATURES[featureKey];
+    const benefits = getFeatureBenefits(featureKey);
+    showModal({
+      title: `🔒 ${f.name}`,
+      content: `
+        <div class="text-center">
+          <div style="font-size:48px;margin-bottom:var(--space-lg)">${f.icon}</div>
+          <h3>Passez au ${f.plan.toUpperCase()}</h3>
+          <p class="text-secondary mb-lg">${getFeatureDescription(featureKey)}</p>
+          <div class="lock-benefits mb-lg" style="justify-content:center">
+            ${benefits.map(b => `<span class="lock-benefit"><span class="lock-benefit-icon">✓</span>${b}</span>`).join('')}
+          </div>
+          <p class="text-secondary text-sm">À partir de <strong class="text-accent">${getPlanPrice(f.plan)}€/mois</strong></p>
+        </div>
+      `,
+      footer: `
+        <button class="btn btn-ghost" onclick="app.closeModal()">Plus tard</button>
+        <button class="btn btn-upgrade" onclick="app.showUpgradeModal('${f.plan}')">⬆️ Upgrader</button>
+      `,
+    });
+  }
+
+  // ============================================
+  // TOAST
+  // ============================================
+
+  function showToast(message, type = 'info', duration = 4000) {
+    const container = document.getElementById('toastContainer');
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    const icons = { success: '✅', error: '❌', warning: '⚠️', info: 'ℹ️' };
+    toast.innerHTML = `<span class="toast-icon">${icons[type]}</span><div class="toast-content"><div class="toast-message">${escapeHtml(message)}</div></div><button class="toast-close" onclick="this.parentElement.remove()">×</button>`;
+    container.appendChild(toast);
+    requestAnimationFrame(() => toast.classList.add('visible'));
+    if (duration > 0) setTimeout(() => { toast.classList.add('removing'); setTimeout(() => toast.remove(), 300); }, duration);
+  }
+
+  // ============================================
+  // API
+  // ============================================
+
+  async function loadPlanInfo() {
+    try {
+      const res = await fetch(`${API_BASE}/plan`);
+      if (res.ok) {
+        const data = await res.json();
+        state.plan = { id: data.current?.planId || 'free', limits: data.limits || { maxProducts: 2 } };
+      }
+    } catch (e) { console.warn('Plan load error', e); }
+  }
+
+  async function loadProducts() {
+    try {
+      const res = await fetch(`${API_BASE}/products`);
+      if (res.ok) state.products = await res.json();
+    } catch (e) { console.warn('Products load error', e); state.products = []; }
+  }
+
+  async function saveProduct() {
+    const name = document.getElementById('productName')?.value;
+    const stock = parseFloat(document.getElementById('productStock')?.value) || 0;
+    const cost = parseFloat(document.getElementById('productCost')?.value) || 0;
+    if (!name) { showToast('Nom requis', 'error'); return; }
+    try {
+      const res = await fetch(`${API_BASE}/products`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, totalGrams: stock, averageCostPerGram: cost }) });
+      if (res.ok) { showToast('Produit ajouté', 'success'); closeModal(); await loadProducts(); renderTab(state.currentTab); }
+      else throw new Error();
+    } catch (e) { showToast('Erreur', 'error'); }
+  }
+
+  async function saveRestock() {
+    const productId = document.getElementById('restockProduct')?.value;
+    const qty = parseFloat(document.getElementById('restockQty')?.value);
+    const price = parseFloat(document.getElementById('restockPrice')?.value) || 0;
+    if (!productId || !qty) { showToast('Champs requis', 'error'); return; }
+    try {
+      const res = await fetch(`${API_BASE}/products/${productId}/restock`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ grams: qty, costPerGram: price }) });
+      if (res.ok) { showToast('Stock mis à jour', 'success'); closeModal(); await loadProducts(); renderTab(state.currentTab); }
+      else throw new Error();
+    } catch (e) { showToast('Erreur', 'error'); }
+  }
+
+  async function saveAdjustment() {
+    const productId = document.getElementById('adjustProduct')?.value;
+    const type = document.querySelector('input[name="adjustType"]:checked')?.value;
+    const qty = parseFloat(document.getElementById('adjustQty')?.value);
+    if (!productId || !qty) { showToast('Champs requis', 'error'); return; }
+    try {
+      const res = await fetch(`${API_BASE}/products/${productId}/adjust`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type, grams: qty }) });
+      if (res.ok) { showToast('Ajustement appliqué', 'success'); closeModal(); await loadProducts(); renderTab(state.currentTab); }
+      else throw new Error();
+    } catch (e) { showToast('Erreur', 'error'); }
+  }
+
+  function syncShopify() { showToast('Synchronisation...', 'info'); }
+  function importFromShopify() { showToast('Import Shopify...', 'info'); }
+  function upgradeTo(plan) { showToast(`Upgrade vers ${plan} - Contactez le support`, 'info'); closeModal(); }
+
+  // ============================================
+  // HELPERS
+  // ============================================
+
+  function updatePlanWidget() {
+    const w = document.getElementById('planWidget');
+    if (!w) return;
+    const max = state.plan.limits.maxProducts || 2;
+    w.innerHTML = `
+      <div class="plan-info">
+        <span class="plan-name">Plan ${getPlanName(state.plan.id)}</span>
+        <span class="plan-usage">${state.products.length}/${max === Infinity ? '∞' : max} produits</span>
       </div>
+      ${state.plan.id !== 'enterprise' ? '<button class="btn btn-upgrade btn-sm" onclick="app.showUpgradeModal()">Upgrade</button>' : ''}
     `;
   }
 
-  // ---------------- SERVER INFO ----------------
-  async function getServerInfo() {
-    try {
-      const res = await apiFetch("/api/server-info");
-      const data = await safeJson(res);
-
-      serverInfo = data || {};
-
-      const badge = el("serverStatus");
-      const mode = el("serverMode");
-      const count = el("productCount");
-
-      if (badge) {
-        badge.classList.remove("online", "dev");
-        badge.classList.add("online");
-        badge.innerHTML = `🟢 En ligne`;
-      }
-      if (mode) mode.textContent = serverInfo.mode || "development";
-      if (count) count.textContent = serverInfo.productCount ?? "0";
-    } catch (err) {
-      log("❌ Impossible de récupérer les infos serveur: " + err.message, "error");
-    }
+  function getPlanName(id) { return { free: 'Free', starter: 'Starter', pro: 'Pro', business: 'Business', enterprise: 'Enterprise' }[id] || 'Free'; }
+  function getPlanPrice(id) { return { starter: 14.99, pro: 39.99, business: 79.99, enterprise: 199 }[id] || 0; }
+  function formatWeight(g) { return g >= 1000 ? (g / 1000).toFixed(2) + ' kg' : g.toFixed(0) + ' g'; }
+  function formatCurrency(a) { return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(a); }
+  function getStockStatus(g) {
+    if (g <= 0) return { class: 'critical', label: 'Rupture', icon: '❌' };
+    if (g < 50) return { class: 'critical', label: 'Critique', icon: '🔴' };
+    if (g < 200) return { class: 'low', label: 'Bas', icon: '🟡' };
+    return { class: 'good', label: 'OK', icon: '🟢' };
   }
-
-  // ---------------- SETTINGS / LOCATIONS ----------------
-  function renderLocationSelect() {
-    const sel = el("locationSelect");
-    if (!sel) return;
-
-    const locs = Array.isArray(shopifyLocations) ? shopifyLocations.slice() : [];
-    locs.sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "fr", { sensitivity: "base" }));
-
-    if (!locs.length) {
-      sel.innerHTML = `<option value="">Aucune location</option>`;
-      return;
-    }
-
-    sel.innerHTML = locs
-      .map((l) => {
-        const id = Number(l.id);
-        const name = String(l.name || `Location ${id}`);
-        const active = l.active ? "" : " (inactive)";
-        return `<option value="${id}">${escapeHtml(name + active)} — ${id}</option>`;
-      })
-      .join("");
-
-    if (currentLocationId) {
-      sel.value = String(currentLocationId);
-    } else {
-      const firstActive = locs.find((l) => l.active)?.id || locs[0].id;
-      sel.value = String(firstActive);
-    }
-  }
-
-  async function loadShopifyLocations() {
-    try {
-      const res = await apiFetch("/api/shopify/locations");
-      const data = await safeJson(res);
-      if (!res.ok) throw new Error(data?.error || "Erreur /api/shopify/locations");
-      shopifyLocations = Array.isArray(data.locations) ? data.locations : [];
-      renderLocationSelect();
-    } catch (e) {
-      shopifyLocations = [];
-      renderLocationSelect();
-      log("❌ Erreur chargement locations Shopify: " + e.message, "error");
-    }
-  }
-
-  async function loadSettings() {
-    try {
-      const res = await apiFetch("/api/settings");
-      const data = await safeJson(res);
-      if (!res.ok) throw new Error(data?.error || "Erreur /api/settings");
-      currentLocationId = Number(data?.settings?.locationId || 0) || null;
-      renderLocationSelect();
-    } catch {
-      currentLocationId = null;
-      renderLocationSelect();
-    }
-  }
-
-  async function saveLocationId(locationId) {
-    try {
-      const res = await apiFetch("/api/settings/location", {
-        method: "POST",
-        body: JSON.stringify({ locationId }),
-      });
-      const data = await safeJson(res);
-      if (!res.ok) throw new Error(data?.error || "Erreur save location");
-      currentLocationId = Number(data?.settings?.locationId || locationId) || locationId;
-      renderLocationSelect();
-      log(`✅ Location Shopify enregistrée: ${currentLocationId}`, "success");
-    } catch (e) {
-      log("❌ Erreur enregistrement location: " + e.message, "error");
-      alert("Erreur: " + e.message);
-      renderLocationSelect();
-    }
-  }
-
-  // ---------------- CATEGORIES ----------------
-  async function loadCategories() {
-    try {
-      const res = await apiFetch("/api/categories");
-      const data = await safeJson(res);
-      categories = Array.isArray(data.categories) ? data.categories : [];
-      updateCategoryFilterOptions();
-      updateProductCategoriesOptions();
-    } catch (e) {
-      log("❌ Erreur chargement catégories: " + e.message, "error");
-    }
-  }
-
-  function updateCategoryFilterOptions() {
-    const sel = el("categoryFilter");
-    if (!sel) return;
-
-    const current = sel.value;
-
-    sel.innerHTML =
-      `<option value="">Toutes</option>` +
-      categories
-        .slice()
-        .sort((a, b) => String(a.name).localeCompare(String(b.name), "fr", { sensitivity: "base" }))
-        .map((c) => `<option value="${escapeHtml(c.id)}">${escapeHtml(c.name)}</option>`)
-        .join("");
-
-    if (current) sel.value = current;
-  }
-
-  function updateProductCategoriesOptions() {
-    const sel = el("productCategoriesSelect");
-    if (!sel) return;
-
-    sel.innerHTML = categories
-      .slice()
-      .sort((a, b) => String(a.name).localeCompare(String(b.name), "fr", { sensitivity: "base" }))
-      .map((c) => `<option value="${escapeHtml(c.id)}">${escapeHtml(c.name)}</option>`)
-      .join("");
-  }
-
-  // ---------------- STOCK ----------------
-  async function refreshStock() {
-    ensureCatalogControls();
-    log("⏳ Actualisation du stock...", "info");
-
-    try {
-      const qs = new URLSearchParams();
-      if (sortAlpha) qs.set("sort", "alpha");
-      if (currentCategoryFilter) qs.set("category", currentCategoryFilter);
-
-      const path = "/api/stock" + (qs.toString() ? `?${qs.toString()}` : "");
-      const res = await apiFetch(path);
-      const data = await safeJson(res);
-
-      if (!res.ok) throw new Error(data?.error || "Erreur /api/stock");
-
-      if (data && Array.isArray(data.products)) {
-        catalogData = data;
-        categories = Array.isArray(data.categories) ? data.categories : categories;
-
-        const map = {};
-        for (const p of data.products) {
-          map[p.productId] = {
-            name: p.name,
-            totalGrams: p.totalGrams,
-            averageCostPerGram: p.averageCostPerGram || 0,
-            variants: p.variants || {},
-            categoryIds: p.categoryIds || [],
-          };
-        }
-        stockData = map;
-
-        updateCategoryFilterOptions();
-        displayProductsGrouped(stockData);
-        updateStats(stockData);
-
-        await refreshStockValue();
-        await refreshCategoryStats();
-
-        log("✅ Stock actualisé", "success");
-        return;
-      }
-
-      stockData = data || {};
-      displayProductsGrouped(stockData);
-      updateStats(stockData);
-
-      await refreshStockValue();
-      await refreshCategoryStats();
-
-      log("✅ Stock actualisé", "success");
-    } catch (err) {
-      log("❌ ERREUR: " + err.message, "error");
-      const list = el("productList");
-      if (list) {
-        list.innerHTML = `<div style="padding:12px;color:#fca5a5;">Erreur de chargement stock: ${escapeHtml(
-          err.message
-        )}</div>`;
-      }
-    }
-  }
-
-  function updateStats(stock) {
-    const products = Object.values(stock || {});
-    const totalProducts = products.length;
-    const totalGrams = products.reduce((acc, p) => acc + Number(p.totalGrams || 0), 0);
-
-    const countEl = el("statProducts");
-    const gramsEl = el("statGrams");
-    const lastEl = el("lastUpdate");
-
-    if (countEl) countEl.textContent = totalProducts;
-    if (gramsEl) gramsEl.textContent = `${totalGrams}g`;
-    if (lastEl) lastEl.textContent = new Date().toLocaleString("fr-FR");
-  }
-
-  // ---------------- GROUPED DISPLAY ----------------
-  function getCategoryNameById(id) {
-    return categories.find((c) => String(c.id) === String(id))?.name || null;
-  }
-
-  function displayProductsGrouped(stock) {
-    const productList = el("productList");
-    if (!productList) return;
-
-    const entries = Object.entries(stock || {});
-    if (!entries.length) {
-      productList.innerHTML = `<div class="muted" style="padding:12px;">Aucun produit configuré</div>`;
-      return;
-    }
-
-    const groups = new Map();
-
-    for (const [id, p] of entries) {
-      const catIds = Array.isArray(p.categoryIds) ? p.categoryIds : [];
-      const first = catIds[0] || "__uncat__";
-      const groupName = first === "__uncat__" ? "Sans catégorie" : getCategoryNameById(first) || "Sans catégorie";
-
-      if (!groups.has(groupName)) groups.set(groupName, []);
-      groups.get(groupName).push([id, p]);
-    }
-
-    const groupNames = Array.from(groups.keys()).sort((a, b) => a.localeCompare(b, "fr", { sensitivity: "base" }));
-
-    productList.innerHTML = groupNames
-      .map((gName) => {
-        const items = groups.get(gName) || [];
-
-        if (sortAlpha) {
-          items.sort((a, b) => String(a[1].name).localeCompare(String(b[1].name), "fr", { sensitivity: "base" }));
-        }
-
-        const cards = items
-          .map(([id, product]) => {
-            const total = Number(product.totalGrams || 0);
-            const avgCost = Number(product.averageCostPerGram || 0);
-            const percent = Math.max(0, Math.min(100, Math.round((total / 200) * 100)));
-            const lowClass = total <= Number(serverInfo?.lowStockThreshold || 10) ? " low" : "";
-
-            const costBadge =
-              avgCost > 0
-                ? `<div style="font-size: 11px; color: var(--text-tertiary); margin-top: 4px;">CMP: ${avgCost.toFixed(
-                    2
-                  )}€/g</div>`
-                : "";
-
-            return `
-              <button class="product-item${lowClass}" type="button" data-open-product="${escapeHtml(id)}">
-                <div class="product-header">
-                  <div>
-                    <div class="product-name">${escapeHtml(product.name)}</div>
-                    ${costBadge}
-                  </div>
-                  <div class="product-stock">${total}g</div>
-                </div>
-                <div class="stock-bar">
-                  <div class="stock-bar-fill" style="width:${percent}%"></div>
-                </div>
-              </button>
-            `;
-          })
-          .join("");
-
-        return `
-          <div class="category-section">
-            <div class="category-title">
-              <div>${escapeHtml(gName)}</div>
-              <div class="category-count">${items.length} produit(s)</div>
-            </div>
-            <div class="product-grid">${cards}</div>
-          </div>
-        `;
-      })
-      .join("");
-
-    productList.querySelectorAll("[data-open-product]").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const id = btn.getAttribute("data-open-product");
-        openProductModal(String(id));
-      });
-    });
-  }
-
-  // ---------------- MOVEMENTS ----------------
-  async function refreshMovements() {
-    const box = el("movementsList");
-    if (!box) return;
-
-    const days = Number(el("movementsDays")?.value || 7);
-    box.innerHTML = `<div class="muted" style="padding:10px;">Chargement...</div>`;
-
-    try {
-      const qs = new URLSearchParams();
-      qs.set("limit", "300");
-      qs.set("days", String(days));
-
-      const path = "/api/movements" + (qs.toString() ? `?${qs.toString()}` : "");
-      const res = await apiFetch(path);
-      const data = await safeJson(res);
-      if (!res.ok) throw new Error(data?.error || "Erreur /api/movements");
-
-      let items = Array.isArray(data.data) ? data.data : [];
-      if (!items.length) {
-        box.innerHTML = `<div class="muted" style="padding:10px;">Aucun mouvement.</div>`;
-        return;
-      }
-
-      items = items.slice().sort((a, b) => {
-        const ta = new Date(a.ts || 0).getTime();
-        const tb = new Date(b.ts || 0).getTime();
-        return tb - ta;
-      });
-
-      box.innerHTML = items
-        .map((m) => {
-          const when = formatDateTime(m.ts);
-          const delta = Number(m.gramsDelta ?? m.deltaGrams ?? 0);
-          const sign = delta > 0 ? "+" : "";
-          const source = m.source || m.type || "movement";
-          const pname = m.productName ? ` • ${escapeHtml(m.productName)}` : "";
-          const after = Number.isFinite(Number(m.totalAfter)) ? ` → ${Number(m.totalAfter)}g` : "";
-
-          const deltaClass = delta > 0 ? "positive" : "negative";
-
-          return `
-            <div class="history-item">
-              <div class="h-left">
-                <div class="h-title">${escapeHtml(source)}${pname}</div>
-                <div class="h-sub">${escapeHtml(when)}</div>
-              </div>
-              <div class="h-delta ${deltaClass}">${sign}${delta}g${after}</div>
-            </div>
-          `;
-        })
-        .join("");
-    } catch (e) {
-      box.innerHTML = `<div style="color:#fca5a5; padding:10px;">Erreur mouvements: ${escapeHtml(e.message)}</div>`;
-    }
-  }
-
-  // ---------------- TEST ORDER ----------------
-  async function testOrder() {
-    log("⏳ Traitement de la commande test en cours...", "info");
-    try {
-      const res = await apiFetch("/api/test-order", { method: "POST" });
-      const data = await safeJson(res);
-      if (!res.ok) throw new Error(data?.error || "Erreur test-order");
-
-      log("✅ COMMANDE TEST OK\n\n" + JSON.stringify(data, null, 2), "success");
-      await refreshStock();
-      await refreshMovements();
-    } catch (err) {
-      log("❌ ERREUR: " + err.message, "error");
-      alert("Erreur: " + err.message);
-    }
-  }
-
-  // ---------------- RESTOCK MODAL ----------------
-  function openRestockModal() {
-    const modal = el("restockModal");
-    const select = el("productSelect");
-    if (!modal || !select) return;
-
-    ensureModalBackdrop(modal);
-
-    select.innerHTML =
-      '<option value="">Sélectionnez un produit...</option>' +
-      Object.entries(stockData)
-        .sort((a, b) => String(a[1]?.name || "").localeCompare(String(b[1]?.name || ""), "fr", { sensitivity: "base" }))
-        .map(([id, product]) => {
-          const avgCost = Number(product.averageCostPerGram || 0);
-          const costInfo = avgCost > 0 ? ` (CMP: ${avgCost.toFixed(2)}€/g)` : "";
-          return `<option value="${escapeHtml(id)}">${escapeHtml(product.name)} - Stock: ${Number(
-            product.totalGrams || 0
-          )}g${costInfo}</option>`;
-        })
-        .join("");
-
-    openModal(modal);
-  }
-
-  function closeRestockModal() {
-    const m = el("restockModal");
-    if (m) closeModal(m);
-    const f = el("restockForm");
-    if (f) f.reset();
-  }
-
-  function bindRestockFormOnce() {
-    const form = el("restockForm");
-    if (!form) return;
-    if (form.dataset.bound === "1") return;
-    form.dataset.bound = "1";
-
-    form.addEventListener("submit", async (e) => {
-      if (e.defaultPrevented) return;
-      e.preventDefault();
-
-      const productId = String(el("productSelect")?.value || "").trim();
-      const grams = Number(el("restockGrams")?.value || 0);
-      const purchasePricePerGram = Number(el("restockPurchasePrice")?.value || 0);
-
-      if (!productId || !Number.isFinite(grams) || grams <= 0) return;
-
-      try {
-        const body = { productId, grams };
-        if (purchasePricePerGram > 0) body.purchasePricePerGram = purchasePricePerGram;
-
-        const res = await apiFetch("/api/restock", {
-          method: "POST",
-          body: JSON.stringify(body),
-        });
-
-        const data = await safeJson(res);
-        if (!res.ok) throw new Error(data?.error || "Erreur restock");
-
-        const message = data.cmpUpdated
-          ? `✅ Stock réapprovisionné (+${grams}g) - CMP mis à jour`
-          : `✅ Stock réapprovisionné (+${grams}g)`;
-
-        log(message, "success");
-        closeRestockModal();
-        await refreshMovements();
-        await refreshStock();
-      } catch (err) {
-        log("❌ Erreur restock: " + err.message, "error");
-        alert("Erreur: " + err.message);
-      }
-    });
-  }
-
-  // ---------------- PRODUCT MODAL ----------------
-  function openProductModal(productId) {
-    const pid = String(productId);
-    currentProductId = pid;
-
-    const product = stockData[pid];
-    if (!product) return;
-
-    const modal = el("productModal");
-    ensureModalBackdrop(modal);
-
-    const title = el("productModalTitle");
-    const totalInput = el("totalGramsInput");
-
-    if (title) title.textContent = `📦 ${product.name}`;
-    if (totalInput) totalInput.value = Number(product.totalGrams || 0);
-
-    displayVariants(product.variants);
-    ensureProductControlsUI();
-    ensureProductCategoriesUI();
-
-    const catSelect = el("productCategoriesSelect");
-    if (catSelect) {
-      const ids = Array.isArray(product.categoryIds) ? product.categoryIds.map(String) : [];
-      for (const opt of Array.from(catSelect.options)) {
-        opt.selected = ids.includes(String(opt.value));
-      }
-    }
-
-    loadProductHistory(pid);
-    openModal(modal);
-  }
-
-  function closeProductModal() {
-    const modal = el("productModal");
-    if (modal) closeModal(modal);
-    currentProductId = null;
-  }
-
-  function displayVariants(variants) {
-    const variantsList = el("variantsList");
-    if (!variantsList) return;
-
-    const arr = Object.entries(variants || {});
-    if (!arr.length) {
-      variantsList.innerHTML = `<div class="muted" style="padding:12px;">Aucune variante configurée</div>`;
-      return;
-    }
-
-    arr.sort((a, b) => Number(a[0]) - Number(b[0]));
-
-    variantsList.innerHTML = arr
-      .map(([label, variant]) => {
-        const canSell = Number(variant.canSell ?? 0);
-        let stockClass = "high";
-        if (canSell <= 2) stockClass = "low";
-        else if (canSell <= 10) stockClass = "medium";
-
-        return `
-          <div class="variant-item ${stockClass}">
-            <div class="variant-label">${escapeHtml(label)}g</div>
-            <div class="variant-stock">${canSell} unité(s)</div>
-          </div>
-        `;
-      })
-      .join("");
-  }
-
-  // ---------------- PRODUCT CONTROLS ----------------
-  function ensureProductControlsUI() {
-    const modalContent = document.querySelector("#productModal .modal-content");
-    if (!modalContent) return;
-    if (el("productAdjustBlock")) return;
-
-    const block = document.createElement("div");
-    block.id = "productAdjustBlock";
-    block.className = "form-group";
-    block.innerHTML = `
-      <label>Stock total (ajouter / enlever en grammes)</label>
-      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
-        <div style="flex: 1; min-width: 120px;">
-          <input id="adjustTotalGrams" type="number" min="1" step="1" placeholder="Grammes" style="width:100%;" />
-        </div>
-        <div style="flex: 1; min-width: 120px;">
-          <input id="adjustPurchasePrice" type="number" min="0" step="0.01" placeholder="Prix €/g (opt.)" style="width:100%;" />
-        </div>
-        <button type="button" class="btn btn-primary btn-sm" id="btnAddTotal">➕ Ajouter</button>
-        <button type="button" class="btn btn-secondary btn-sm" id="btnRemoveTotal">➖ Enlever</button>
-        <div style="flex:1"></div>
-        <button type="button" class="btn btn-danger btn-sm" id="btnDeleteProduct">🗑️ Supprimer produit</button>
-      </div>
-      <div class="hint">
-        💡 Si vous renseignez le prix d'achat lors d'un ajout, le CMP sera recalculé automatiquement.
-      </div>
-    `;
-
-    modalContent.appendChild(block);
-
-    el("btnAddTotal")?.addEventListener("click", () => adjustTotal(+1));
-    el("btnRemoveTotal")?.addEventListener("click", () => adjustTotal(-1));
-    el("btnDeleteProduct")?.addEventListener("click", deleteCurrentProduct);
-  }
-
-  async function adjustTotal(sign) {
-    if (!currentProductId) return;
-
-    const grams = Number(el("adjustTotalGrams")?.value || 0);
-    const purchasePrice = Number(el("adjustPurchasePrice")?.value || 0);
-
-    if (!grams || grams <= 0) return alert("Entre une quantité de grammes valide");
-
-    const gramsDelta = sign * grams;
-
-    try {
-      const body = { gramsDelta };
-      if (sign > 0 && purchasePrice > 0) body.purchasePricePerGram = purchasePrice;
-
-      const res = await apiFetch(`/api/products/${encodeURIComponent(currentProductId)}/adjust-total`, {
-        method: "POST",
-        body: JSON.stringify(body),
-      });
-
-      const data = await safeJson(res);
-      if (!res.ok) throw new Error(data?.error || "Erreur ajustement total");
-
-      const message = data.cmpUpdated
-        ? `✅ Stock mis à jour (${gramsDelta > 0 ? "+" : ""}${gramsDelta}g) - CMP recalculé: ${Number(
-            data.product?.averageCostPerGram || 0
-          ).toFixed(2)}€/g`
-        : `✅ Stock mis à jour (${gramsDelta > 0 ? "+" : ""}${gramsDelta}g)`;
-
-      log(message, "success");
-
-      await refreshStock();
-      await refreshMovements();
-
-      const updated = stockData[currentProductId];
-      if (updated) {
-        const totalInput = el("totalGramsInput");
-        if (totalInput) totalInput.value = Number(updated.totalGrams || 0);
-        displayVariants(updated.variants);
-        loadProductHistory(currentProductId);
-      }
-
-      if (el("adjustTotalGrams")) el("adjustTotalGrams").value = "";
-      if (el("adjustPurchasePrice")) el("adjustPurchasePrice").value = "";
-    } catch (e) {
-      log("❌ Erreur ajustement total: " + e.message, "error");
-      alert("Erreur: " + e.message);
-    }
-  }
-
-  async function deleteCurrentProduct() {
-    if (!currentProductId) return;
-
-    const p = stockData[currentProductId];
-    const name = p?.name || currentProductId;
-
-    if (!confirm(`Supprimer "${name}" de l'interface ? (cela ne supprime PAS le produit Shopify)`)) return;
-
-    try {
-      const res = await apiFetch(`/api/products/${encodeURIComponent(currentProductId)}`, { method: "DELETE" });
-      const data = await safeJson(res);
-      if (!res.ok) throw new Error(data?.error || "Erreur suppression");
-
-      log(`✅ Produit supprimé: ${name}`, "success");
-      closeProductModal();
-      await refreshStock();
-      await refreshMovements();
-    } catch (e) {
-      log("❌ Erreur suppression produit: " + e.message, "error");
-      alert("Erreur: " + e.message);
-    }
-  }
-
-  function ensureProductCategoriesUI() {
-    const modalContent = document.querySelector("#productModal .modal-content");
-    if (!modalContent) return;
-    if (el("productCategoriesSelect")) return;
-
-    const block = document.createElement("div");
-    block.className = "form-group";
-    block.innerHTML = `
-      <label>Catégories</label>
-      <select id="productCategoriesSelect" multiple size="6"></select>
-      <div class="hint">Ctrl (Windows) / Cmd (Mac) pour sélectionner plusieurs. (Aucune sélection = Sans catégorie)</div>
-      <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;">
-        <button type="button" class="btn btn-secondary btn-sm" id="btnClearCategories">🧹 Tout enlever</button>
-        <button type="button" class="btn btn-primary btn-sm" id="btnSaveCategories">💾 Enregistrer</button>
-      </div>
-    `;
-
-    modalContent.appendChild(block);
-    updateProductCategoriesOptions();
-
-    el("btnSaveCategories")?.addEventListener("click", saveProductCategories);
-    el("btnClearCategories")?.addEventListener("click", () => {
-      const sel = el("productCategoriesSelect");
-      if (!sel) return;
-      for (const opt of Array.from(sel.options)) opt.selected = false;
-    });
-  }
-
-  async function saveProductCategories() {
-    if (!currentProductId) return;
-    const sel = el("productCategoriesSelect");
-    if (!sel) return;
-
-    const categoryIds = Array.from(sel.selectedOptions).map((o) => o.value);
-
-    try {
-      const res = await apiFetch(`/api/products/${encodeURIComponent(currentProductId)}/categories`, {
-        method: "POST",
-        body: JSON.stringify({ categoryIds }),
-      });
-
-      const data = await safeJson(res);
-      if (!res.ok) throw new Error(data?.error || "Erreur");
-
-      log("✅ Catégories enregistrées", "success");
-      await refreshStock();
-      await refreshMovements();
-
-      const updated = stockData[currentProductId];
-      if (updated) {
-        const ids = Array.isArray(updated.categoryIds) ? updated.categoryIds.map(String) : [];
-        for (const opt of Array.from(sel.options)) opt.selected = ids.includes(String(opt.value));
-      }
-
-      loadProductHistory(currentProductId);
-    } catch (e) {
-      log("❌ Erreur catégories: " + e.message, "error");
-      alert("Erreur: " + e.message);
-    }
-  }
-
-  async function loadProductHistory(productId) {
-    const modalContent = document.querySelector("#productModal .modal-content");
-    if (!modalContent) return;
-
-    let block = el("productHistoryBlock");
-    if (!block) {
-      block = document.createElement("div");
-      block.id = "productHistoryBlock";
-      block.className = "product-history";
-      block.innerHTML = `
-        <div class="card-title">🕐 Historique du produit</div>
-        <div class="hint" style="margin-top:6px;">Derniers mouvements liés à ce produit (récents en haut).</div>
-        <div id="productHistoryList" class="history-list"></div>
-      `;
-      modalContent.appendChild(block);
-    }
-
-    const list = el("productHistoryList");
-    if (!list) return;
-
-    list.innerHTML = `<div class="muted" style="padding:10px;">Chargement...</div>`;
-
-    try {
-      const res = await apiFetch(`/api/products/${encodeURIComponent(productId)}/history?limit=200`);
-      const data = await safeJson(res);
-      if (!res.ok) throw new Error(data?.error || "Erreur history");
-
-      let items = Array.isArray(data.data) ? data.data : [];
-      if (!items.length) {
-        list.innerHTML = `<div class="muted" style="padding:10px;">Aucun mouvement.</div>`;
-        return;
-      }
-
-      items = items.slice().sort((a, b) => {
-        const ta = new Date(a.ts || 0).getTime();
-        const tb = new Date(b.ts || 0).getTime();
-        return tb - ta;
-      });
-
-      list.innerHTML = items
-        .map((m) => {
-          const when = formatDateTime(m.ts);
-          const delta = Number(m.gramsDelta ?? 0);
-          const sign = delta > 0 ? "+" : "";
-          const source = m.source || "movement";
-          const totalAfter = Number(m.totalAfter ?? NaN);
-          const deltaClass = delta > 0 ? "positive" : "negative";
-
-          return `
-            <div class="history-item">
-              <div class="h-left">
-                <div class="h-title">${escapeHtml(source)}</div>
-                <div class="h-sub">${escapeHtml(when)}</div>
-              </div>
-              <div class="h-delta ${deltaClass}">${sign}${delta}g ${Number.isFinite(totalAfter) ? `→ ${totalAfter}g` : ""}</div>
-            </div>
-          `;
-        })
-        .join("");
-    } catch (e) {
-      list.innerHTML = `<div style="color:#fca5a5; padding:10px;">Erreur: ${escapeHtml(e.message)}</div>`;
-    }
-  }
-
-  // ---------------- CATEGORIES MODAL ----------------
-  function openCategoriesModal() {
-    let modal = el("categoriesModal");
-    if (!modal) {
-      modal = document.createElement("div");
-      modal.id = "categoriesModal";
-      modal.className = "modal";
-      modal.innerHTML = `
-        <div class="modal-panel">
-          <div class="modal-content">
-            <div class="modal-head">
-              <div class="modal-title">🏷️ Catégories</div>
-              <button class="btn btn-close" type="button" id="btnCloseCategories">✖</button>
-            </div>
-
-            <div class="modal-body">
-              <div class="info-box">
-                Crée des catégories pour trier tes produits (ex: Fleurs, Résines, Gummies…).
-              </div>
-
-              <div style="display:flex; gap:10px; margin-top:16px; flex-wrap:wrap;">
-                <input id="newCategoryName" placeholder="Nom de catégorie (ex: Fleurs)" style="flex:1; min-width:220px;" />
-                <button class="btn btn-primary btn-sm" id="btnAddCategory" type="button">➕ Ajouter</button>
-              </div>
-
-              <div id="categoriesList" class="categories-list"></div>
-            </div>
-          </div>
-        </div>
-      `;
-      document.body.appendChild(modal);
-      ensureModalBackdrop(modal);
-      ensureModalLayout(modal);
-
-      el("btnCloseCategories")?.addEventListener("click", () => closeModal(modal));
-      el("btnAddCategory")?.addEventListener("click", async () => {
-        const input = el("newCategoryName");
-        const name = input?.value?.trim() || "";
-        if (!name) return;
-
-        try {
-          const res = await apiFetch("/api/categories", {
-            method: "POST",
-            body: JSON.stringify({ name }),
-          });
-          const data = await safeJson(res);
-          if (!res.ok) throw new Error(data?.error || "Erreur");
-
-          if (input) input.value = "";
-          await loadCategories();
-          await refreshStock();
-          renderCategoriesList();
-          await refreshMovements();
-          log(`✅ Catégorie créée: ${name}`, "success");
-        } catch (e) {
-          log("❌ Erreur création catégorie: " + e.message, "error");
-          alert("Erreur: " + e.message);
-        }
-      });
-    }
-
-    renderCategoriesList();
-    openModal(modal);
-  }
-
-  function renderCategoriesList() {
-    const list = el("categoriesList");
-    if (!list) return;
-
-    const sorted = categories
-      .slice()
-      .sort((a, b) => String(a.name).localeCompare(String(b.name), "fr", { sensitivity: "base" }));
-
-    if (!sorted.length) {
-      list.innerHTML = `<div class="muted" style="padding:10px;">Aucune catégorie</div>`;
-      return;
-    }
-
-    list.innerHTML = sorted
-      .map(
-        (c) => `
-        <div class="category-item">
-          <div class="category-name">${escapeHtml(c.name)}</div>
-          <div class="category-actions">
-            <button class="btn btn-secondary btn-sm" data-act="rename" data-id="${escapeHtml(c.id)}" type="button">✏️ Renommer</button>
-            <button class="btn btn-danger btn-sm" data-act="delete" data-id="${escapeHtml(c.id)}" type="button">🗑️ Supprimer</button>
-          </div>
-        </div>
-      `
-      )
-      .join("");
-
-    list.querySelectorAll("button[data-act]").forEach((btn) => {
-      btn.addEventListener("click", async () => {
-        const id = btn.getAttribute("data-id");
-        const act = btn.getAttribute("data-act");
-
-        try {
-          if (act === "rename") {
-            const name = prompt("Nouveau nom de la catégorie ?");
-            if (!name) return;
-
-            const res = await apiFetch(`/api/categories/${encodeURIComponent(id)}`, {
-              method: "PUT",
-              body: JSON.stringify({ name: name.trim() }),
-            });
-            const data = await safeJson(res);
-            if (!res.ok) throw new Error(data?.error || "Erreur");
-            log(`✅ Catégorie renommée: ${name}`, "success");
-          }
-
-          if (act === "delete") {
-            if (!confirm("Supprimer cette catégorie ?")) return;
-
-            const res = await apiFetch(`/api/categories/${encodeURIComponent(id)}`, { method: "DELETE" });
-            const data = await safeJson(res);
-            if (!res.ok) throw new Error(data?.error || "Erreur");
-            log(`✅ Catégorie supprimée`, "success");
-          }
-
-          await loadCategories();
-          await refreshStock();
-          renderCategoriesList();
-          await refreshMovements();
-        } catch (e) {
-          log("❌ Erreur catégorie: " + e.message, "error");
-          alert("Erreur: " + e.message);
-        }
-      });
-    });
-  }
-
-  // ---------------- IMPORT MODAL ----------------
-  function openImportModal() {
-    let modal = el("importModal");
-    if (!modal) {
-      modal = document.createElement("div");
-      modal.id = "importModal";
-      modal.className = "modal";
-      modal.innerHTML = `
-        <div class="modal-panel modal-wide">
-          <div class="modal-content">
-            <div class="modal-head">
-              <div class="modal-title">➕ Import depuis Shopify</div>
-              <button class="btn btn-close" type="button" id="btnCloseImport">✖</button>
-            </div>
-
-            <div class="modal-body">
-              <div class="import-toolbar">
-                <input id="importQuery" placeholder="Rechercher un produit (ex: amnesia)" style="flex:1;min-width:260px;" />
-                <button class="btn btn-info btn-sm" id="btnSearchShopify" type="button">🔍 Rechercher</button>
-
-                <div class="field" style="min-width:220px;">
-                  <label>Catégorie (optionnel)</label>
-                  <select id="importCategory">
-                    <option value="">Aucune</option>
-                  </select>
-                </div>
-              </div>
-
-              <div id="importResults" class="import-results"></div>
-            </div>
-          </div>
-        </div>
-      `;
-      document.body.appendChild(modal);
-      ensureModalBackdrop(modal);
-      ensureModalLayout(modal);
-
-      el("btnCloseImport")?.addEventListener("click", () => closeModal(modal));
-      el("btnSearchShopify")?.addEventListener("click", () => searchShopifyProducts());
-    }
-
-    const sel = el("importCategory");
-    if (sel) {
-      sel.innerHTML =
-        `<option value="">Aucune</option>` +
-        categories
-          .slice()
-          .sort((a, b) => String(a.name).localeCompare(String(b.name), "fr", { sensitivity: "base" }))
-          .map((c) => `<option value="${escapeHtml(c.id)}">${escapeHtml(c.name)}</option>`)
-          .join("");
-    }
-
-    const results = el("importResults");
-    if (results) {
-      results.innerHTML = `<div class="muted" style="padding:10px;">Lance une recherche pour afficher tes produits Shopify.</div>`;
-    }
-
-    openModal(modal);
-  }
-
-  async function searchShopifyProducts() {
-    const q = el("importQuery")?.value?.trim() || "";
-    const results = el("importResults");
-    if (!results) return;
-
-    results.innerHTML = `<div class="muted" style="padding:10px;">⏳ Recherche en cours...</div>`;
-
-    try {
-      const qs = new URLSearchParams();
-      qs.set("limit", "100");
-      if (q) qs.set("query", q);
-
-      const path = "/api/shopify/products" + (qs.toString() ? `?${qs.toString()}` : "");
-      const res = await apiFetch(path);
-      const data = await safeJson(res);
-      if (!res.ok) throw new Error(data?.error || "Erreur");
-
-      const items = Array.isArray(data.products) ? data.products : [];
-      if (!items.length) {
-        results.innerHTML = `<div class="muted" style="padding:10px;">Aucun produit trouvé.</div>`;
-        return;
-      }
-
-      results.innerHTML = items
-        .map(
-          (p) => `
-          <div class="import-item">
-            <div class="import-main">
-              <div class="import-title">${escapeHtml(p.title)}</div>
-              <div class="import-sub">ID: ${escapeHtml(p.id)} • Variantes: ${escapeHtml(p.variantsCount ?? "?")}</div>
-            </div>
-            <button class="btn btn-primary btn-sm" data-import="${escapeHtml(p.id)}" type="button">➕ Importer</button>
-          </div>
-        `
-        )
-        .join("");
-
-      results.querySelectorAll("button[data-import]").forEach((btn) => {
-        btn.addEventListener("click", async () => {
-          const productId = btn.getAttribute("data-import");
-          await importProduct(productId);
-        });
-      });
-    } catch (e) {
-      results.innerHTML = `<div style="color:#fca5a5; padding:10px;">Erreur: ${escapeHtml(e.message)}</div>`;
-    }
-  }
-
-  async function importProduct(productId) {
-    const cat = el("importCategory")?.value || "";
-    const categoryIds = cat ? [cat] : [];
-
-    log(`⏳ Import du produit Shopify ${productId}...`, "info");
-
-    try {
-      const res = await apiFetch("/api/import/product", {
-        method: "POST",
-        body: JSON.stringify({ productId, categoryIds }),
-      });
-      const data = await safeJson(res);
-      if (!res.ok) throw new Error(data?.error || "Erreur");
-
-      log("✅ Produit importé", "success");
-      await refreshStock();
-      await refreshMovements();
-    } catch (e) {
-      log("❌ Import échoué: " + e.message, "error");
-      alert("Erreur: " + e.message);
-    }
-  }
-
-  // ---------------- INIT ----------------
-  window.addEventListener("load", async () => {
-    document.body.classList.add("full-width");
-
-    injectAppCss();
-    ensureCatalogControls();
-    bindRestockFormOnce();
-
-    await getServerInfo();
-    await loadSettings();
-    await loadShopifyLocations();
-    await loadCategories();
-
-    await refreshStock();
-    await refreshMovements();
-
-    window.openProductModal = openProductModal;
-    window.openRestockModal = openRestockModal;
-    window.closeRestockModal = closeRestockModal;
-    window.closeProductModal = closeProductModal;
-    window.testOrder = testOrder;
-    window.refreshMovements = refreshMovements;
-    window.refreshStock = refreshStock;
-  });
+  function escapeHtml(s) { if (!s) return ''; const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+  // ============================================
+  // EXPORTS
+  // ============================================
+
+  window.app = {
+    init, navigateTo, toggleSidebar,
+    showModal, closeModal, showAddProductModal, showRestockModal, showAdjustModal, showUpgradeModal, showFeatureLockedModal,
+    saveProduct, saveRestock, saveAdjustment, syncShopify, importFromShopify, upgradeTo,
+    showToast,
+    get state() { return state; },
+  };
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
 })();
