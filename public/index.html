@@ -7,6 +7,7 @@
 
   <!-- ✅ IMPORTANT : on met l’ID attendu par app.js pour éviter un double chargement -->
   <link id="bulk-stock-manager-css" rel="stylesheet" href="./css/style.css" />
+  <link rel="stylesheet" href="./css/ux-polish.css" />
 </head>
 
 <body>
@@ -197,6 +198,8 @@
 <script src="https://unpkg.com/@shopify/app-bridge-utils@3"></script>
 
   <!-- ✅ defer pour être sûr que le DOM est prêt -->
+  <script src="./js/ux-utils.js" defer></script>
+  <script src="./js/onboarding.js" defer></script>
   <script src="./js/app.js" defer></script>
   <script src="./js/analytics.js" defer></script>
   <script src="./js/settings.js" defer></script>
