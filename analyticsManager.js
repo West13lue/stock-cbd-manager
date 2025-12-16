@@ -79,6 +79,9 @@ function formatDateKey(d, bucket = "day") {
  * Transforme un payload de commande Shopify en ventes individuelles
  * et les enregistre dans le store
  * 
+ * ✅ CALCUL SUR PRIX RÉEL : après réductions, hors shipping/cadeaux
+ * ✅ COLLECTE MINIMALE : pas de données personnelles client
+ * 
  * @param {string} shop - Domaine de la boutique
  * @param {Object} orderPayload - Payload du webhook orders/create
  * @returns {Array} Liste des ventes enregistrées
@@ -98,11 +101,15 @@ async function recordSaleFromOrder(shop, orderPayload) {
     return [];
   }
 
-  // Client (optionnel)
-  const customerId = orderPayload.customer?.id || null;
-  const customerEmail = orderPayload.customer?.email || null;
+  // ❌ PAS DE DONNÉES CLIENT - On ne stocke rien sur le client
+  // Pas de: customer.id, customer.email, customer.name, addresses
 
   const lineItems = Array.isArray(orderPayload.line_items) ? orderPayload.line_items : [];
+  
+  // Calculer le total des réductions au niveau commande pour répartition
+  const orderDiscounts = calculateOrderDiscounts(orderPayload);
+  const orderSubtotal = lineItems.reduce((sum, li) => sum + (toNum(li.price, 0) * toNum(li.quantity, 0)), 0);
+  
   const sales = [];
 
   for (const li of lineItems) {
@@ -115,9 +122,22 @@ async function recordSaleFromOrder(shop, orderPayload) {
     const quantity = toNum(li.quantity, 0);
     if (quantity <= 0) continue;
 
-    // Prix de vente
+    // ✅ PRIX RÉEL après réductions
     const unitPrice = toNum(li.price, 0);
-    const lineTotal = unitPrice * quantity;
+    const grossPrice = unitPrice * quantity;
+    
+    // Réductions sur cette ligne
+    const lineDiscounts = calculateLineDiscounts(li);
+    
+    // Répartition proportionnelle des réductions commande
+    const proportionalOrderDiscount = orderSubtotal > 0 
+      ? (grossPrice / orderSubtotal) * orderDiscounts 
+      : 0;
+    
+    const totalDiscount = lineDiscounts + proportionalOrderDiscount;
+    
+    // ✅ Revenu NET = prix brut - réductions (hors shipping/taxes)
+    const netRevenue = Math.max(0, grossPrice - totalDiscount);
 
     // Déterminer les grammes par unité depuis le variant title/sku
     const gramsPerUnit = parseGramsFromLineItem(li);
@@ -140,12 +160,12 @@ async function recordSaleFromOrder(shop, orderPayload) {
       }
     }
 
-    // Calculer coût et marge
+    // ✅ Calculer coût et marge sur le REVENU NET (prix réel)
     const totalCost = roundTo(totalGrams * costPerGram, 2);
-    const margin = roundTo(lineTotal - totalCost, 2);
-    const marginPercent = lineTotal > 0 ? roundTo((margin / lineTotal) * 100, 2) : 0;
+    const margin = roundTo(netRevenue - totalCost, 2);
+    const marginPercent = netRevenue > 0 ? roundTo((margin / netRevenue) * 100, 2) : 0;
 
-    // Enregistrer la vente
+    // Enregistrer la vente (SANS données client)
     const sale = analyticsStore.addSale({
       orderId,
       orderNumber,
@@ -160,8 +180,10 @@ async function recordSaleFromOrder(shop, orderPayload) {
       gramsPerUnit,
       totalGrams,
       
-      unitPrice,
-      lineTotal,
+      // ✅ Prix réels
+      grossPrice: roundTo(grossPrice, 2),
+      discountAmount: roundTo(totalDiscount, 2),
+      netRevenue: roundTo(netRevenue, 2),
       currency,
       
       costPerGram,
@@ -170,17 +192,65 @@ async function recordSaleFromOrder(shop, orderPayload) {
       marginPercent,
       
       categoryIds,
-      
-      customerId,
-      customerEmail,
-      
       source: "webhook",
+      
+      // ❌ PAS DE: customerId, customerEmail
     }, shop);
 
     sales.push(sale);
   }
 
   return sales;
+}
+
+/**
+ * Calcule les réductions au niveau commande (codes promo globaux, etc.)
+ */
+function calculateOrderDiscounts(orderPayload) {
+  let total = 0;
+  
+  // discount_codes
+  if (Array.isArray(orderPayload.discount_codes)) {
+    for (const dc of orderPayload.discount_codes) {
+      total += toNum(dc.amount, 0);
+    }
+  }
+  
+  // discount_applications (Shopify plus récent)
+  if (Array.isArray(orderPayload.discount_applications)) {
+    for (const da of orderPayload.discount_applications) {
+      if (da.target_type === "line_item") continue; // Déjà dans line_item
+      total += toNum(da.value, 0);
+    }
+  }
+  
+  // total_discounts (fallback)
+  if (total === 0 && orderPayload.total_discounts) {
+    total = toNum(orderPayload.total_discounts, 0);
+  }
+  
+  return total;
+}
+
+/**
+ * Calcule les réductions sur une ligne spécifique
+ */
+function calculateLineDiscounts(lineItem) {
+  let total = 0;
+  
+  // discount_allocations
+  if (Array.isArray(lineItem.discount_allocations)) {
+    for (const da of lineItem.discount_allocations) {
+      total += toNum(da.amount, 0);
+    }
+  }
+  
+  // total_discount (champ direct)
+  if (lineItem.total_discount) {
+    total = Math.max(total, toNum(lineItem.total_discount, 0));
+  }
+  
+  return total;
 }
 
 /**
@@ -217,6 +287,7 @@ function parseGramsFromLineItem(li) {
 
 /**
  * Calcule les KPIs globaux pour une période
+ * ✅ Utilise netRevenue (prix réel après réductions)
  */
 function calculateSummary(shop, from, to) {
   const sales = analyticsStore.listSales({ shop, from, to, limit: 50000 });
@@ -227,6 +298,8 @@ function calculateSummary(shop, from, to) {
       totalOrders: 0,
       uniqueOrders: 0,
       totalRevenue: 0,
+      totalGrossRevenue: 0,
+      totalDiscounts: 0,
       totalCost: 0,
       totalMargin: 0,
       averageMarginPercent: 0,
@@ -242,13 +315,16 @@ function calculateSummary(shop, from, to) {
   const orderIds = new Set(sales.map(s => s.orderId).filter(Boolean));
   
   const totals = sales.reduce((acc, s) => {
-    acc.revenue += toNum(s.lineTotal, 0);
+    // ✅ Utiliser netRevenue (prix réel) au lieu de lineTotal
+    acc.revenue += toNum(s.netRevenue || s.lineTotal, 0);
+    acc.grossRevenue += toNum(s.grossPrice || s.lineTotal, 0);
+    acc.discounts += toNum(s.discountAmount, 0);
     acc.cost += toNum(s.totalCost, 0);
     acc.margin += toNum(s.margin, 0);
     acc.grams += toNum(s.totalGrams, 0);
     acc.quantity += toNum(s.quantity, 0);
     return acc;
-  }, { revenue: 0, cost: 0, margin: 0, grams: 0, quantity: 0 });
+  }, { revenue: 0, grossRevenue: 0, discounts: 0, cost: 0, margin: 0, grams: 0, quantity: 0 });
 
   const uniqueOrders = orderIds.size || sales.length;
   const avgMarginPercent = totals.revenue > 0 
@@ -259,7 +335,9 @@ function calculateSummary(shop, from, to) {
     period: { from, to },
     totalOrders: sales.length,
     uniqueOrders,
-    totalRevenue: roundTo(totals.revenue, 2),
+    totalRevenue: roundTo(totals.revenue, 2),         // CA net (après réductions)
+    totalGrossRevenue: roundTo(totals.grossRevenue, 2), // CA brut
+    totalDiscounts: roundTo(totals.discounts, 2),     // Total réductions
     totalCost: roundTo(totals.cost, 2),
     totalMargin: roundTo(totals.margin, 2),
     averageMarginPercent: roundTo(avgMarginPercent, 2),
@@ -273,6 +351,7 @@ function calculateSummary(shop, from, to) {
 
 /**
  * Calcule les données pour les graphiques (timeseries)
+ * ✅ Utilise netRevenue (prix réel après réductions)
  */
 function calculateTimeseries(shop, from, to, bucket = "day") {
   const sales = analyticsStore.listSales({ shop, from, to, limit: 50000 });
@@ -288,6 +367,8 @@ function calculateTimeseries(shop, from, to, bucket = "day") {
       buckets.set(key, {
         date: key,
         revenue: 0,
+        grossRevenue: 0,
+        discounts: 0,
         cost: 0,
         margin: 0,
         grams: 0,
@@ -297,7 +378,9 @@ function calculateTimeseries(shop, from, to, bucket = "day") {
     }
     
     const b = buckets.get(key);
-    b.revenue += toNum(sale.lineTotal, 0);
+    b.revenue += toNum(sale.netRevenue || sale.lineTotal, 0);
+    b.grossRevenue += toNum(sale.grossPrice || sale.lineTotal, 0);
+    b.discounts += toNum(sale.discountAmount, 0);
     b.cost += toNum(sale.totalCost, 0);
     b.margin += toNum(sale.margin, 0);
     b.grams += toNum(sale.totalGrams, 0);
@@ -310,6 +393,8 @@ function calculateTimeseries(shop, from, to, bucket = "day") {
     .map(b => ({
       date: b.date,
       revenue: roundTo(b.revenue, 2),
+      grossRevenue: roundTo(b.grossRevenue, 2),
+      discounts: roundTo(b.discounts, 2),
       cost: roundTo(b.cost, 2),
       margin: roundTo(b.margin, 2),
       marginPercent: b.revenue > 0 ? roundTo((b.margin / b.revenue) * 100, 2) : 0,

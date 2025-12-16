@@ -48,6 +48,14 @@ try {
   console.warn("Analytics modules non disponibles:", e.message);
 }
 
+// --- Plan Manager (Free/Standard/Premium) ✅ NOUVEAU
+let planManager = null;
+try {
+  planManager = require("./planManager");
+} catch (e) {
+  console.warn("PlanManager non disponible:", e.message);
+}
+
 // --- Settings (multi-shop) : locationId par boutique
 let settingsStore = null;
 try {
@@ -689,11 +697,24 @@ router.get("/api/stock", (req, res) => {
   });
 });
 
-// ✅ Valeur totale du stock
+// ✅ Valeur totale du stock - STANDARD+ ONLY
 router.get("/api/stock/value", (req, res) => {
   safeJson(req, res, () => {
     const shop = getShop(req);
     if (!shop) return apiError(res, 400, "Shop introuvable");
+
+    // ✅ Vérifier le plan
+    if (planManager) {
+      const check = planManager.checkLimit(shop, "view_stock_value");
+      if (!check.allowed) {
+        return res.status(403).json({
+          error: "plan_limit",
+          message: check.reason,
+          upgrade: check.upgrade,
+          feature: "stock_value",
+        });
+      }
+    }
 
     if (typeof stock.calculateTotalStockValue !== "function") {
       return apiError(res, 500, "calculateTotalStockValue non disponible");
@@ -704,11 +725,24 @@ router.get("/api/stock/value", (req, res) => {
   });
 });
 
-// ✅ Stats par catégorie
+// ✅ Stats par catégorie - STANDARD+ ONLY
 router.get("/api/stats/categories", (req, res) => {
   safeJson(req, res, () => {
     const shop = getShop(req);
     if (!shop) return apiError(res, 400, "Shop introuvable");
+
+    // ✅ Vérifier le plan
+    if (planManager) {
+      const check = planManager.checkLimit(shop, "view_categories");
+      if (!check.allowed) {
+        return res.status(403).json({
+          error: "plan_limit",
+          message: check.reason,
+          upgrade: check.upgrade,
+          feature: "categories",
+        });
+      }
+    }
 
     if (typeof stock.getCategoryStats !== "function") {
       return apiError(res, 500, "getCategoryStats non disponible");
@@ -747,6 +781,21 @@ router.get("/api/categories", (req, res) => {
   safeJson(req, res, () => {
     const shop = getShop(req);
     if (!shop) return apiError(res, 400, "Shop introuvable");
+
+    // ✅ Vérifier le plan (catégories = Standard+)
+    if (planManager) {
+      const check = planManager.checkLimit(shop, "view_categories");
+      if (!check.allowed) {
+        // Pour la liste, on retourne un tableau vide avec un flag
+        return res.json({ 
+          categories: [], 
+          planLimited: true,
+          message: check.reason,
+          upgrade: check.upgrade,
+        });
+      }
+    }
+
     const categories = catalogStore.listCategories ? catalogStore.listCategories(shop) : [];
     res.json({ categories });
   });
@@ -756,6 +805,19 @@ router.post("/api/categories", (req, res) => {
   safeJson(req, res, () => {
     const shop = getShop(req);
     if (!shop) return apiError(res, 400, "Shop introuvable");
+
+    // ✅ Vérifier le plan
+    if (planManager) {
+      const check = planManager.checkLimit(shop, "manage_categories");
+      if (!check.allowed) {
+        return res.status(403).json({
+          error: "plan_limit",
+          message: check.reason,
+          upgrade: check.upgrade,
+          feature: "categories",
+        });
+      }
+    }
 
     const name = String(req.body?.name ?? req.body?.categoryName ?? "").trim();
     if (!name) return apiError(res, 400, "Nom de catégorie invalide");
@@ -812,10 +874,25 @@ router.get("/api/movements", (req, res) => {
     if (!shop) return apiError(res, 400, "Shop introuvable");
 
     const limit = Math.min(Number(req.query.limit || 200), 2000);
-    const days = Math.min(Math.max(Number(req.query.days || 7), 1), 365);
+    let days = Math.min(Math.max(Number(req.query.days || 7), 1), 365);
+
+    // ✅ Appliquer la limite de jours selon le plan
+    let daysLimited = false;
+    if (planManager) {
+      const maxDays = planManager.applyMovementDaysLimit(shop, days);
+      if (maxDays < days) {
+        daysLimited = true;
+        days = maxDays;
+      }
+    }
 
     const rows = movementStore.listMovements ? movementStore.listMovements({ shop, days, limit }) : [];
-    res.json({ count: rows.length, data: rows });
+    res.json({ 
+      count: rows.length, 
+      data: rows,
+      daysLimited,
+      maxDays: days,
+    });
   });
 });
 
@@ -824,8 +901,26 @@ router.get("/api/movements.csv", (req, res) => {
     const shop = getShop(req);
     if (!shop) return apiError(res, 400, "Shop introuvable");
 
+    // ✅ Vérifier le plan pour export avancé
+    if (planManager) {
+      const check = planManager.checkLimit(shop, "advanced_export");
+      if (!check.allowed) {
+        return res.status(403).json({
+          error: "plan_limit",
+          message: check.reason,
+          upgrade: check.upgrade,
+          feature: "advanced_export",
+        });
+      }
+    }
+
     const limit = Math.min(Number(req.query.limit || 2000), 10000);
-    const days = Math.min(Math.max(Number(req.query.days || 30), 1), 365);
+    let days = Math.min(Math.max(Number(req.query.days || 30), 1), 365);
+
+    // Appliquer la limite de jours
+    if (planManager) {
+      days = planManager.applyMovementDaysLimit(shop, days);
+    }
 
     const rows = movementStore.listMovements ? movementStore.listMovements({ shop, days, limit }) : [];
 
@@ -1071,6 +1166,35 @@ router.post("/api/import/product", (req, res) => {
   safeJson(req, res, async () => {
     const shop = getShop(req);
     if (!shop) return apiError(res, 400, "Shop introuvable");
+
+    // ✅ Vérifier le plan (import Shopify = Standard+)
+    if (planManager) {
+      const checkImport = planManager.checkLimit(shop, "import_shopify");
+      if (!checkImport.allowed) {
+        return res.status(403).json({
+          error: "plan_limit",
+          message: checkImport.reason,
+          upgrade: checkImport.upgrade,
+          feature: "import_shopify",
+        });
+      }
+
+      // Vérifier aussi la limite de produits
+      const snapshot = stock.getCatalogSnapshot ? stock.getCatalogSnapshot(shop) : { products: [] };
+      const currentCount = Array.isArray(snapshot.products) ? snapshot.products.length : 0;
+      const checkProduct = planManager.checkLimit(shop, "add_product", { currentProductCount: currentCount });
+      if (!checkProduct.allowed) {
+        return res.status(403).json({
+          error: "plan_limit",
+          message: checkProduct.reason,
+          upgrade: checkProduct.upgrade,
+          feature: "max_products",
+          limit: checkProduct.limit,
+          current: checkProduct.current,
+        });
+      }
+    }
+
     const client = shopifyFor(shop);
 
     const productId = req.body?.productId ?? req.body?.id;
@@ -1293,15 +1417,118 @@ router.get("/api/auth/callback", (req, res) => {
 });
 
 // =====================================================
+// PLAN ROUTES ✅ NOUVEAU (Free/Standard/Premium)
+// =====================================================
+
+// Info sur le plan actuel
+router.get("/api/plan", (req, res) => {
+  safeJson(req, res, () => {
+    const shop = getShop(req);
+    if (!shop) return apiError(res, 400, "Shop introuvable");
+    if (!planManager) return apiError(res, 500, "PlanManager non disponible");
+
+    // Compter les produits actuels
+    const snapshot = stock.getCatalogSnapshot ? stock.getCatalogSnapshot(shop) : { products: [] };
+    const productCount = Array.isArray(snapshot.products) ? snapshot.products.length : 0;
+
+    const planInfo = planManager.getPlanInfoForUI(shop, productCount);
+    res.json(planInfo);
+  });
+});
+
+// Liste des plans disponibles
+router.get("/api/plans", (req, res) => {
+  safeJson(req, res, () => {
+    if (!planManager) return apiError(res, 500, "PlanManager non disponible");
+    res.json({ plans: Object.values(planManager.PLANS) });
+  });
+});
+
+// Changer de plan (simulation - en prod, utiliser Shopify Billing API)
+router.post("/api/plan/upgrade", (req, res) => {
+  safeJson(req, res, () => {
+    const shop = getShop(req);
+    if (!shop) return apiError(res, 400, "Shop introuvable");
+    if (!planManager) return apiError(res, 500, "PlanManager non disponible");
+
+    const planId = String(req.body?.planId || "").toLowerCase();
+    if (!planManager.PLANS[planId]) {
+      return apiError(res, 400, `Plan inconnu: ${planId}`);
+    }
+
+    // En production, ici on créerait un AppSubscription via Shopify Billing API
+    // Pour le moment, on simule le changement de plan
+    const result = planManager.setShopPlan(shop, planId, {
+      id: `sub_${Date.now()}`,
+      status: "active",
+      startedAt: new Date().toISOString(),
+    });
+
+    logEvent("plan_upgraded", { shop, planId }, "info");
+    res.json({ success: true, ...result });
+  });
+});
+
+// Annuler l'abonnement
+router.post("/api/plan/cancel", (req, res) => {
+  safeJson(req, res, () => {
+    const shop = getShop(req);
+    if (!shop) return apiError(res, 400, "Shop introuvable");
+    if (!planManager) return apiError(res, 500, "PlanManager non disponible");
+
+    const result = planManager.cancelSubscription(shop);
+    logEvent("plan_cancelled", { shop }, "info");
+    res.json({ success: true, ...result });
+  });
+});
+
+// Vérifier une limite spécifique
+router.get("/api/plan/check/:action", (req, res) => {
+  safeJson(req, res, () => {
+    const shop = getShop(req);
+    if (!shop) return apiError(res, 400, "Shop introuvable");
+    if (!planManager) return apiError(res, 500, "PlanManager non disponible");
+
+    const action = String(req.params.action);
+    
+    // Context pour certaines vérifications
+    const context = {};
+    if (action === "add_product") {
+      const snapshot = stock.getCatalogSnapshot ? stock.getCatalogSnapshot(shop) : { products: [] };
+      context.currentProductCount = Array.isArray(snapshot.products) ? snapshot.products.length : 0;
+    }
+    if (action === "view_movements") {
+      context.days = Number(req.query.days || 7);
+    }
+
+    const result = planManager.checkLimit(shop, action, context);
+    res.json(result);
+  });
+});
+
+// =====================================================
 // ANALYTICS ROUTES ✅ NOUVEAU
 // =====================================================
 
-// Summary (KPIs globaux)
+// Summary (KPIs globaux) - ✅ PREMIUM ONLY
 router.get("/api/analytics/summary", (req, res) => {
   safeJson(req, res, () => {
     const shop = getShop(req);
     if (!shop) return apiError(res, 400, "Shop introuvable");
     if (!analyticsManager) return apiError(res, 500, "Analytics non disponible");
+
+    // ✅ Vérifier le plan
+    if (planManager) {
+      const check = planManager.checkLimit(shop, "view_analytics");
+      if (!check.allowed) {
+        return res.status(403).json({
+          error: "plan_limit",
+          message: check.reason,
+          upgrade: check.upgrade,
+          feature: "analytics",
+        });
+      }
+    }
 
     const from = req.query.from || null;
     const to = req.query.to || null;
@@ -1311,12 +1538,24 @@ router.get("/api/analytics/summary", (req, res) => {
   });
 });
 
-// Timeseries (données graphiques)
+// Timeseries (données graphiques) - ✅ PREMIUM ONLY
 router.get("/api/analytics/timeseries", (req, res) => {
   safeJson(req, res, () => {
     const shop = getShop(req);
     if (!shop) return apiError(res, 400, "Shop introuvable");
     if (!analyticsManager) return apiError(res, 500, "Analytics non disponible");
+
+    // ✅ Vérifier le plan
+    if (planManager) {
+      const check = planManager.checkLimit(shop, "view_analytics");
+      if (!check.allowed) {
+        return res.status(403).json({
+          error: "plan_limit",
+          message: check.reason,
+          upgrade: check.upgrade,
+        });
+      }
+    }
 
     const from = req.query.from || null;
     const to = req.query.to || null;
@@ -1327,12 +1566,24 @@ router.get("/api/analytics/timeseries", (req, res) => {
   });
 });
 
-// Liste des commandes récentes
+// Liste des commandes récentes - ✅ PREMIUM ONLY
 router.get("/api/analytics/orders", (req, res) => {
   safeJson(req, res, () => {
     const shop = getShop(req);
     if (!shop) return apiError(res, 400, "Shop introuvable");
     if (!analyticsManager) return apiError(res, 500, "Analytics non disponible");
+
+    // ✅ Vérifier le plan
+    if (planManager) {
+      const check = planManager.checkLimit(shop, "view_analytics");
+      if (!check.allowed) {
+        return res.status(403).json({
+          error: "plan_limit",
+          message: check.reason,
+          upgrade: check.upgrade,
+        });
+      }
+    }
 
     const from = req.query.from || null;
     const to = req.query.to || null;
@@ -1343,12 +1594,24 @@ router.get("/api/analytics/orders", (req, res) => {
   });
 });
 
-// Top produits
+// Top produits - ✅ PREMIUM ONLY
 router.get("/api/analytics/products/top", (req, res) => {
   safeJson(req, res, () => {
     const shop = getShop(req);
     if (!shop) return apiError(res, 400, "Shop introuvable");
     if (!analyticsManager) return apiError(res, 500, "Analytics non disponible");
+
+    // ✅ Vérifier le plan
+    if (planManager) {
+      const check = planManager.checkLimit(shop, "view_analytics");
+      if (!check.allowed) {
+        return res.status(403).json({
+          error: "plan_limit",
+          message: check.reason,
+          upgrade: check.upgrade,
+        });
+      }
+    }
 
     const from = req.query.from || null;
     const to = req.query.to || null;

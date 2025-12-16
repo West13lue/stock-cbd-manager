@@ -138,6 +138,7 @@
     analyticsState.loading = true;
 
     showLoading(true);
+    hideError();
 
     const { from, to } = analyticsState.dateRange;
     const bucket = analyticsState.bucket;
@@ -150,6 +151,13 @@
         fetchApi(`/api/analytics/products/top?from=${from}&to=${to}&by=revenue&limit=10`),
         fetchApi(`/api/analytics/orders?from=${from}&to=${to}&limit=20`),
       ]);
+
+      // Vérifier les erreurs de plan (403)
+      if (summaryRes.status === 403) {
+        const errorData = await summaryRes.json();
+        showPlanUpgradeMessage(errorData);
+        return;
+      }
 
       const [summary, timeseries, topProducts, orders] = await Promise.all([
         safeJson(summaryRes),
@@ -185,12 +193,55 @@
     }
   }
 
+  function hideError() {
+    const container = el("analyticsError");
+    if (container) {
+      container.style.display = "none";
+    }
+  }
+
   function showError(message) {
     const container = el("analyticsError");
     if (container) {
       container.innerHTML = `<div class="analytics-error">${escapeHtml(message)}</div>`;
       container.style.display = "block";
     }
+  }
+
+  function showPlanUpgradeMessage(errorData) {
+    const container = el("analyticsKPIs");
+    if (!container) return;
+
+    const upgradePlan = errorData.upgrade || "premium";
+    const planNames = { standard: "Standard (14,99€/mois)", premium: "Premium (39,99€/mois)" };
+
+    container.innerHTML = `
+      <div class="plan-upgrade-card">
+        <div class="plan-upgrade-icon">🔒</div>
+        <div class="plan-upgrade-content">
+          <h3>Fonctionnalité Premium</h3>
+          <p>${escapeHtml(errorData.message || "Cette fonctionnalité nécessite un plan supérieur.")}</p>
+          <p class="plan-upgrade-features">
+            Avec le plan <strong>${planNames[upgradePlan] || upgradePlan}</strong>, accédez à :
+          </p>
+          <ul>
+            <li>📈 Analyse des marges et CA</li>
+            <li>🏆 Top produits par marge/volume/CA</li>
+            <li>📊 Graphiques et tendances</li>
+            <li>📤 Exports avancés</li>
+          </ul>
+          <button class="btn btn-primary btn-lg" onclick="window.open('/api/plan/upgrade?planId=${upgradePlan}', '_self')">
+            🚀 Passer au plan ${upgradePlan.charAt(0).toUpperCase() + upgradePlan.slice(1)}
+          </button>
+        </div>
+      </div>
+    `;
+
+    // Cacher les autres sections
+    const chartCard = document.querySelector(".analytics-chart-card");
+    const grid = document.querySelector(".analytics-grid");
+    if (chartCard) chartCard.style.display = "none";
+    if (grid) grid.style.display = "none";
   }
 
   // ============================================

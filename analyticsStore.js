@@ -1,10 +1,25 @@
 // analyticsStore.js — Persistance des ventes analytics (NDJSON/mois) sur /var/data/<shop>/analytics
 // Compatible multi-shop, même pattern que movementStore.js
+// ✅ COLLECTE MINIMALE : pas de PII (nom/adresse client), juste les données nécessaires au calcul des marges
 
 const fs = require("fs");
 const path = require("path");
 
 const DATA_DIR = process.env.DATA_DIR || "/var/data";
+
+// ============================================
+// POLITIQUE DE CONFIDENTIALITÉ
+// ============================================
+// Ce module collecte UNIQUEMENT les données nécessaires au calcul des stocks et marges :
+// - order_id, order_number, date
+// - product_id, variant_id, qty, grams
+// - revenue (prix réel après réductions), cost, margin
+// 
+// AUCUNE donnée personnelle client n'est stockée :
+// - Pas de nom, email, téléphone
+// - Pas d'adresse de livraison/facturation
+// - Pas d'IP ou données de navigation
+// ============================================
 
 // ============================================
 // Helpers
@@ -54,7 +69,7 @@ function generateId() {
 // ============================================
 
 /**
- * Enregistre une vente
+ * Enregistre une vente (COLLECTE MINIMALE - pas de PII)
  * @param {Object} sale - Données de la vente
  * @param {string} shop - Identifiant de la boutique
  * @returns {Object} La vente enregistrée avec son ID
@@ -65,47 +80,48 @@ function addSale(sale = {}, shop = sale.shop) {
 
   const saleDate = sale.orderDate ? new Date(sale.orderDate) : new Date();
 
+  // ✅ STRUCTURE MINIMALE - Pas de données client
   const record = {
     id: sale.id || generateId(),
     ts: new Date().toISOString(),
+    
+    // Commande (identifiants uniquement)
     orderDate: saleDate.toISOString(),
     orderId: sale.orderId || null,
     orderNumber: sale.orderNumber || null,
     
-    // Produit vendu
+    // Produit
     productId: String(sale.productId || ""),
     productName: String(sale.productName || ""),
     variantId: sale.variantId || null,
     variantTitle: sale.variantTitle || null,
+    categoryIds: Array.isArray(sale.categoryIds) ? sale.categoryIds : [],
     
     // Quantités
     quantity: Number(sale.quantity || 0),
     gramsPerUnit: Number(sale.gramsPerUnit || 0),
     totalGrams: Number(sale.totalGrams || 0),
     
-    // Prix de vente
-    unitPrice: Number(sale.unitPrice || 0),        // Prix unitaire HT
-    lineTotal: Number(sale.lineTotal || 0),        // Total ligne HT
+    // ✅ Prix RÉELS (après réductions, hors shipping/cadeaux)
+    grossPrice: Number(sale.grossPrice || 0),           // Prix brut avant réductions
+    discountAmount: Number(sale.discountAmount || 0),   // Réductions appliquées
+    netRevenue: Number(sale.netRevenue || 0),           // Prix réel encaissé (HT)
     currency: String(sale.currency || "EUR"),
     
-    // Coût (snapshot CMP au moment de la vente)
-    costPerGram: Number(sale.costPerGram || 0),    // CMP au moment de la vente
-    totalCost: Number(sale.totalCost || 0),        // Coût total (grammes × CMP)
+    // Coût (CMP snapshot)
+    costPerGram: Number(sale.costPerGram || 0),
+    totalCost: Number(sale.totalCost || 0),
     
-    // Marge calculée
-    margin: Number(sale.margin || 0),              // lineTotal - totalCost
-    marginPercent: Number(sale.marginPercent || 0), // (margin / lineTotal) × 100
-    
-    // Catégories du produit
-    categoryIds: Array.isArray(sale.categoryIds) ? sale.categoryIds : [],
+    // Marge calculée sur prix RÉEL
+    margin: Number(sale.margin || 0),
+    marginPercent: Number(sale.marginPercent || 0),
     
     // Métadonnées
     shop: sanitizeShop(s),
-    source: sale.source || "webhook", // webhook | manual | import
+    source: sale.source || "webhook",
     
-    // Client (optionnel, pour analytics avancées)
-    customerId: sale.customerId || null,
-    customerEmail: sale.customerEmail || null,
+    // ❌ PAS DE DONNÉES CLIENT
+    // Pas de: customerId, customerEmail, customerName, address, phone, ip
   };
 
   const file = fileForMonth(s, saleDate);
@@ -206,7 +222,7 @@ function csvEscape(v) {
 }
 
 /**
- * Convertit les ventes en CSV
+ * Convertit les ventes en CSV (SANS données personnelles)
  */
 function toCSV(sales = []) {
   const cols = [
@@ -219,8 +235,9 @@ function toCSV(sales = []) {
     "quantity",
     "gramsPerUnit",
     "totalGrams",
-    "unitPrice",
-    "lineTotal",
+    "grossPrice",
+    "discountAmount",
+    "netRevenue",
     "currency",
     "costPerGram",
     "totalCost",
