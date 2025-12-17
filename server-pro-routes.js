@@ -1,7 +1,7 @@
-// server-pro-routes.js — Routes API pour les modules PRO
-// À inclure dans server.js avec: require('./server-pro-routes')(app);
+// server-pro-routes.js â€” Routes API pour les modules PRO
+// Ã€ inclure dans server.js avec: require('./server-pro-routes')(app);
 
-module.exports = function(app) {
+module.exports = function(router, helpers = {}) {
   
   // ============================================
   // IMPORTS
@@ -17,9 +17,9 @@ module.exports = function(app) {
   try { inventoryCountStore = require('./inventoryCountStore'); } catch(e) { console.warn('inventoryCountStore not loaded'); }
   try { planManager = require('./planManager'); } catch(e) { console.warn('planManager not loaded'); }
 
-  // Helper: vérifier feature
+  // Helper: vÃ©rifier feature
   function checkFeature(req, res, feature) {
-    const shop = req.query.shop || req.headers['x-shop-domain'];
+    const shop = req.shopDomain || req.query.shop || req.headers['x-shop-domain'] || '';
     if (!shop) {
       res.status(400).json({ error: 'Shop requis' });
       return false;
@@ -29,7 +29,7 @@ module.exports = function(app) {
         error: 'Feature non disponible', 
         feature,
         upgrade: true,
-        message: `Cette fonctionnalité nécessite un plan supérieur.`
+        message: `Cette fonctionnalitÃ© nÃ©cessite un plan supÃ©rieur.`
       });
       return false;
     }
@@ -42,7 +42,7 @@ module.exports = function(app) {
 
   if (batchStore) {
     // Liste des lots
-    app.get('/api/batches', (req, res) => {
+    router.get('/api/batches', (req, res) => {
       const shop = checkFeature(req, res, 'hasBatchTracking');
       if (!shop) return;
       
@@ -63,8 +63,8 @@ module.exports = function(app) {
       }
     });
 
-    // Créer un lot
-    app.post('/api/batches', (req, res) => {
+    // CrÃ©er un lot
+    router.post('/api/batches', (req, res) => {
       const shop = checkFeature(req, res, 'hasBatchTracking');
       if (!shop) return;
       
@@ -76,14 +76,14 @@ module.exports = function(app) {
       }
     });
 
-    // Détail d'un lot
-    app.get('/api/batches/:batchId', (req, res) => {
+    // DÃ©tail d'un lot
+    router.get('/api/batches/:batchId', (req, res) => {
       const shop = checkFeature(req, res, 'hasBatchTracking');
       if (!shop) return;
       
       try {
         const batch = batchStore.getBatch(shop, req.params.batchId);
-        if (!batch) return res.status(404).json({ error: 'Lot non trouvé' });
+        if (!batch) return res.status(404).json({ error: 'Lot non trouvÃ©' });
         res.json(batch);
       } catch (e) {
         res.status(500).json({ error: e.message });
@@ -91,7 +91,7 @@ module.exports = function(app) {
     });
 
     // Consommer un lot (FIFO)
-    app.post('/api/batches/consume', (req, res) => {
+    router.post('/api/batches/consume', (req, res) => {
       const shop = checkFeature(req, res, 'hasBatchTracking');
       if (!shop) return;
       
@@ -104,8 +104,8 @@ module.exports = function(app) {
       }
     });
 
-    // Lots expirés
-    app.get('/api/batches/expired', (req, res) => {
+    // Lots expirÃ©s
+    router.get('/api/batches/expired', (req, res) => {
       const shop = checkFeature(req, res, 'hasBatchTracking');
       if (!shop) return;
       
@@ -124,7 +124,7 @@ module.exports = function(app) {
 
   if (supplierStore) {
     // Liste des fournisseurs
-    app.get('/api/suppliers', (req, res) => {
+    router.get('/api/suppliers', (req, res) => {
       const shop = checkFeature(req, res, 'hasSuppliers');
       if (!shop) return;
       
@@ -136,8 +136,8 @@ module.exports = function(app) {
       }
     });
 
-    // Créer un fournisseur
-    app.post('/api/suppliers', (req, res) => {
+    // CrÃ©er un fournisseur
+    router.post('/api/suppliers', (req, res) => {
       const shop = checkFeature(req, res, 'hasSuppliers');
       if (!shop) return;
       
@@ -149,14 +149,14 @@ module.exports = function(app) {
       }
     });
 
-    // Détail fournisseur
-    app.get('/api/suppliers/:supplierId', (req, res) => {
+    // DÃ©tail fournisseur
+    router.get('/api/suppliers/:supplierId', (req, res) => {
       const shop = checkFeature(req, res, 'hasSuppliers');
       if (!shop) return;
       
       try {
         const supplier = supplierStore.getSupplier(shop, req.params.supplierId);
-        if (!supplier) return res.status(404).json({ error: 'Fournisseur non trouvé' });
+        if (!supplier) return res.status(404).json({ error: 'Fournisseur non trouvÃ©' });
         res.json(supplier);
       } catch (e) {
         res.status(500).json({ error: e.message });
@@ -164,7 +164,7 @@ module.exports = function(app) {
     });
 
     // Modifier fournisseur
-    app.put('/api/suppliers/:supplierId', (req, res) => {
+    router.put('/api/suppliers/:supplierId', (req, res) => {
       const shop = checkFeature(req, res, 'hasSuppliers');
       if (!shop) return;
       
@@ -177,7 +177,7 @@ module.exports = function(app) {
     });
 
     // Supprimer fournisseur
-    app.delete('/api/suppliers/:supplierId', (req, res) => {
+    router.delete('/api/suppliers/:supplierId', (req, res) => {
       const shop = checkFeature(req, res, 'hasSuppliers');
       if (!shop) return;
       
@@ -190,7 +190,7 @@ module.exports = function(app) {
     });
 
     // Comparaison prix
-    app.get('/api/suppliers/compare/:productId', (req, res) => {
+    router.get('/api/suppliers/compare/:productId', (req, res) => {
       const shop = checkFeature(req, res, 'hasSuppliers');
       if (!shop) return;
       
@@ -209,7 +209,7 @@ module.exports = function(app) {
 
   if (purchaseOrderStore) {
     // Liste des PO
-    app.get('/api/purchase-orders', (req, res) => {
+    router.get('/api/purchase-orders', (req, res) => {
       const shop = checkFeature(req, res, 'hasPurchaseOrders');
       if (!shop) return;
       
@@ -226,8 +226,8 @@ module.exports = function(app) {
       }
     });
 
-    // Créer PO
-    app.post('/api/purchase-orders', (req, res) => {
+    // CrÃ©er PO
+    router.post('/api/purchase-orders', (req, res) => {
       const shop = checkFeature(req, res, 'hasPurchaseOrders');
       if (!shop) return;
       
@@ -239,14 +239,14 @@ module.exports = function(app) {
       }
     });
 
-    // Détail PO
-    app.get('/api/purchase-orders/:poId', (req, res) => {
+    // DÃ©tail PO
+    router.get('/api/purchase-orders/:poId', (req, res) => {
       const shop = checkFeature(req, res, 'hasPurchaseOrders');
       if (!shop) return;
       
       try {
         const po = purchaseOrderStore.getPurchaseOrder(shop, req.params.poId);
-        if (!po) return res.status(404).json({ error: 'Commande non trouvée' });
+        if (!po) return res.status(404).json({ error: 'Commande non trouvÃ©e' });
         res.json(po);
       } catch (e) {
         res.status(500).json({ error: e.message });
@@ -254,7 +254,7 @@ module.exports = function(app) {
     });
 
     // Envoyer PO
-    app.post('/api/purchase-orders/:poId/send', (req, res) => {
+    router.post('/api/purchase-orders/:poId/send', (req, res) => {
       const shop = checkFeature(req, res, 'hasPurchaseOrders');
       if (!shop) return;
       
@@ -267,7 +267,7 @@ module.exports = function(app) {
     });
 
     // Confirmer PO
-    app.post('/api/purchase-orders/:poId/confirm', (req, res) => {
+    router.post('/api/purchase-orders/:poId/confirm', (req, res) => {
       const shop = checkFeature(req, res, 'hasPurchaseOrders');
       if (!shop) return;
       
@@ -281,7 +281,7 @@ module.exports = function(app) {
     });
 
     // Recevoir articles
-    app.post('/api/purchase-orders/:poId/receive', (req, res) => {
+    router.post('/api/purchase-orders/:poId/receive', (req, res) => {
       const shop = checkFeature(req, res, 'hasPurchaseOrders');
       if (!shop) return;
       
@@ -295,7 +295,7 @@ module.exports = function(app) {
     });
 
     // Stats PO
-    app.get('/api/purchase-orders/stats/:year', (req, res) => {
+    router.get('/api/purchase-orders/stats/:year', (req, res) => {
       const shop = checkFeature(req, res, 'hasPurchaseOrders');
       if (!shop) return;
       
@@ -309,12 +309,12 @@ module.exports = function(app) {
   }
 
   // ============================================
-  // FORECAST (Prévisions)
+  // FORECAST (PrÃ©visions)
   // ============================================
 
   if (forecastManager) {
-    // Vélocité d'un produit
-    app.get('/api/forecast/velocity/:productId', (req, res) => {
+    // VÃ©locitÃ© d'un produit
+    router.get('/api/forecast/velocity/:productId', (req, res) => {
       const shop = checkFeature(req, res, 'hasForecast');
       if (!shop) return;
       
@@ -329,8 +329,8 @@ module.exports = function(app) {
       }
     });
 
-    // Prédiction rupture
-    app.get('/api/forecast/stockout/:productId', (req, res) => {
+    // PrÃ©diction rupture
+    router.get('/api/forecast/stockout/:productId', (req, res) => {
       const shop = checkFeature(req, res, 'hasForecast');
       if (!shop) return;
       
@@ -346,8 +346,8 @@ module.exports = function(app) {
       }
     });
 
-    // Suggestion réapprovisionnement
-    app.get('/api/forecast/reorder/:productId', (req, res) => {
+    // Suggestion rÃ©approvisionnement
+    router.get('/api/forecast/reorder/:productId', (req, res) => {
       const shop = checkFeature(req, res, 'hasForecast');
       if (!shop) return;
       
@@ -363,7 +363,7 @@ module.exports = function(app) {
     });
 
     // Alertes restock
-    app.post('/api/forecast/alerts', (req, res) => {
+    router.post('/api/forecast/alerts', (req, res) => {
       const shop = checkFeature(req, res, 'hasForecast');
       if (!shop) return;
       
@@ -377,7 +377,7 @@ module.exports = function(app) {
     });
 
     // Rapport complet
-    app.post('/api/forecast/report', (req, res) => {
+    router.post('/api/forecast/report', (req, res) => {
       const shop = checkFeature(req, res, 'hasForecast');
       if (!shop) return;
       
@@ -397,7 +397,7 @@ module.exports = function(app) {
 
   if (kitStore) {
     // Liste des kits
-    app.get('/api/kits', (req, res) => {
+    router.get('/api/kits', (req, res) => {
       const shop = checkFeature(req, res, 'hasKits');
       if (!shop) return;
       
@@ -409,8 +409,8 @@ module.exports = function(app) {
       }
     });
 
-    // Créer kit
-    app.post('/api/kits', (req, res) => {
+    // CrÃ©er kit
+    router.post('/api/kits', (req, res) => {
       const shop = checkFeature(req, res, 'hasKits');
       if (!shop) return;
       
@@ -422,22 +422,22 @@ module.exports = function(app) {
       }
     });
 
-    // Détail kit
-    app.get('/api/kits/:kitId', (req, res) => {
+    // DÃ©tail kit
+    router.get('/api/kits/:kitId', (req, res) => {
       const shop = checkFeature(req, res, 'hasKits');
       if (!shop) return;
       
       try {
         const kit = kitStore.getKit(shop, req.params.kitId);
-        if (!kit) return res.status(404).json({ error: 'Kit non trouvé' });
+        if (!kit) return res.status(404).json({ error: 'Kit non trouvÃ©' });
         res.json(kit);
       } catch (e) {
         res.status(500).json({ error: e.message });
       }
     });
 
-    // Stock kit calculé
-    app.post('/api/kits/:kitId/stock', (req, res) => {
+    // Stock kit calculÃ©
+    router.post('/api/kits/:kitId/stock', (req, res) => {
       const shop = checkFeature(req, res, 'hasKits');
       if (!shop) return;
       
@@ -450,8 +450,8 @@ module.exports = function(app) {
       }
     });
 
-    // Déduire composants
-    app.post('/api/kits/:kitId/deduct', (req, res) => {
+    // DÃ©duire composants
+    router.post('/api/kits/:kitId/deduct', (req, res) => {
       const shop = checkFeature(req, res, 'hasKits');
       if (!shop) return;
       
@@ -465,7 +465,7 @@ module.exports = function(app) {
     });
 
     // Stats kits
-    app.post('/api/kits/stats', (req, res) => {
+    router.post('/api/kits/stats', (req, res) => {
       const shop = checkFeature(req, res, 'hasKits');
       if (!shop) return;
       
@@ -485,7 +485,7 @@ module.exports = function(app) {
 
   if (inventoryCountStore) {
     // Liste des inventaires
-    app.get('/api/inventory-counts', (req, res) => {
+    router.get('/api/inventory-counts', (req, res) => {
       const shop = checkFeature(req, res, 'hasInventoryCount');
       if (!shop) return;
       
@@ -497,8 +497,8 @@ module.exports = function(app) {
       }
     });
 
-    // Créer inventaire
-    app.post('/api/inventory-counts', (req, res) => {
+    // CrÃ©er inventaire
+    router.post('/api/inventory-counts', (req, res) => {
       const shop = checkFeature(req, res, 'hasInventoryCount');
       if (!shop) return;
       
@@ -513,22 +513,22 @@ module.exports = function(app) {
       }
     });
 
-    // Détail inventaire
-    app.get('/api/inventory-counts/:countId', (req, res) => {
+    // DÃ©tail inventaire
+    router.get('/api/inventory-counts/:countId', (req, res) => {
       const shop = checkFeature(req, res, 'hasInventoryCount');
       if (!shop) return;
       
       try {
         const count = inventoryCountStore.getInventoryCount(shop, req.params.countId);
-        if (!count) return res.status(404).json({ error: 'Inventaire non trouvé' });
+        if (!count) return res.status(404).json({ error: 'Inventaire non trouvÃ©' });
         res.json(count);
       } catch (e) {
         res.status(500).json({ error: e.message });
       }
     });
 
-    // Mettre à jour comptage
-    app.put('/api/inventory-counts/:countId/products/:productId', (req, res) => {
+    // Mettre Ã  jour comptage
+    router.put('/api/inventory-counts/:countId/products/:productId', (req, res) => {
       const shop = checkFeature(req, res, 'hasInventoryCount');
       if (!shop) return;
       
@@ -542,7 +542,7 @@ module.exports = function(app) {
     });
 
     // Soumettre pour review
-    app.post('/api/inventory-counts/:countId/submit', (req, res) => {
+    router.post('/api/inventory-counts/:countId/submit', (req, res) => {
       const shop = checkFeature(req, res, 'hasInventoryCount');
       if (!shop) return;
       
@@ -555,13 +555,13 @@ module.exports = function(app) {
     });
 
     // Approuver et ajuster
-    app.post('/api/inventory-counts/:countId/approve', (req, res) => {
+    router.post('/api/inventory-counts/:countId/approve', (req, res) => {
       const shop = checkFeature(req, res, 'hasInventoryCount');
       if (!shop) return;
       
       try {
         const { approvedBy } = req.body;
-        // Note: stockManager doit être passé depuis server.js
+        // Note: stockManager doit Ãªtre passÃ© depuis server.js
         const count = inventoryCountStore.approveAndAdjust(shop, req.params.countId, approvedBy);
         res.json(count);
       } catch (e) {
@@ -569,8 +569,8 @@ module.exports = function(app) {
       }
     });
 
-    // Rapport écarts
-    app.get('/api/inventory-counts/:countId/variance-report', (req, res) => {
+    // Rapport Ã©carts
+    router.get('/api/inventory-counts/:countId/variance-report', (req, res) => {
       const shop = checkFeature(req, res, 'hasInventoryCount');
       if (!shop) return;
       
@@ -583,5 +583,5 @@ module.exports = function(app) {
     });
   }
 
-  console.log('✅ Routes PRO chargées');
+  console.log('âœ… Routes PRO chargÃ©es');
 };
