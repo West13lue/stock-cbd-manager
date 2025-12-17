@@ -1,4 +1,4 @@
-// app.js - Stock Manager Pro - Main Application
+// app.js - Stock Manager Pro - Main Application (FIXED)
 (function() {
   'use strict';
 
@@ -140,6 +140,7 @@
   var state = {
     currentTab: 'dashboard',
     plan: { id: 'free', limits: { maxProducts: 2 } },
+    planLimits: {}, // Stocke toutes les limites du plan (hasAnalytics, hasBatchTracking, etc.)
     products: [],
     loading: false,
     sidebarOpen: true,
@@ -166,7 +167,7 @@
     await loadProducts();
     renderTab('dashboard');
     updatePlanWidget();
-    console.log('[Init] Ready');
+    console.log('[Init] Ready - Plan:', state.plan.id);
   }
 
   function setupNavigation() {
@@ -205,11 +206,38 @@
     var renderers = {
       dashboard: renderDashboard,
       products: renderProducts,
+      batches: function(c) { renderFeatureTab(c, 'hasBatchTracking', 'Lots & DLC', '📦'); },
+      suppliers: function(c) { renderFeatureTab(c, 'hasSuppliers', 'Fournisseurs', '🏭'); },
+      orders: function(c) { renderFeatureTab(c, 'hasPurchaseOrders', 'Bons de commande', '📝'); },
+      forecast: function(c) { renderFeatureTab(c, 'hasForecast', 'Previsions', '🔮'); },
+      kits: function(c) { renderFeatureTab(c, 'hasKits', 'Kits & Bundles', '🧩'); },
+      analytics: function(c) { renderFeatureTab(c, 'hasAnalytics', 'Analytics', '📈'); },
+      inventory: function(c) { renderFeatureTab(c, 'hasInventoryCount', 'Inventaire', '📋'); },
       settings: renderSettings
     };
 
     var renderer = renderers[tab] || renderDashboard;
     if (typeof renderer === 'function') renderer(content);
+  }
+
+  function renderFeatureTab(c, featureKey, title, icon) {
+    if (!hasFeature(featureKey)) {
+      renderLockedFeature(c, featureKey);
+    } else {
+      c.innerHTML = '<div class="page-header"><div><h1 class="page-title">' + icon + ' ' + title + '</h1><p class="page-subtitle">Fonctionnalite disponible</p></div></div>' +
+        '<div class="card"><div class="card-body"><div class="empty-state" style="min-height:250px"><div class="empty-icon">' + icon + '</div><p class="empty-description">Aucun element pour le moment</p></div></div></div>';
+    }
+  }
+
+  function renderLockedFeature(c, featureKey) {
+    var f = FEATURES[featureKey] || { name: 'Feature', plan: 'pro', icon: '🔒' };
+    c.innerHTML = '<div class="page-header"><h1 class="page-title">' + f.icon + ' ' + f.name + '</h1></div>' +
+      '<div class="card" style="min-height:400px;display:flex;align-items:center;justify-content:center">' +
+      '<div class="text-center"><div style="font-size:64px;margin-bottom:16px">🔒</div>' +
+      '<h2>Fonctionnalite ' + f.plan.toUpperCase() + '</h2>' +
+      '<p class="text-secondary mb-lg">Passez au plan ' + f.plan.toUpperCase() + ' pour debloquer cette fonctionnalite.</p>' +
+      '<button class="btn btn-upgrade btn-lg" onclick="app.showUpgradeModal(\'' + f.plan + '\')">Upgrader vers ' + f.plan.toUpperCase() + '</button>' +
+      '<p class="text-secondary text-sm mt-md">A partir de ' + getPlanPrice(f.plan) + ' EUR/mois</p></div></div>';
   }
 
   function renderDashboard(c) {
@@ -228,7 +256,7 @@
   }
 
   function renderProducts(c) {
-    c.innerHTML = '<div class="page-header"><div><h1 class="page-title">Produits</h1><p class="page-subtitle">' + state.products.length + ' produit(s)</p></div><div class="page-actions"><button class="btn btn-secondary" onclick="app.importFromShopify()">Import Shopify</button><button class="btn btn-primary" onclick="app.showAddProductModal()">+ Ajouter</button></div></div>' +
+    c.innerHTML = '<div class="page-header"><div><h1 class="page-title">Produits</h1><p class="page-subtitle">' + state.products.length + ' produit(s)</p></div><div class="page-actions"><button class="btn btn-secondary" onclick="app.showImportModal()">Import Shopify</button><button class="btn btn-primary" onclick="app.showAddProductModal()">+ Ajouter</button></div></div>' +
       '<div class="card"><div class="card-body" style="padding:0">' + (state.products.length > 0 ? renderProductsTable(state.products) : renderEmptyProducts()) + '</div></div>';
   }
 
@@ -249,19 +277,30 @@
   }
 
   function renderEmptyProducts() {
-    return '<div class="empty-state"><div class="empty-icon">📦</div><h3 class="empty-title">Aucun produit</h3><p class="empty-description">Ajoutez votre premier produit pour commencer.</p><button class="btn btn-primary" onclick="app.showAddProductModal()">+ Ajouter</button></div>';
+    return '<div class="empty-state"><div class="empty-icon">📦</div><h3 class="empty-title">Aucun produit</h3><p class="empty-description">Ajoutez votre premier produit ou importez depuis Shopify.</p><button class="btn btn-primary" onclick="app.showAddProductModal()">+ Ajouter</button> <button class="btn btn-secondary" onclick="app.showImportModal()">Import Shopify</button></div>';
   }
 
   function renderSettings(c) {
     var max = state.plan.limits.maxProducts === Infinity ? 'Illimite' : state.plan.limits.maxProducts;
     c.innerHTML = '<div class="page-header"><h1 class="page-title">Parametres</h1></div>' +
-      '<div class="card mb-lg"><div class="card-header"><h3 class="card-title">Mon plan</h3></div><div class="card-body"><div class="flex items-center justify-between"><div><div class="font-bold">' + getPlanName(state.plan.id) + '</div><div class="text-secondary text-sm">' + state.products.length + '/' + max + ' produits</div></div>' + (state.plan.id !== 'enterprise' ? '<button class="btn btn-upgrade" onclick="app.showUpgradeModal()">Upgrade</button>' : '') + '</div></div></div>';
+      '<div class="card mb-lg"><div class="card-header"><h3 class="card-title">Mon plan</h3></div><div class="card-body"><div class="flex items-center justify-between"><div><div class="font-bold">' + getPlanName(state.plan.id) + '</div><div class="text-secondary text-sm">' + state.products.length + '/' + max + ' produits</div></div>' + (state.plan.id !== 'enterprise' ? '<button class="btn btn-upgrade" onclick="app.showUpgradeModal()">Upgrade</button>' : '<span class="badge badge-success">Plan complet</span>') + '</div></div></div>';
   }
 
+  // IMPORTANT: Verifie si une feature est disponible
+  // Utilise SOIT le planLimits du backend, SOIT la hierarchie des plans
   function hasFeature(featureKey) {
+    // Si on a les limites directement du backend, les utiliser
+    if (state.planLimits && state.planLimits[featureKey] !== undefined) {
+      console.log('[Feature] ' + featureKey + ' from backend limits:', state.planLimits[featureKey]);
+      return state.planLimits[featureKey] === true;
+    }
+    
+    // Sinon, utiliser la hierarchie des plans
     var planIdx = PLAN_HIERARCHY.indexOf(state.plan.id);
     var reqIdx = PLAN_HIERARCHY.indexOf((FEATURES[featureKey] || {}).plan || 'free');
-    return planIdx >= reqIdx;
+    var result = planIdx >= reqIdx;
+    console.log('[Feature] ' + featureKey + ' from hierarchy: plan=' + state.plan.id + '(' + planIdx + ') >= ' + ((FEATURES[featureKey] || {}).plan || 'free') + '(' + reqIdx + ') = ' + result);
+    return result;
   }
 
   function showModal(opts) {
@@ -282,6 +321,84 @@
       content: '<div class="form-group"><label class="form-label required">Nom</label><input type="text" class="form-input" id="productName" placeholder="CBD Premium"></div><div class="form-row"><div class="form-group"><label class="form-label">Stock initial</label><div class="input-group"><input type="number" class="form-input" id="productStock" value="0" min="0"><span class="input-suffix">g</span></div></div><div class="form-group"><label class="form-label">Cout</label><div class="input-group"><input type="number" class="form-input" id="productCost" value="0" min="0" step="0.01"><span class="input-suffix">EUR/g</span></div></div></div>',
       footer: '<button class="btn btn-ghost" onclick="app.closeModal()">Annuler</button><button class="btn btn-primary" onclick="app.saveProduct()">Ajouter</button>'
     });
+  }
+
+  function showImportModal() {
+    showModal({
+      title: 'Importer depuis Shopify',
+      content: '<div class="text-center mb-lg"><div style="font-size:48px">🛍️</div></div>' +
+        '<p class="text-secondary mb-lg">Selectionnez les produits Shopify a importer dans votre gestionnaire de stock.</p>' +
+        '<div id="shopifyProductsList"><p class="text-center">Chargement des produits Shopify...</p></div>',
+      footer: '<button class="btn btn-ghost" onclick="app.closeModal()">Annuler</button><button class="btn btn-primary" onclick="app.doImportShopify()" id="btnImport" disabled>Importer</button>'
+    });
+    loadShopifyProducts();
+  }
+
+  async function loadShopifyProducts() {
+    var container = document.getElementById('shopifyProductsList');
+    if (!container) return;
+    
+    try {
+      var res = await authFetch(apiUrl('/shopify/products'));
+      if (!res.ok) throw new Error('Erreur chargement');
+      var data = await res.json();
+      var products = data.products || data || [];
+      
+      if (products.length === 0) {
+        container.innerHTML = '<p class="text-center text-secondary">Aucun produit trouve sur Shopify.</p>';
+        return;
+      }
+      
+      var html = '<div style="max-height:300px;overflow-y:auto">';
+      products.forEach(function(p) {
+        html += '<label style="display:flex;align-items:center;padding:8px;border-bottom:1px solid var(--border-primary);cursor:pointer">' +
+          '<input type="checkbox" class="shopify-product-cb" value="' + p.id + '" data-title="' + escapeHtml(p.title) + '" style="margin-right:12px">' +
+          '<span>' + escapeHtml(p.title) + '</span></label>';
+      });
+      html += '</div>';
+      container.innerHTML = html;
+      
+      var btn = document.getElementById('btnImport');
+      if (btn) btn.disabled = false;
+    } catch (e) {
+      container.innerHTML = '<p class="text-center text-danger">Erreur: ' + e.message + '</p>';
+    }
+  }
+
+  async function doImportShopify() {
+    var checkboxes = document.querySelectorAll('.shopify-product-cb:checked');
+    if (checkboxes.length === 0) {
+      showToast('Selectionnez au moins un produit', 'warning');
+      return;
+    }
+    
+    var btn = document.getElementById('btnImport');
+    if (btn) { btn.disabled = true; btn.textContent = 'Import en cours...'; }
+    
+    var imported = 0;
+    var errors = 0;
+    
+    for (var i = 0; i < checkboxes.length; i++) {
+      var cb = checkboxes[i];
+      try {
+        var res = await authFetch(apiUrl('/import/product'), {
+          method: 'POST',
+          body: JSON.stringify({ productId: cb.value })
+        });
+        if (res.ok) imported++;
+        else errors++;
+      } catch (e) { errors++; }
+    }
+    
+    closeModal();
+    if (imported > 0) {
+      showToast(imported + ' produit(s) importe(s)', 'success');
+      await loadProducts();
+      renderTab(state.currentTab);
+    }
+    if (errors > 0) {
+      showToast(errors + ' erreur(s) lors de l\'import', 'error');
+    }
   }
 
   function showRestockModal(productId) {
@@ -364,9 +481,23 @@
       var res = await authFetch(url);
       if (res.ok) {
         var data = await res.json();
-        state.plan = { id: (data.current || {}).planId || 'free', limits: data.limits || { maxProducts: 2 } };
-        console.log('[Plan] Charge:', state.plan.id);
+        console.log('[Plan] Response:', JSON.stringify(data));
+        
+        // Extraire le planId
+        var planId = 'free';
+        if (data.current && data.current.planId) planId = data.current.planId;
+        else if (data.planId) planId = data.planId;
+        
+        // Extraire les limites
+        var limits = data.limits || { maxProducts: 2 };
+        
+        state.plan = { id: planId, limits: limits };
+        state.planLimits = limits; // Stocker toutes les limites (hasAnalytics, etc.)
+        
+        console.log('[Plan] Loaded: id=' + state.plan.id + ', limits=', state.planLimits);
         updatePlanWidget();
+      } else {
+        console.warn('[Plan] Error response:', res.status);
       }
     } catch (e) { console.warn('[Plan] Load error', e); }
   }
@@ -379,6 +510,7 @@
       if (!res.ok) { state.products = []; return; }
       var data = await res.json().catch(function() { return {}; });
       state.products = Array.isArray(data.products) ? data.products : [];
+      console.log('[Products] Loaded:', state.products.length);
     } catch (e) { console.warn('[Products] Error', e); state.products = []; }
     finally { updatePlanWidget(); }
   }
@@ -446,7 +578,6 @@
   }
 
   function syncShopify() { showToast('Synchronisation...', 'info'); }
-  function importFromShopify() { showToast('Import Shopify en cours...', 'info'); }
 
   async function upgradeTo(planId, interval) {
     interval = interval || 'monthly';
@@ -463,8 +594,9 @@
   function updatePlanWidget() {
     var w = document.getElementById('planWidget');
     if (!w) return;
-    var max = state.plan.limits.maxProducts === Infinity ? 'Illimite' : state.plan.limits.maxProducts;
-    w.innerHTML = '<div class="plan-info"><span class="plan-name">Plan ' + getPlanName(state.plan.id) + '</span><span class="plan-usage">' + state.products.length + '/' + max + ' produits</span></div>' + (state.plan.id !== 'enterprise' ? '<button class="btn btn-upgrade btn-sm" onclick="app.showUpgradeModal()">Upgrade</button>' : '');
+    var max = state.plan.limits.maxProducts;
+    if (max === Infinity || max === 'Illimite' || max > 9999) max = 'Illimite';
+    w.innerHTML = '<div class="plan-info"><span class="plan-name">Plan ' + getPlanName(state.plan.id) + '</span><span class="plan-usage">' + state.products.length + '/' + max + ' produits</span></div>' + (state.plan.id !== 'enterprise' ? '<button class="btn btn-upgrade btn-sm" onclick="app.showUpgradeModal()">Upgrade</button>' : '<span class="badge badge-success" style="font-size:10px">ENTERPRISE</span>');
   }
 
   function getPlanName(id) { return { free: 'Free', starter: 'Starter', pro: 'Pro', business: 'Business', enterprise: 'Enterprise' }[id] || 'Free'; }
@@ -483,8 +615,9 @@
 
   window.app = {
     init: init, navigateTo: navigateTo, toggleSidebar: toggleSidebar, toggleNotifications: toggleNotifications, toggleUserMenu: toggleUserMenu,
-    showModal: showModal, closeModal: closeModal, showAddProductModal: showAddProductModal, showRestockModal: showRestockModal, showAdjustModal: showAdjustModal, showUpgradeModal: showUpgradeModal, showFeatureLockedModal: showFeatureLockedModal,
-    saveProduct: saveProduct, saveRestock: saveRestock, saveAdjustment: saveAdjustment, syncShopify: syncShopify, importFromShopify: importFromShopify, upgradeTo: upgradeTo, showToast: showToast,
+    showModal: showModal, closeModal: closeModal, showAddProductModal: showAddProductModal, showImportModal: showImportModal, doImportShopify: doImportShopify,
+    showRestockModal: showRestockModal, showAdjustModal: showAdjustModal, showUpgradeModal: showUpgradeModal, showFeatureLockedModal: showFeatureLockedModal,
+    saveProduct: saveProduct, saveRestock: saveRestock, saveAdjustment: saveAdjustment, syncShopify: syncShopify, upgradeTo: upgradeTo, showToast: showToast,
     get state() { return state; }
   };
 
