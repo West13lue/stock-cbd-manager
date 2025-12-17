@@ -35,7 +35,7 @@
     console.log("[Shop]", CURRENT_SHOP);
   }
 
-  // ✅ IMPORTANT: API calls should NOT include ?shop=... in an embedded app.
+  // âœ… IMPORTANT: API calls should NOT include ?shop=... in an embedded app.
   // The server should resolve shop from the Session Token (JWT) for security + Shopify review.
   function apiUrl(endpoint) {
     return API_BASE + endpoint;
@@ -90,7 +90,7 @@
     sessionToken = null;
   }
 
-  // ✅ authFetch correctly closed + sends Session Token
+  // âœ… authFetch correctly closed + sends Session Token
   async function authFetch(url, options) {
     options = options || {};
     var token = await getSessionToken();
@@ -113,7 +113,7 @@
       res = await doFetch();
     }
 
-    // 🔐 OAuth AUTO if token missing/revoked
+    // ðŸ” OAuth AUTO if token missing/revoked
     if (res.status === 401) {
       var data = null;
       try {
@@ -178,7 +178,7 @@
     try {
       var token = await getSessionToken();
       if (!token) {
-        console.warn("[OAuth] Aucun session token → redirection");
+        console.warn("[OAuth] Aucun session token â†’ redirection");
         var shop = CURRENT_SHOP;
         if (!shop) throw new Error("Shop manquant");
         var url = "/api/auth/start?shop=" + encodeURIComponent(shop);
@@ -188,7 +188,7 @@
       }
       return true;
     } catch (e) {
-      console.warn("[OAuth] Erreur session → redirection", e);
+      console.warn("[OAuth] Erreur session â†’ redirection", e);
       var shop2 = CURRENT_SHOP;
       if (shop2) {
         var url2 = "/api/auth/start?shop=" + encodeURIComponent(shop2);
@@ -211,11 +211,11 @@
         return;
       }
       document.body.innerHTML =
-        '<div style="padding:40px"><h2>Application Shopify</h2><p>Paramètre shop manquant.</p></div>';
+        '<div style="padding:40px"><h2>Application Shopify</h2><p>ParamÃ¨tre shop manquant.</p></div>';
       return;
     }
 
-    // 2) embedded but host missing → OAuth
+    // 2) embedded but host missing â†’ OAuth
     if (!host && CURRENT_SHOP) {
       window.top.location.href = "/api/auth/start?shop=" + encodeURIComponent(CURRENT_SHOP);
       return;
@@ -224,7 +224,7 @@
     // 3) shop missing
     if (!CURRENT_SHOP) {
       document.body.innerHTML =
-        '<div style="padding:40px"><h2>Application Shopify</h2><p>Paramètre shop manquant.</p></div>';
+        '<div style="padding:40px"><h2>Application Shopify</h2><p>ParamÃ¨tre shop manquant.</p></div>';
       return;
     }
 
@@ -286,25 +286,25 @@
         renderProducts(c);
         break;
       case "batches":
-        renderFeature(c, "hasBatchTracking", "Lots & DLC", "📦");
+        renderFeature(c, "hasBatchTracking", "Lots & DLC", "ðŸ“¦");
         break;
       case "suppliers":
-        renderFeature(c, "hasSuppliers", "Fournisseurs", "🏭");
+        renderFeature(c, "hasSuppliers", "Fournisseurs", "ðŸ­");
         break;
       case "orders":
-        renderFeature(c, "hasPurchaseOrders", "Commandes", "📝");
+        renderFeature(c, "hasPurchaseOrders", "Commandes", "ðŸ“");
         break;
       case "forecast":
-        renderFeature(c, "hasForecast", "Previsions", "🔮");
+        renderFeature(c, "hasForecast", "Previsions", "ðŸ”®");
         break;
       case "kits":
-        renderFeature(c, "hasKits", "Kits", "🧩");
+        renderFeature(c, "hasKits", "Kits", "ðŸ§©");
         break;
       case "analytics":
-        renderFeature(c, "hasAnalytics", "Analytics", "📈");
+        renderFeature(c, "hasAnalytics", "Analytics", "ðŸ“ˆ");
         break;
       case "inventory":
-        renderFeature(c, "hasInventoryCount", "Inventaire", "📋");
+        renderFeature(c, "hasInventoryCount", "Inventaire", "ðŸ“‹");
         break;
       case "settings":
         renderSettings(c);
@@ -323,7 +323,7 @@
         title +
         "</h1></div>" +
         '<div class="card" style="min-height:400px;display:flex;align-items:center;justify-content:center"><div class="text-center">' +
-        '<div style="font-size:64px">🔒</div><h2>Fonctionnalite verrouillee</h2>' +
+        '<div style="font-size:64px">ðŸ”’</div><h2>Fonctionnalite verrouillee</h2>' +
         '<p class="text-secondary">Passez a un plan superieur pour debloquer.</p>' +
         '<button class="btn btn-upgrade mt-lg" onclick="app.showUpgradeModal()">Upgrader</button></div></div>';
     } else {
@@ -356,16 +356,16 @@
       '<div class="page-actions"><button class="btn btn-secondary" onclick="app.syncShopify()">Sync</button>' +
       '<button class="btn btn-primary" onclick="app.showAddProductModal()">+ Produit</button></div></div>' +
       '<div class="stats-grid">' +
-      '<div class="stat-card"><div class="stat-icon">📦</div><div class="stat-value">' +
+      '<div class="stat-card"><div class="stat-icon">ðŸ“¦</div><div class="stat-value">' +
       state.products.length +
       '</div><div class="stat-label">Produits</div></div>' +
-      '<div class="stat-card"><div class="stat-icon">⚖️</div><div class="stat-value">' +
+      '<div class="stat-card"><div class="stat-icon">âš–ï¸</div><div class="stat-value">' +
       formatWeight(totalStock) +
       '</div><div class="stat-label">Stock total</div></div>' +
-      '<div class="stat-card"><div class="stat-icon">💰</div><div class="stat-value">' +
+      '<div class="stat-card"><div class="stat-icon">ðŸ’°</div><div class="stat-value">' +
       formatCurrency(totalValue) +
       '</div><div class="stat-label">Valeur</div></div>' +
-      '<div class="stat-card"><div class="stat-icon">⚠️</div><div class="stat-value">' +
+      '<div class="stat-card"><div class="stat-icon">âš ï¸</div><div class="stat-value">' +
       lowStock +
       '</div><div class="stat-label">Stock bas</div></div>' +
       "</div>" +
@@ -395,7 +395,8 @@
           cost = p.averageCostPerGram || 0;
         var st = getStatus(s);
         return (
-          "<tr><td>" +
+          '<tr class="product-row" data-product-id="' + esc(p.productId) + '" onclick="app.openProductDetails(\'' + esc(p.productId) + '\')" style="cursor:pointer">' +
+          "<td>" +
           esc(p.name || p.title || "Sans nom") +
           "</td>" +
           "<td>" +
@@ -413,12 +414,16 @@
           " " +
           st.l +
           "</span></td>" +
-          '<td><button class="btn btn-ghost btn-xs" onclick="app.showRestockModal(\'' +
+          '<td class="cell-actions" onclick="event.stopPropagation()">' +
+          '<button class="btn btn-ghost btn-xs" onclick="app.showRestockModal(\'' +
           p.productId +
           "')\">+</button>" +
           '<button class="btn btn-ghost btn-xs" onclick="app.showAdjustModal(\'' +
           p.productId +
-          "')\">Edit</button></td></tr>"
+          "')\">Edit</button>" +
+          '<button class="btn btn-ghost btn-xs" onclick="app.openProductDetails(\'' +
+          p.productId +
+          "')\">👁</button></td></tr>"
         );
       })
       .join("");
@@ -431,7 +436,7 @@
 
   function renderEmpty() {
     return (
-      '<div class="empty-state"><div class="empty-icon">📦</div><h3>Aucun produit</h3>' +
+      '<div class="empty-state"><div class="empty-icon">ðŸ“¦</div><h3>Aucun produit</h3>' +
       '<p class="text-secondary">Ajoutez ou importez des produits.</p>' +
       '<button class="btn btn-primary" onclick="app.showAddProductModal()">+ Ajouter</button> ' +
       '<button class="btn btn-secondary" onclick="app.showImportModal()">Import Shopify</button></div>'
@@ -636,7 +641,7 @@
     ];
     var cards = plans
       .map(function (p) {
-        var fl = p.feats.map(function (f) { return "<li>✓ " + f + "</li>"; }).join("");
+        var fl = p.feats.map(function (f) { return "<li>âœ“ " + f + "</li>"; }).join("");
         var isCurrent = state.planId === p.id;
         return (
           '<div class="card" style="' + (p.badge ? "border:2px solid var(--accent-primary)" : "") + '">' +
@@ -663,7 +668,7 @@
     showModal({
       title: "Fonctionnalite verrouillee",
       content:
-        '<div class="text-center"><div style="font-size:64px">🔒</div><p class="text-secondary mt-lg">Passez a un plan superieur pour debloquer cette fonctionnalite.</p></div>',
+        '<div class="text-center"><div style="font-size:64px">ðŸ”’</div><p class="text-secondary mt-lg">Passez a un plan superieur pour debloquer cette fonctionnalite.</p></div>',
       footer:
         '<button class="btn btn-ghost" onclick="app.closeModal()">Fermer</button><button class="btn btn-upgrade" onclick="app.showUpgradeModal()">Upgrader</button>',
     });
@@ -676,7 +681,7 @@
     t.className = "toast " + (type || "info");
     t.innerHTML =
       '<span class="toast-icon">' +
-      ({ success: "✓", error: "X", warning: "!", info: "i" }[type] || "i") +
+      ({ success: "âœ“", error: "X", warning: "!", info: "i" }[type] || "i") +
       '</span><div class="toast-message">' +
       esc(msg) +
       '</div><button class="toast-close" onclick="this.parentElement.remove()">X</button>';
@@ -840,7 +845,7 @@
     var w = document.getElementById("planWidget");
     if (w) {
       var max = state.limits.maxProducts;
-      max = max === Infinity || max > 9999 ? "∞" : max;
+      max = max === Infinity || max > 9999 ? "âˆž" : max;
       w.innerHTML =
         '<div class="plan-info"><span class="plan-name">' +
         state.planName +
@@ -851,7 +856,7 @@
         "</span></div>" +
         (state.planId !== "enterprise"
           ? '<button class="btn btn-upgrade btn-sm" onclick="app.showUpgradeModal()">Upgrade</button>'
-          : '<span style="color:var(--success);font-size:11px">ENTERPRISE ✓</span>');
+          : '<span style="color:var(--success);font-size:11px">ENTERPRISE âœ“</span>');
     }
   }
 
@@ -862,10 +867,10 @@
     return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(v);
   }
   function getStatus(g) {
-    if (g <= 0) return { c: "critical", l: "Rupture", i: "⛔" };
-    if (g < 50) return { c: "critical", l: "Critique", i: "🔴" };
-    if (g < 200) return { c: "low", l: "Bas", i: "🟡" };
-    return { c: "good", l: "OK", i: "🟢" };
+    if (g <= 0) return { c: "critical", l: "Rupture", i: "â›”" };
+    if (g < 50) return { c: "critical", l: "Critique", i: "ðŸ”´" };
+    if (g < 200) return { c: "low", l: "Bas", i: "ðŸŸ¡" };
+    return { c: "good", l: "OK", i: "ðŸŸ¢" };
   }
   function esc(s) {
     if (!s) return "";
@@ -878,6 +883,192 @@
   }
   function toggleUserMenu() {
     showToast("Bientot", "info");
+  }
+
+  // ============================================
+  // ✅ FICHE DÉTAIL PRODUIT
+  // ============================================
+  async function openProductDetails(productId) {
+    if (!productId) return;
+
+    // Afficher loading
+    showModal({
+      title: "Chargement...",
+      size: "xl",
+      content: '<div class="text-center" style="padding:40px"><div class="spinner"></div></div>',
+    });
+
+    try {
+      var res = await authFetch(apiUrl("/products/" + encodeURIComponent(productId)));
+      if (!res.ok) {
+        var err = await res.json().catch(function() { return {}; });
+        showToast(err.error || "Erreur chargement", "error");
+        closeModal();
+        return;
+      }
+      var data = await res.json();
+      renderProductDetails(data);
+    } catch (e) {
+      showToast("Erreur: " + e.message, "error");
+      closeModal();
+    }
+  }
+
+  function renderProductDetails(data) {
+    var p = data.product;
+    var variants = data.variantStats || [];
+    var summary = data.summary || {};
+
+    // Status badge
+    var statusClass = p.stockStatus || "good";
+    var statusLabel = p.stockLabel || "OK";
+    var statusIcon = statusClass === "critical" ? "🔴" : statusClass === "low" ? "🟡" : "🟢";
+
+    // Categories chips
+    var categoriesHtml = "";
+    if (p.categories && p.categories.length) {
+      categoriesHtml = p.categories.map(function(c) {
+        return '<span class="tag">' + esc(c.name) + '</span>';
+      }).join(" ");
+    } else {
+      categoriesHtml = '<span class="text-secondary text-sm">Aucune catégorie</span>';
+    }
+
+    // Variants table
+    var variantsRows = variants.map(function(v, i) {
+      var barWidth = Math.min(100, Math.max(5, v.shareByUnits || 0));
+      return (
+        '<tr>' +
+        '<td class="cell-primary">' + v.gramsPerUnit + 'g</td>' +
+        '<td class="cell-mono">' + (v.inventoryItemId || '-') + '</td>' +
+        '<td style="font-weight:600">' + v.canSell + ' unités</td>' +
+        '<td>' + formatWeight(v.gramsEquivalent) + '</td>' +
+        '<td style="width:150px">' +
+        '<div class="variant-bar-container">' +
+        '<div class="variant-bar" style="width:' + barWidth + '%"></div>' +
+        '<span class="variant-bar-label">' + v.shareByUnits.toFixed(1) + '%</span>' +
+        '</div>' +
+        '</td>' +
+        '</tr>'
+      );
+    }).join("");
+
+    // Chart data (simple bar chart via CSS)
+    var chartBars = variants.map(function(v, i) {
+      var maxCanSell = Math.max.apply(null, variants.map(function(x) { return x.canSell; })) || 1;
+      var heightPercent = Math.round((v.canSell / maxCanSell) * 100);
+      var colors = ['#6366f1', '#8b5cf6', '#06b6d4', '#10b981', '#f59e0b', '#ef4444'];
+      var color = colors[i % colors.length];
+      return (
+        '<div class="chart-bar-wrapper">' +
+        '<div class="chart-bar" style="height:' + heightPercent + '%;background:' + color + '"></div>' +
+        '<div class="chart-bar-label">' + v.gramsPerUnit + 'g</div>' +
+        '<div class="chart-bar-value">' + v.canSell + '</div>' +
+        '</div>'
+      );
+    }).join("");
+
+    var content = 
+      // Header KPIs
+      '<div class="product-detail-header">' +
+      '<div class="product-detail-title">' +
+      '<h2>' + esc(p.name) + '</h2>' +
+      '<span class="stock-badge ' + statusClass + '">' + statusIcon + ' ' + statusLabel + '</span>' +
+      '</div>' +
+      '<div class="product-detail-categories">' + categoriesHtml + '</div>' +
+      '</div>' +
+
+      // Stats grid
+      '<div class="product-detail-stats">' +
+      '<div class="detail-stat"><div class="detail-stat-value">' + formatWeight(p.totalGrams) + '</div><div class="detail-stat-label">Stock total</div></div>' +
+      '<div class="detail-stat"><div class="detail-stat-value">' + formatCurrency(p.averageCostPerGram) + '/g</div><div class="detail-stat-label">Coût moyen (CMP)</div></div>' +
+      '<div class="detail-stat"><div class="detail-stat-value">' + formatCurrency(p.stockValue) + '</div><div class="detail-stat-label">Valeur stock</div></div>' +
+      '<div class="detail-stat"><div class="detail-stat-value">' + summary.variantCount + '</div><div class="detail-stat-label">Variantes</div></div>' +
+      '</div>' +
+
+      // Actions rapides
+      '<div class="product-detail-actions">' +
+      '<button class="btn btn-primary btn-sm" onclick="app.closeModal();app.showRestockModal(\'' + p.productId + '\')">📦 Réappro</button>' +
+      '<button class="btn btn-secondary btn-sm" onclick="app.closeModal();app.showAdjustModal(\'' + p.productId + '\')">✏️ Ajuster</button>' +
+      '<button class="btn btn-ghost btn-sm" onclick="app.showEditCMPModal(\'' + p.productId + '\',' + p.averageCostPerGram + ')">💰 Modifier CMP</button>' +
+      '</div>' +
+
+      // Graphique capacité de vente
+      '<div class="product-detail-section">' +
+      '<h3 class="section-title">📊 Capacité de vente par variante</h3>' +
+      '<p class="text-secondary text-sm mb-md">Nombre d\'unités vendables si le stock était vendu uniquement via cette variante</p>' +
+      '<div class="chart-container">' +
+      '<div class="simple-bar-chart">' + chartBars + '</div>' +
+      '</div>' +
+      '</div>' +
+
+      // Tableau variantes
+      '<div class="product-detail-section">' +
+      '<h3 class="section-title">📦 Détail des variantes</h3>' +
+      '<div class="table-container">' +
+      '<table class="data-table data-table-compact">' +
+      '<thead><tr><th>Grammage</th><th>Inventory ID</th><th>Unités dispo</th><th>Équivalent stock</th><th>Répartition</th></tr></thead>' +
+      '<tbody>' + variantsRows + '</tbody>' +
+      '</table>' +
+      '</div>' +
+      '</div>' +
+
+      // Info pool global
+      '<div class="product-detail-info">' +
+      '<div class="info-icon">ℹ️</div>' +
+      '<div class="info-text">' +
+      '<strong>Mode Pool Global</strong><br>' +
+      '<span class="text-secondary">Le stock est partagé entre toutes les variantes. Les "unités dispo" représentent la capacité maximale de vente pour chaque grammage.</span>' +
+      '</div>' +
+      '</div>';
+
+    showModal({
+      title: "Fiche produit",
+      size: "xl",
+      content: content,
+      footer: '<button class="btn btn-ghost" onclick="app.closeModal()">Fermer</button>',
+    });
+  }
+
+  function showEditCMPModal(productId, currentCMP) {
+    closeModal();
+    showModal({
+      title: "Modifier le coût moyen (CMP)",
+      content:
+        '<p class="text-secondary mb-md">Le CMP actuel est de <strong>' + formatCurrency(currentCMP) + '/g</strong>.</p>' +
+        '<div class="form-group"><label class="form-label">Nouveau CMP (€/g)</label>' +
+        '<input type="number" class="form-input" id="newCMP" value="' + currentCMP + '" step="0.01" min="0"></div>' +
+        '<p class="form-hint">⚠️ La modification manuelle du CMP écrase le calcul automatique.</p>',
+      footer:
+        '<button class="btn btn-ghost" onclick="app.closeModal()">Annuler</button>' +
+        '<button class="btn btn-primary" onclick="app.saveCMP(\'' + productId + '\')">Enregistrer</button>',
+    });
+  }
+
+  async function saveCMP(productId) {
+    var input = document.getElementById("newCMP");
+    var newCMP = parseFloat(input ? input.value : 0);
+    if (!Number.isFinite(newCMP) || newCMP < 0) {
+      showToast("Valeur invalide", "error");
+      return;
+    }
+    try {
+      var res = await authFetch(apiUrl("/products/" + encodeURIComponent(productId) + "/average-cost"), {
+        method: "PATCH",
+        body: JSON.stringify({ averageCostPerGram: newCMP }),
+      });
+      if (res.ok) {
+        showToast("CMP mis à jour", "success");
+        closeModal();
+        await loadProducts();
+        renderTab(state.currentTab);
+      } else {
+        var e = await res.json();
+        showToast(e.error || "Erreur", "error");
+      }
+    } catch (e) {
+      showToast("Erreur: " + e.message, "error");
+    }
   }
 
   window.app = {
@@ -902,6 +1093,9 @@
     upgradeTo: upgradeTo,
     showToast: showToast,
     hasFeature: hasFeature,
+    openProductDetails: openProductDetails,
+    showEditCMPModal: showEditCMPModal,
+    saveCMP: saveCMP,
     get state() {
       return state;
     },
