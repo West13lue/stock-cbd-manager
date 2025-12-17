@@ -52,14 +52,34 @@
 
     var doFetch = function() { return fetch(url, Object.assign({}, options, { headers: headers })); };
     var res = await doFetch();
-    if (res.status === 401 && token) {
-      clearSessionToken();
-      var t2 = await getSessionToken();
-      if (t2) headers['Authorization'] = 'Bearer ' + t2;
-      res = await doFetch();
-    }
-    return res;
+  if (res.status === 401 && token) {
+    clearSessionToken();
+    var t2 = await getSessionToken();
+    if (t2) headers['Authorization'] = 'Bearer ' + t2;
+    res = await doFetch();
   }
+
+  // 🔐 OAuth AUTO si token manquant / révoqué
+  if (res.status === 401) {
+    var data = null;
+    try {
+      data = await res.clone().json();
+    } catch (e) {}
+
+    if (data && data.error === 'reauth_required' && data.reauthUrl) {
+      console.warn('[OAuth] Redirection automatique:', data.reauthUrl);
+
+      if (window.top) {
+        window.top.location.href = data.reauthUrl;
+      } else {
+        window.location.href = data.reauthUrl;
+      }
+
+      throw new Error('OAuth redirect');
+    }
+  }
+
+  return res;
 
   function getShopFromUrl() {
     var urlParams = new URLSearchParams(window.location.search);
@@ -128,14 +148,51 @@
   // ==========================================
   // INIT
   // ==========================================
+
+async function ensureSessionOrRedirect() {
+  try {
+    var token = await getSessionToken();
+
+    if (!token) {
+      console.warn('[OAuth] Aucun session token → redirection');
+
+      var shop = CURRENT_SHOP;
+      if (!shop) throw new Error('Shop manquant');
+
+      var url = '/api/auth/start?shop=' + encodeURIComponent(shop);
+
+      if (window.top) window.top.location.href = url;
+      else window.location.href = url;
+
+      return false;
+    }
+
+    return true;
+  } catch (e) {
+    console.warn('[OAuth] Erreur session → redirection', e);
+
+    var shop2 = CURRENT_SHOP;
+    if (shop2) {
+      var url2 = '/api/auth/start?shop=' + encodeURIComponent(shop2);
+      if (window.top) window.top.location.href = url2;
+      else window.location.href = url2;
+    }
+
+    return false;
+  }
+}
+
   async function init() {
     console.log('[Init] Stock Manager Pro');
     if (!CURRENT_SHOP || window.top === window.self) {
       document.body.innerHTML = '<div style="padding:40px"><h2>Application Shopify</h2><p>Ouvrez depuis l\'admin Shopify.</p></div>';
       return;
     }
-    var ready = await initAppBridge();
-    if (!ready) { console.warn('[Init] AppBridge fail'); return; }
+var ready = await initAppBridge();
+if (!ready) { console.warn('[Init] AppBridge fail'); return; }
+
+var okSession = await ensureSessionOrRedirect();
+if (!okSession) return;
 
     setupNavigation();
     await loadPlanInfo();

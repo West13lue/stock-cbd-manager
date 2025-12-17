@@ -347,13 +347,13 @@ function safeJson(req, res, fn) {
       } catch {}
 
       const reauthUrl = `/api/auth/start?shop=${encodeURIComponent(resolvedShop)}`;
-      return res.status(401).json({
-        error: "reauth_required",
-        message: "RÃ©auth Shopify requise (token rÃ©voquÃ© ou manquant).",
-        shop: resolvedShop,
-        reauthUrl,
-      });
-    }
+return res.status(401).json({
+  error: "reauth_required",
+  message: "Shopify authentication required",
+  shop: req.resolvedShop || getShop(req),
+  reauthUrl: `/api/auth/start?shop=${encodeURIComponent(req.resolvedShop || getShop(req))}`,
+});
+
 
     return res.status(401).json({
       error: "reauth_required",
