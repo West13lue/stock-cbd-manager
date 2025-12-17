@@ -486,24 +486,262 @@
     );
   }
 
+  // ============================================
+  // PARAMETRES COMPLETS
+  // ============================================
+  var settingsData = null;
+  var settingsOptions = null;
+
   function renderSettings(c) {
-    var max = state.limits.maxProducts;
-    max = max === Infinity || max > 9999 ? "Illimite" : max;
     c.innerHTML =
       '<div class="page-header"><h1 class="page-title">Parametres</h1></div>' +
-      '<div class="card"><div class="card-header"><h3>Mon plan</h3></div><div class="card-body">' +
-      '<div style="display:flex;justify-content:space-between;align-items:center">' +
-      "<div><strong>" +
-      state.planName +
-      "</strong><br><span class=\"text-secondary\">" +
-      state.products.length +
-      "/" +
-      max +
-      " produits</span></div>" +
-      (state.planId !== "enterprise"
-        ? '<button class="btn btn-upgrade" onclick="app.showUpgradeModal()">Upgrader</button>'
-        : '<span class="badge badge-success">ENTERPRISE</span>') +
-      "</div></div></div>";
+      '<div id="settingsContent"><div class="text-center" style="padding:40px"><div class="spinner"></div></div></div>';
+    
+    loadSettingsData();
+  }
+
+  async function loadSettingsData() {
+    try {
+      var res = await authFetch(apiUrl("/settings"));
+      if (!res.ok) {
+        document.getElementById("settingsContent").innerHTML = '<div class="card"><div class="card-body"><p class="text-danger">Erreur chargement parametres</p></div></div>';
+        return;
+      }
+      var data = await res.json();
+      settingsData = data.settings || {};
+      settingsOptions = data.options || {};
+      renderSettingsContent();
+    } catch (e) {
+      document.getElementById("settingsContent").innerHTML = '<div class="card"><div class="card-body"><p class="text-danger">Erreur: ' + e.message + '</p></div></div>';
+    }
+  }
+
+  function renderSettingsContent() {
+    if (!settingsData) return;
+    var s = settingsData;
+    var o = settingsOptions || {};
+
+    // Section Plan
+    var max = state.limits.maxProducts;
+    max = max === Infinity || max > 9999 ? "Illimite" : max;
+    var trialInfo = "";
+    if (state.trial && state.trial.active) {
+      trialInfo = '<div class="setting-trial-info"><span class="badge badge-warning">ESSAI</span> ' + state.trial.daysLeft + ' jours restants</div>';
+    }
+
+    var planSection = 
+      '<div class="settings-section">' +
+      '<div class="settings-section-header"><h3>Mon abonnement</h3></div>' +
+      '<div class="settings-section-body">' +
+      '<div class="setting-plan-card">' +
+      '<div class="plan-current"><div class="plan-name-big">' + state.planName + '</div>' + trialInfo +
+      '<div class="plan-usage">' + state.products.length + ' / ' + max + ' produits</div></div>' +
+      (state.planId !== "enterprise" ? '<button class="btn btn-upgrade" onclick="app.showUpgradeModal()">Changer de plan</button>' : '<span class="badge badge-success">ENTERPRISE</span>') +
+      '</div></div></div>';
+
+    // Section Langue & Region
+    var langOptions = (o.languages || []).map(function(l) {
+      var sel = (s.general && s.general.language === l.value) ? ' selected' : '';
+      return '<option value="' + l.value + '"' + sel + '>' + l.label + '</option>';
+    }).join('');
+
+    var tzOptions = (o.timezones || []).map(function(t) {
+      var sel = (s.general && s.general.timezone === t.value) ? ' selected' : '';
+      return '<option value="' + t.value + '"' + sel + '>' + t.label + '</option>';
+    }).join('');
+
+    var dateOptions = (o.dateFormats || []).map(function(d) {
+      var sel = (s.general && s.general.dateFormat === d.value) ? ' selected' : '';
+      return '<option value="' + d.value + '"' + sel + '>' + d.label + '</option>';
+    }).join('');
+
+    var langSection = 
+      '<div class="settings-section">' +
+      '<div class="settings-section-header"><h3>Langue & Region</h3><p class="text-secondary">Personnalisez l\'affichage selon votre pays</p></div>' +
+      '<div class="settings-section-body">' +
+      '<div class="setting-row"><label class="setting-label">Langue de l\'application</label>' +
+      '<select class="form-select setting-input" onchange="app.updateSetting(\'general\',\'language\',this.value)">' + langOptions + '</select></div>' +
+      '<div class="setting-row"><label class="setting-label">Fuseau horaire</label>' +
+      '<select class="form-select setting-input" onchange="app.updateSetting(\'general\',\'timezone\',this.value)">' + tzOptions + '</select></div>' +
+      '<div class="setting-row"><label class="setting-label">Format de date</label>' +
+      '<select class="form-select setting-input" onchange="app.updateSetting(\'general\',\'dateFormat\',this.value)">' + dateOptions + '</select></div>' +
+      '<div class="setting-row"><label class="setting-label">Format horaire</label>' +
+      '<div class="setting-toggle-group">' +
+      '<button class="btn btn-sm ' + (s.general && s.general.timeFormat === '24h' ? 'btn-primary' : 'btn-ghost') + '" onclick="app.updateSetting(\'general\',\'timeFormat\',\'24h\')">24h</button>' +
+      '<button class="btn btn-sm ' + (s.general && s.general.timeFormat === '12h' ? 'btn-primary' : 'btn-ghost') + '" onclick="app.updateSetting(\'general\',\'timeFormat\',\'12h\')">12h</button>' +
+      '</div></div></div></div>';
+
+    // Section Devise & Unites
+    var currOptions = (o.currencies || []).map(function(c) {
+      var sel = (s.currency && s.currency.code === c.value) ? ' selected' : '';
+      return '<option value="' + c.value + '"' + sel + '>' + c.symbol + ' ' + c.label + '</option>';
+    }).join('');
+
+    var weightOptions = (o.weightUnits || []).map(function(w) {
+      var sel = (s.units && s.units.weightUnit === w.value) ? ' selected' : '';
+      return '<option value="' + w.value + '"' + sel + '>' + w.label + '</option>';
+    }).join('');
+
+    var currencySection = 
+      '<div class="settings-section">' +
+      '<div class="settings-section-header"><h3>Devise & Unites</h3><p class="text-secondary">Configurez vos preferences monetaires</p></div>' +
+      '<div class="settings-section-body">' +
+      '<div class="setting-row"><label class="setting-label">Devise principale</label>' +
+      '<select class="form-select setting-input" onchange="app.updateSetting(\'currency\',\'code\',this.value)">' + currOptions + '</select></div>' +
+      '<div class="setting-row"><label class="setting-label">Position du symbole</label>' +
+      '<div class="setting-toggle-group">' +
+      '<button class="btn btn-sm ' + (s.currency && s.currency.position === 'before' ? 'btn-primary' : 'btn-ghost') + '" onclick="app.updateSetting(\'currency\',\'position\',\'before\')">$100</button>' +
+      '<button class="btn btn-sm ' + (s.currency && s.currency.position === 'after' ? 'btn-primary' : 'btn-ghost') + '" onclick="app.updateSetting(\'currency\',\'position\',\'after\')">100$</button>' +
+      '</div></div>' +
+      '<div class="setting-row"><label class="setting-label">Unite de poids</label>' +
+      '<select class="form-select setting-input" onchange="app.updateSetting(\'units\',\'weightUnit\',this.value)">' + weightOptions + '</select></div>' +
+      '</div></div>';
+
+    // Section Stock
+    var stockSection = 
+      '<div class="settings-section">' +
+      '<div class="settings-section-header"><h3>Gestion du stock</h3><p class="text-secondary">Regles de calcul et alertes</p></div>' +
+      '<div class="settings-section-body">' +
+      '<div class="setting-row"><label class="setting-label">Seuil stock bas (g)</label>' +
+      '<input type="number" class="form-input setting-input" value="' + ((s.stock && s.stock.lowStockThreshold) || 10) + '" onchange="app.updateSetting(\'stock\',\'lowStockThreshold\',parseInt(this.value))"></div>' +
+      '<div class="setting-row"><label class="setting-label">Alertes stock bas</label>' +
+      '<label class="toggle"><input type="checkbox" ' + (s.stock && s.stock.lowStockEnabled ? 'checked' : '') + ' onchange="app.updateSetting(\'stock\',\'lowStockEnabled\',this.checked)"><span class="toggle-slider"></span></label></div>' +
+      '<div class="setting-row"><label class="setting-label">Methode de valorisation</label>' +
+      '<select class="form-select setting-input" onchange="app.updateSetting(\'stock\',\'costMethod\',this.value)">' +
+      '<option value="cmp"' + (s.stock && s.stock.costMethod === 'cmp' ? ' selected' : '') + '>CMP (Cout Moyen Pondere)</option>' +
+      '<option value="fifo"' + (s.stock && s.stock.costMethod === 'fifo' ? ' selected' : '') + '>FIFO (Premier Entre, Premier Sorti)</option>' +
+      '</select></div>' +
+      '<div class="setting-row"><label class="setting-label">Figer le CMP</label>' +
+      '<label class="toggle"><input type="checkbox" ' + (s.stock && s.stock.freezeCMP ? 'checked' : '') + ' onchange="app.updateSetting(\'stock\',\'freezeCMP\',this.checked)"><span class="toggle-slider"></span></label></div>' +
+      '<div class="setting-row"><label class="setting-label">Autoriser stock negatif</label>' +
+      '<label class="toggle"><input type="checkbox" ' + (s.units && !s.units.neverNegative ? 'checked' : '') + ' onchange="app.updateSetting(\'units\',\'neverNegative\',!this.checked)"><span class="toggle-slider"></span></label></div>' +
+      '</div></div>';
+
+    // Section Notifications (PRO)
+    var notifSection = '';
+    if (hasFeature('hasNotifications')) {
+      notifSection = 
+        '<div class="settings-section">' +
+        '<div class="settings-section-header"><h3>Notifications</h3><span class="badge badge-pro">PRO</span><p class="text-secondary">Configurez vos alertes</p></div>' +
+        '<div class="settings-section-body">' +
+        '<div class="setting-row"><label class="setting-label">Notifications activees</label>' +
+        '<label class="toggle"><input type="checkbox" ' + (s.notifications && s.notifications.enabled ? 'checked' : '') + ' onchange="app.updateSetting(\'notifications\',\'enabled\',this.checked)"><span class="toggle-slider"></span></label></div>' +
+        '<div class="setting-row"><label class="setting-label">Alerte stock bas</label>' +
+        '<label class="toggle"><input type="checkbox" ' + (s.notifications && s.notifications.triggers && s.notifications.triggers.lowStock ? 'checked' : '') + ' onchange="app.updateNestedSetting(\'notifications\',\'triggers\',\'lowStock\',this.checked)"><span class="toggle-slider"></span></label></div>' +
+        '</div></div>';
+    } else {
+      notifSection = 
+        '<div class="settings-section settings-locked">' +
+        '<div class="settings-section-header"><h3>Notifications</h3><span class="badge badge-pro">PRO</span></div>' +
+        '<div class="settings-section-body">' +
+        '<div class="locked-overlay"><p>Passez au plan Pro pour configurer les notifications.</p>' +
+        '<button class="btn btn-upgrade btn-sm" onclick="app.showUpgradeModal()">Passer a Pro</button></div>' +
+        '</div></div>';
+    }
+
+    // Section Avancee (BUSINESS)
+    var advSection = '';
+    if (hasFeature('hasAutomations')) {
+      advSection = 
+        '<div class="settings-section">' +
+        '<div class="settings-section-header"><h3>Parametres avances</h3><span class="badge badge-business">BIZ</span></div>' +
+        '<div class="settings-section-body">' +
+        '<div class="setting-row"><label class="setting-label">Freebies par commande (g)</label>' +
+        '<input type="number" class="form-input setting-input" value="' + ((s.freebies && s.freebies.deductionPerOrder) || 0) + '" onchange="app.updateSetting(\'freebies\',\'deductionPerOrder\',parseFloat(this.value))"></div>' +
+        '<div class="setting-row"><label class="setting-label">Freebies actives</label>' +
+        '<label class="toggle"><input type="checkbox" ' + (s.freebies && s.freebies.enabled ? 'checked' : '') + ' onchange="app.updateSetting(\'freebies\',\'enabled\',this.checked)"><span class="toggle-slider"></span></label></div>' +
+        '</div></div>';
+    }
+
+    // Section Donnees
+    var dataSection = 
+      '<div class="settings-section">' +
+      '<div class="settings-section-header"><h3>Donnees & Securite</h3></div>' +
+      '<div class="settings-section-body">' +
+      '<div class="setting-row"><label class="setting-label">Mode lecture seule</label>' +
+      '<label class="toggle"><input type="checkbox" ' + (s.security && s.security.readOnlyMode ? 'checked' : '') + ' onchange="app.updateSetting(\'security\',\'readOnlyMode\',this.checked)"><span class="toggle-slider"></span></label></div>' +
+      '<div class="setting-row"><label class="setting-label">Exporter les donnees</label>' +
+      '<button class="btn btn-secondary btn-sm" onclick="app.exportSettings()">Telecharger backup</button></div>' +
+      '<div class="setting-row"><label class="setting-label">Reinitialiser les parametres</label>' +
+      '<button class="btn btn-ghost btn-sm text-danger" onclick="app.resetAllSettings()">Reinitialiser</button></div>' +
+      '</div></div>';
+
+    document.getElementById("settingsContent").innerHTML = 
+      planSection + langSection + currencySection + stockSection + notifSection + advSection + dataSection;
+  }
+
+  async function updateSetting(section, key, value) {
+    try {
+      var body = {};
+      body[key] = value;
+      var res = await authFetch(apiUrl("/settings/" + section), {
+        method: "PUT",
+        body: JSON.stringify(body),
+      });
+      if (res.ok) {
+        showToast("Parametre enregistre", "success");
+        // Mettre a jour le cache local
+        if (!settingsData[section]) settingsData[section] = {};
+        settingsData[section][key] = value;
+      } else {
+        var e = await res.json();
+        showToast(e.error || "Erreur", "error");
+      }
+    } catch (e) {
+      showToast("Erreur: " + e.message, "error");
+    }
+  }
+
+  async function updateNestedSetting(section, subSection, key, value) {
+    try {
+      var body = {};
+      body[subSection] = {};
+      body[subSection][key] = value;
+      var res = await authFetch(apiUrl("/settings/" + section), {
+        method: "PUT",
+        body: JSON.stringify(body),
+      });
+      if (res.ok) {
+        showToast("Parametre enregistre", "success");
+      } else {
+        var e = await res.json();
+        showToast(e.error || "Erreur", "error");
+      }
+    } catch (e) {
+      showToast("Erreur: " + e.message, "error");
+    }
+  }
+
+  async function exportSettings() {
+    try {
+      var res = await authFetch(apiUrl("/settings/backup"));
+      if (res.ok) {
+        var data = await res.json();
+        var blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement("a");
+        a.href = url;
+        a.download = "stock-manager-backup-" + new Date().toISOString().slice(0, 10) + ".json";
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast("Backup telecharge", "success");
+      }
+    } catch (e) {
+      showToast("Erreur export", "error");
+    }
+  }
+
+  async function resetAllSettings() {
+    if (!confirm("Reinitialiser tous les parametres aux valeurs par defaut ?")) return;
+    try {
+      var res = await authFetch(apiUrl("/settings/reset"), { method: "POST" });
+      if (res.ok) {
+        showToast("Parametres reinitialises", "success");
+        loadSettingsData();
+      }
+    } catch (e) {
+      showToast("Erreur", "error");
+    }
   }
 
   function showModal(opts) {
@@ -1633,6 +1871,11 @@
     // Analytics
     changeAnalyticsPeriod: changeAnalyticsPeriod,
     toggleSection: toggleSection,
+    // Settings
+    updateSetting: updateSetting,
+    updateNestedSetting: updateNestedSetting,
+    exportSettings: exportSettings,
+    resetAllSettings: resetAllSettings,
     get state() {
       return state;
     },

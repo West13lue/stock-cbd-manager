@@ -2633,3 +2633,197 @@ html, body {
   color: var(--text-secondary);
   margin-bottom: var(--space-lg);
 }
+
+/* ============================================
+   SETTINGS PAGE
+   ============================================ */
+
+.settings-section {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  margin-bottom: var(--space-lg);
+  overflow: hidden;
+}
+
+.settings-section.settings-locked {
+  opacity: 0.7;
+  position: relative;
+}
+
+.settings-section-header {
+  padding: var(--space-md) var(--space-lg);
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+
+.settings-section-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.settings-section-header p {
+  margin: 0;
+  width: 100%;
+  font-size: 13px;
+}
+
+.settings-section-body {
+  padding: var(--space-lg);
+}
+
+.setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-md) 0;
+  border-bottom: 1px solid var(--border);
+  gap: var(--space-md);
+}
+
+.setting-row:last-child {
+  border-bottom: none;
+}
+
+.setting-label {
+  font-size: 14px;
+  color: var(--text-primary);
+  flex: 1;
+}
+
+.setting-input {
+  width: 200px;
+  max-width: 100%;
+}
+
+.setting-toggle-group {
+  display: flex;
+  gap: var(--space-xs);
+}
+
+/* Toggle switch */
+.toggle {
+  position: relative;
+  display: inline-block;
+  width: 48px;
+  height: 26px;
+}
+
+.toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: var(--surface);
+  border-radius: var(--radius-full);
+  transition: 0.3s;
+}
+
+.toggle-slider:before {
+  position: absolute;
+  content: "";
+  height: 20px;
+  width: 20px;
+  left: 3px;
+  bottom: 3px;
+  background-color: var(--text-tertiary);
+  border-radius: 50%;
+  transition: 0.3s;
+}
+
+.toggle input:checked + .toggle-slider {
+  background-color: var(--accent-primary);
+}
+
+.toggle input:checked + .toggle-slider:before {
+  transform: translateX(22px);
+  background-color: white;
+}
+
+/* Plan card in settings */
+.setting-plan-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-lg);
+  background: var(--surface);
+  border-radius: var(--radius-md);
+}
+
+.plan-current {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.plan-name-big {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--accent-primary);
+}
+
+.plan-usage {
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.setting-trial-info {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-size: 13px;
+  color: var(--warning);
+}
+
+/* Locked overlay */
+.locked-overlay {
+  text-align: center;
+  padding: var(--space-xl);
+}
+
+.locked-overlay p {
+  color: var(--text-secondary);
+  margin-bottom: var(--space-md);
+}
+
+/* Badges */
+.badge-pro {
+  background: rgba(139, 92, 246, 0.2);
+  color: #8b5cf6;
+}
+
+.badge-business {
+  background: rgba(245, 158, 11, 0.2);
+  color: #f59e0b;
+}
+
+/* Responsive settings */
+@media (max-width: 600px) {
+  .setting-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .setting-input {
+    width: 100%;
+  }
+  
+  .setting-plan-card {
+    flex-direction: column;
+    gap: var(--space-md);
+    text-align: center;
+  }
+}

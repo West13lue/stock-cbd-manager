@@ -1,5 +1,5 @@
-// settingsManager.js — Gestionnaire de paramètres avancé (multi-shop)
-// ✅ International, compliance-friendly, app store ready
+// settingsManager.js â€” Gestionnaire de paramÃ¨tres avancÃ© (multi-shop)
+// âœ… International, compliance-friendly, app store ready
 
 const fs = require("fs");
 const path = require("path");
@@ -7,11 +7,11 @@ const path = require("path");
 const DATA_DIR = process.env.DATA_DIR || "/var/data";
 
 // ============================================
-// SCHÉMA DES PARAMÈTRES PAR DÉFAUT
+// SCHÃ‰MA DES PARAMÃˆTRES PAR DÃ‰FAUT
 // ============================================
 
 const DEFAULT_SETTINGS = {
-  // ==================== GÉNÉRAL ====================
+  // ==================== GÃ‰NÃ‰RAL ====================
   general: {
     language: "auto",           // auto | fr | en | de | es | it
     timezone: "auto",           // auto | Europe/Paris | America/New_York | etc.
@@ -19,11 +19,11 @@ const DEFAULT_SETTINGS = {
     timeFormat: "24h",          // 24h | 12h
   },
 
-  // ==================== UNITÉS & FORMATS ====================
+  // ==================== UNITÃ‰S & FORMATS ====================
   units: {
     weightUnit: "g",            // g | kg | oz | lb
-    weightPrecision: 1,         // Décimales (0, 1, 2)
-    showEquivalent: false,      // Afficher équivalent (ex: 1000g = 1kg)
+    weightPrecision: 1,         // DÃ©cimales (0, 1, 2)
+    showEquivalent: false,      // Afficher Ã©quivalent (ex: 1000g = 1kg)
     roundingRule: "standard",   // standard | floor | ceil
     neverNegative: true,        // Ne jamais descendre sous 0
   },
@@ -31,7 +31,7 @@ const DEFAULT_SETTINGS = {
   // ==================== MONNAIE ====================
   currency: {
     code: "EUR",                // EUR | USD | GBP | CAD | CHF | etc.
-    symbol: "€",
+    symbol: "â‚¬",
     position: "after",          // before | after
     decimalSeparator: ",",      // , | .
     thousandsSeparator: " ",    // (espace) | , | . | '
@@ -40,11 +40,11 @@ const DEFAULT_SETTINGS = {
 
   // ==================== STOCK ====================
   stock: {
-    lowStockThreshold: 10,      // Seuil stock bas (en unité de poids)
+    lowStockThreshold: 10,      // Seuil stock bas (en unitÃ© de poids)
     lowStockEnabled: true,      // Activer alertes stock bas
     lowStockColor: "#ef4444",   // Couleur pour stock bas
     
-    costMethod: "cmp",          // cmp (Coût Moyen Pondéré) | fifo | lifo
+    costMethod: "cmp",          // cmp (CoÃ»t Moyen PondÃ©rÃ©) | fifo | lifo
     freezeCMP: false,           // Figer le CMP (ne pas recalculer)
     
     sourceOfTruth: "app",       // app | shopify
@@ -53,26 +53,26 @@ const DEFAULT_SETTINGS = {
 
   // ==================== LOCATIONS SHOPIFY ====================
   locations: {
-    defaultLocationId: "auto",  // auto | ID spécifique
+    defaultLocationId: "auto",  // auto | ID spÃ©cifique
     multiLocationBehavior: "primary", // primary | distribute | ignore
-    // primary = écrire sur location par défaut uniquement
-    // distribute = répartir le stock
+    // primary = Ã©crire sur location par dÃ©faut uniquement
+    // distribute = rÃ©partir le stock
     // ignore = ne pas synchroniser les locations
   },
 
-  // ==================== CATÉGORIES ====================
+  // ==================== CATÃ‰GORIES ====================
   categories: {
     enabled: true,
-    showUncategorized: true,    // Afficher "Sans catégorie"
+    showUncategorized: true,    // Afficher "Sans catÃ©gorie"
     sortOrder: "alpha",         // alpha | manual | count
-    defaultExpanded: true,      // Catégories dépliées par défaut
+    defaultExpanded: true,      // CatÃ©gories dÃ©pliÃ©es par dÃ©faut
   },
 
   // ==================== FREEBIES / CADEAUX ====================
   freebies: {
     enabled: false,
     mode: "per_order",          // per_order | per_product | per_category | cart_threshold
-    deductionPerOrder: 0,       // Grammes déduits par commande
+    deductionPerOrder: 0,       // Grammes dÃ©duits par commande
     deductionPerProduct: {},    // { productId: grams }
     deductionPerCategory: {},   // { categoryId: grams }
     cartThresholds: [],         // [{ minAmount: 50, deduction: 2 }, ...]
@@ -98,24 +98,24 @@ const DEFAULT_SETTINGS = {
     costMethod: "cmp",          // cmp | fifo | actual
     includeShipping: false,     // Inclure shipping dans le CA
     includeTaxes: false,        // Inclure taxes dans le CA
-    includeDiscounts: true,     // Déduire les réductions (recommandé)
+    includeDiscounts: true,     // DÃ©duire les rÃ©ductions (recommandÃ©)
     excludeFreebies: true,      // Exclure les freebies du CA
     excludeGifts: true,         // Exclure les produits offerts (prix=0)
   },
 
-  // ==================== SÉCURITÉ & PERMISSIONS ====================
+  // ==================== SÃ‰CURITÃ‰ & PERMISSIONS ====================
   security: {
-    readOnlyMode: false,        // Mode lecture seule (désactive écritures Shopify)
+    readOnlyMode: false,        // Mode lecture seule (dÃ©sactive Ã©critures Shopify)
     confirmDestructive: true,   // Confirmation avant actions destructrices
     requirePinForSensitive: false, // PIN pour actions sensibles
-    pin: null,                  // Code PIN hashé
+    pin: null,                  // Code PIN hashÃ©
     
     allowedActions: {
       restock: true,
       adjustStock: true,
       deleteProduct: true,
       importShopify: true,
-      resetStock: false,        // Désactivé par défaut
+      resetStock: false,        // DÃ©sactivÃ© par dÃ©faut
       exportData: true,
     },
   },
@@ -143,7 +143,7 @@ const DEFAULT_SETTINGS = {
     includePayloads: false,     // Inclure payloads complets (debug)
   },
 
-  // ==================== MÉTADONNÉES ====================
+  // ==================== MÃ‰TADONNÃ‰ES ====================
   _meta: {
     version: 2,
     createdAt: null,
@@ -159,10 +159,10 @@ const DEFAULT_SETTINGS = {
 const SETTING_OPTIONS = {
   languages: [
     { value: "auto", label: "Auto (Shopify)" },
-    { value: "fr", label: "Français" },
+    { value: "fr", label: "FranÃ§ais" },
     { value: "en", label: "English" },
     { value: "de", label: "Deutsch" },
-    { value: "es", label: "Español" },
+    { value: "es", label: "EspaÃ±ol" },
     { value: "it", label: "Italiano" },
   ],
   
@@ -184,13 +184,13 @@ const SETTING_OPTIONS = {
   ],
   
   currencies: [
-    { value: "EUR", symbol: "€", label: "Euro" },
+    { value: "EUR", symbol: "â‚¬", label: "Euro" },
     { value: "USD", symbol: "$", label: "US Dollar" },
-    { value: "GBP", symbol: "£", label: "British Pound" },
+    { value: "GBP", symbol: "Â£", label: "British Pound" },
     { value: "CAD", symbol: "CA$", label: "Canadian Dollar" },
     { value: "CHF", symbol: "CHF", label: "Swiss Franc" },
     { value: "AUD", symbol: "A$", label: "Australian Dollar" },
-    { value: "JPY", symbol: "¥", label: "Japanese Yen" },
+    { value: "JPY", symbol: "Â¥", label: "Japanese Yen" },
   ],
   
   dateFormats: [
@@ -200,21 +200,21 @@ const SETTING_OPTIONS = {
   ],
   
   costMethods: [
-    { value: "cmp", label: "CMP (Coût Moyen Pondéré)", description: "Moyenne pondérée de tous les achats" },
-    { value: "fifo", label: "FIFO (Premier Entré, Premier Sorti)", description: "Utilise le coût du plus ancien stock" },
-    { value: "lifo", label: "LIFO (Dernier Entré, Premier Sorti)", description: "Utilise le coût du plus récent stock" },
+    { value: "cmp", label: "CMP (CoÃ»t Moyen PondÃ©rÃ©)", description: "Moyenne pondÃ©rÃ©e de tous les achats" },
+    { value: "fifo", label: "FIFO (Premier EntrÃ©, Premier Sorti)", description: "Utilise le coÃ»t du plus ancien stock" },
+    { value: "lifo", label: "LIFO (Dernier EntrÃ©, Premier Sorti)", description: "Utilise le coÃ»t du plus rÃ©cent stock" },
   ],
   
   syncModes: [
-    { value: "realtime", label: "Temps réel", description: "Sync à chaque changement" },
+    { value: "realtime", label: "Temps rÃ©el", description: "Sync Ã  chaque changement" },
     { value: "hourly", label: "Toutes les heures" },
     { value: "daily", label: "Une fois par jour" },
     { value: "manual", label: "Manuel uniquement" },
   ],
   
   logLevels: [
-    { value: "normal", label: "Normal", description: "Événements importants uniquement" },
-    { value: "debug", label: "Debug", description: "Inclut les détails techniques" },
+    { value: "normal", label: "Normal", description: "Ã‰vÃ©nements importants uniquement" },
+    { value: "debug", label: "Debug", description: "Inclut les dÃ©tails techniques" },
     { value: "verbose", label: "Verbose", description: "Tout enregistrer (support)" },
   ],
 };
@@ -264,7 +264,7 @@ function deepClone(obj) {
 // ============================================
 
 /**
- * Charge les paramètres d'un shop (avec valeurs par défaut)
+ * Charge les paramÃ¨tres d'un shop (avec valeurs par dÃ©faut)
  */
 function loadSettings(shop) {
   const file = settingsFile(shop);
@@ -279,10 +279,10 @@ function loadSettings(shop) {
     console.warn("Erreur lecture settings:", e.message);
   }
   
-  // Merger avec les defaults pour avoir toutes les clés
+  // Merger avec les defaults pour avoir toutes les clÃ©s
   const settings = deepMerge(deepClone(DEFAULT_SETTINGS), saved);
   
-  // Mettre à jour les métadonnées
+  // Mettre Ã  jour les mÃ©tadonnÃ©es
   if (!settings._meta.createdAt) {
     settings._meta.createdAt = new Date().toISOString();
   }
@@ -291,12 +291,12 @@ function loadSettings(shop) {
 }
 
 /**
- * Sauvegarde les paramètres
+ * Sauvegarde les paramÃ¨tres
  */
 function saveSettings(shop, settings) {
   const file = settingsFile(shop);
   
-  // Mettre à jour les métadonnées
+  // Mettre Ã  jour les mÃ©tadonnÃ©es
   settings._meta = settings._meta || {};
   settings._meta.updatedAt = new Date().toISOString();
   settings._meta.version = DEFAULT_SETTINGS._meta.version;
@@ -309,7 +309,7 @@ function saveSettings(shop, settings) {
 }
 
 /**
- * Met à jour une section de paramètres
+ * Met Ã  jour une section de paramÃ¨tres
  */
 function updateSettings(shop, section, values) {
   const settings = loadSettings(shop);
@@ -323,7 +323,7 @@ function updateSettings(shop, section, values) {
 }
 
 /**
- * Met à jour un paramètre unique
+ * Met Ã  jour un paramÃ¨tre unique
  */
 function setSetting(shop, path, value) {
   const settings = loadSettings(shop);
@@ -340,7 +340,7 @@ function setSetting(shop, path, value) {
 }
 
 /**
- * Récupère un paramètre unique
+ * RÃ©cupÃ¨re un paramÃ¨tre unique
  */
 function getSetting(shop, path, defaultValue = null) {
   const settings = loadSettings(shop);
@@ -356,7 +356,7 @@ function getSetting(shop, path, defaultValue = null) {
 }
 
 /**
- * Reset aux valeurs par défaut
+ * Reset aux valeurs par dÃ©faut
  */
 function resetSettings(shop, section = null) {
   if (section) {
@@ -379,7 +379,7 @@ function resetSettings(shop, section = null) {
 // ============================================
 
 /**
- * Exporte la configuration complète (pour backup)
+ * Exporte la configuration complÃ¨te (pour backup)
  */
 function exportConfig(shop) {
   const settings = loadSettings(shop);
@@ -411,7 +411,7 @@ function importConfig(shop, config, options = {}) {
     const current = loadSettings(shop);
     settings = deepMerge(current, config.settings);
   } else {
-    // Remplacer complètement
+    // Remplacer complÃ¨tement
     settings = deepMerge(deepClone(DEFAULT_SETTINGS), config.settings);
   }
   
@@ -422,11 +422,11 @@ function importConfig(shop, config, options = {}) {
 }
 
 // ============================================
-// HELPERS DE FORMATAGE (utilisés par l'app)
+// HELPERS DE FORMATAGE (utilisÃ©s par l'app)
 // ============================================
 
 /**
- * Formate un poids selon les paramètres
+ * Formate un poids selon les paramÃ¨tres
  */
 function formatWeight(shop, grams, options = {}) {
   const settings = loadSettings(shop);
@@ -444,7 +444,7 @@ function formatWeight(shop, grams, options = {}) {
     result += unit;
   }
   
-  // Afficher équivalent si activé
+  // Afficher Ã©quivalent si activÃ©
   const doShowEquiv = showEquivalent !== null ? showEquivalent : settings.units.showEquivalent;
   if (doShowEquiv && unit !== "g" && grams >= 1000) {
     result += ` (${grams.toFixed(0)}g)`;
@@ -454,7 +454,7 @@ function formatWeight(shop, grams, options = {}) {
 }
 
 /**
- * Formate un montant selon les paramètres
+ * Formate un montant selon les paramÃ¨tres
  */
 function formatCurrency(shop, amount, options = {}) {
   const settings = loadSettings(shop);
@@ -473,7 +473,7 @@ function formatCurrency(shop, amount, options = {}) {
 }
 
 /**
- * Formate une date selon les paramètres
+ * Formate une date selon les paramÃ¨tres
  */
 function formatDate(shop, date, options = {}) {
   const settings = loadSettings(shop);
@@ -516,7 +516,7 @@ function formatDate(shop, date, options = {}) {
 }
 
 /**
- * Applique les règles d'arrondi au poids
+ * Applique les rÃ¨gles d'arrondi au poids
  */
 function applyWeightRounding(shop, grams) {
   const settings = loadSettings(shop);
@@ -524,7 +524,7 @@ function applyWeightRounding(shop, grams) {
   
   let result = grams;
   
-  // Appliquer la règle d'arrondi
+  // Appliquer la rÃ¨gle d'arrondi
   const factor = Math.pow(10, weightPrecision);
   switch (roundingRule) {
     case "floor":
@@ -546,7 +546,7 @@ function applyWeightRounding(shop, grams) {
 }
 
 /**
- * Vérifie si un produit est en stock bas
+ * VÃ©rifie si un produit est en stock bas
  */
 function isLowStock(shop, grams) {
   const settings = loadSettings(shop);
@@ -555,7 +555,7 @@ function isLowStock(shop, grams) {
 }
 
 /**
- * Calcule la déduction freebie pour une commande
+ * Calcule la dÃ©duction freebie pour une commande
  */
 function calculateFreebieDeduction(shop, order) {
   const settings = loadSettings(shop);
@@ -588,7 +588,7 @@ function calculateFreebieDeduction(shop, order) {
       
     case "cart_threshold":
       const orderTotal = order.total || 0;
-      // Trouver le seuil applicable (le plus élevé atteint)
+      // Trouver le seuil applicable (le plus Ã©levÃ© atteint)
       const applicableThreshold = cartThresholds
         .filter(t => orderTotal >= t.minAmount)
         .sort((a, b) => b.minAmount - a.minAmount)[0];
@@ -606,7 +606,7 @@ function calculateFreebieDeduction(shop, order) {
 // ============================================
 
 /**
- * Génère un bundle de diagnostic pour le support
+ * GÃ©nÃ¨re un bundle de diagnostic pour le support
  */
 function generateSupportBundle(shop, options = {}) {
   const settings = loadSettings(shop);
@@ -618,7 +618,7 @@ function generateSupportBundle(shop, options = {}) {
     appVersion: process.env.APP_VERSION || "unknown",
     nodeVersion: process.version,
     
-    // Infos système
+    // Infos systÃ¨me
     system: {
       platform: process.platform,
       arch: process.arch,
@@ -626,13 +626,13 @@ function generateSupportBundle(shop, options = {}) {
       memory: process.memoryUsage(),
     },
     
-    // État des webhooks (à implémenter avec les vrais statuts)
+    // Ã‰tat des webhooks (Ã  implÃ©menter avec les vrais statuts)
     webhooks: {
       ordersCreate: { status: "unknown", lastReceived: null },
       ordersUpdate: { status: "unknown", lastReceived: null },
     },
     
-    // Dernière erreur
+    // DerniÃ¨re erreur
     lastError: null,
     
     // Statistiques
@@ -644,7 +644,7 @@ function generateSupportBundle(shop, options = {}) {
   };
   
   if (includeSettings) {
-    // Masquer les données sensibles
+    // Masquer les donnÃ©es sensibles
     const safeSettings = deepClone(settings);
     if (safeSettings.security?.pin) safeSettings.security.pin = "***";
     if (safeSettings.notifications?.channels?.slack?.webhookUrl) {
