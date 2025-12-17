@@ -250,10 +250,25 @@
     setupNavigation();
     await ensureOAuthInstalled();
     await loadPlanInfo();
+    await loadSettingsDataSilent();  // Charger les settings pour getStatus
     await loadProducts();
     renderTab("dashboard");
     updateUI();
     console.log("[Init] Ready - Plan:", state.planId, "Features:", state.limits);
+  }
+
+  // Charger les settings silencieusement (pour getStatus)
+  async function loadSettingsDataSilent() {
+    try {
+      var res = await authFetch(apiUrl("/settings"));
+      if (res.ok) {
+        var data = await res.json();
+        settingsData = data.settings || {};
+        settingsOptions = data.options || {};
+      }
+    } catch (e) {
+      console.warn("[Settings] Silent load failed:", e);
+    }
   }
 
   function setupNavigation() {
@@ -598,14 +613,30 @@
       '</div></div>';
 
     // Section Stock
+    var criticalThreshold = (s.stock && s.stock.criticalThreshold) || 50;
+    var lowThreshold = (s.stock && s.stock.lowStockThreshold) || 200;
+    
     var stockSection = 
       '<div class="settings-section">' +
-      '<div class="settings-section-header"><h3>Gestion du stock</h3><p class="text-secondary">Regles de calcul et alertes</p></div>' +
+      '<div class="settings-section-header"><h3>Gestion du stock</h3><p class="text-secondary">Regles de calcul et seuils d\'alerte</p></div>' +
       '<div class="settings-section-body">' +
-      '<div class="setting-row"><label class="setting-label">Seuil stock bas (g)</label>' +
-      '<input type="number" class="form-input setting-input" value="' + ((s.stock && s.stock.lowStockThreshold) || 10) + '" onchange="app.updateSetting(\'stock\',\'lowStockThreshold\',parseInt(this.value))"></div>' +
+      
+      '<div class="setting-group-title">Seuils de statut</div>' +
+      '<div class="setting-row"><label class="setting-label"><span class="status-dot critical"></span> Seuil critique (g)</label>' +
+      '<div class="setting-input-help"><input type="number" class="form-input setting-input-sm" value="' + criticalThreshold + '" onchange="app.updateSetting(\'stock\',\'criticalThreshold\',parseInt(this.value))">' +
+      '<span class="help-text">Stock &lt; ce seuil = Rouge</span></div></div>' +
+      
+      '<div class="setting-row"><label class="setting-label"><span class="status-dot low"></span> Seuil bas (g)</label>' +
+      '<div class="setting-input-help"><input type="number" class="form-input setting-input-sm" value="' + lowThreshold + '" onchange="app.updateSetting(\'stock\',\'lowStockThreshold\',parseInt(this.value))">' +
+      '<span class="help-text">Stock &lt; ce seuil = Jaune</span></div></div>' +
+      
+      '<div class="setting-info"><span class="status-dot good"></span> Au-dessus du seuil bas = Vert (OK)</div>' +
+      
+      '<div class="setting-group-title" style="margin-top:var(--space-lg)">Alertes</div>' +
       '<div class="setting-row"><label class="setting-label">Alertes stock bas</label>' +
-      '<label class="toggle"><input type="checkbox" ' + (s.stock && s.stock.lowStockEnabled ? 'checked' : '') + ' onchange="app.updateSetting(\'stock\',\'lowStockEnabled\',this.checked)"><span class="toggle-slider"></span></label></div>' +
+      '<label class="toggle"><input type="checkbox" ' + (s.stock && s.stock.lowStockEnabled !== false ? 'checked' : '') + ' onchange="app.updateSetting(\'stock\',\'lowStockEnabled\',this.checked)"><span class="toggle-slider"></span></label></div>' +
+      
+      '<div class="setting-group-title" style="margin-top:var(--space-lg)">Valorisation</div>' +
       '<div class="setting-row"><label class="setting-label">Methode de valorisation</label>' +
       '<select class="form-select setting-input" onchange="app.updateSetting(\'stock\',\'costMethod\',this.value)">' +
       '<option value="cmp"' + (s.stock && s.stock.costMethod === 'cmp' ? ' selected' : '') + '>CMP (Cout Moyen Pondere)</option>' +
@@ -1200,10 +1231,19 @@
     return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(v);
   }
   function getStatus(g) {
-    if (g <= 0) return { c: "critical", l: "Rupture", i: "â›”" };
-    if (g < 50) return { c: "critical", l: "Critique", i: "ðŸ”´" };
-    if (g < 200) return { c: "low", l: "Bas", i: "ðŸŸ¡" };
-    return { c: "good", l: "OK", i: "ðŸŸ¢" };
+    // Utiliser les seuils des settings si disponibles
+    var criticalThreshold = 50;
+    var lowThreshold = 200;
+    
+    if (settingsData && settingsData.stock) {
+      criticalThreshold = settingsData.stock.criticalThreshold || 50;
+      lowThreshold = settingsData.stock.lowStockThreshold || 200;
+    }
+    
+    if (g <= 0) return { c: "critical", l: "Rupture", i: "[!]" };
+    if (g < criticalThreshold) return { c: "critical", l: "Critique", i: "[!]" };
+    if (g < lowThreshold) return { c: "low", l: "Bas", i: "[~]" };
+    return { c: "good", l: "OK", i: "[OK]" };
   }
   function esc(s) {
     if (!s) return "";

@@ -402,6 +402,9 @@ function getShopPlan(shop) {
       grandfathered: true,
       bypass: true,
       effectivePlanId: bypassPlan,
+      effectivePlan: plan,
+      effectiveReason: "bypass",
+      trialPlanId: null,
     };
   } else {
     console.log(`[Plan] NO BYPASS for "${shop}" - checking normal plan...`);

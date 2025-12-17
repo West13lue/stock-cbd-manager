@@ -2827,3 +2827,59 @@ html, body {
     text-align: center;
   }
 }
+
+/* Settings - Stock thresholds */
+.setting-group-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: var(--space-sm);
+  padding-bottom: var(--space-xs);
+  border-bottom: 1px solid var(--border);
+}
+
+.setting-input-help {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.setting-input-sm {
+  width: 100px;
+}
+
+.help-text {
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+.setting-info {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-size: 13px;
+  color: var(--text-secondary);
+  padding: var(--space-sm) 0;
+}
+
+.status-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.status-dot.critical {
+  background: var(--danger);
+}
+
+.status-dot.low {
+  background: var(--warning);
+}
+
+.status-dot.good {
+  background: var(--success);
+}
