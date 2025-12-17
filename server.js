@@ -27,7 +27,13 @@ try {
 }
 
 // --- Shopify client (✅ par shop)
-const { getShopifyClient, normalizeShopDomain } = require("./shopifyClient");
+const {
+  getShopifyClient,
+  normalizeShopDomain,
+  createAppSubscription,
+  getActiveAppSubscriptions,
+  cancelAppSubscription,
+} = require("./shopifyClient");
 
 // --- Stock (source de vérité app)
 const stock = require("./stockManager");
@@ -285,6 +291,10 @@ function requireApiAuth(req, res, next) {
 
   // ✅ config publique (front App Bridge)
   if (req.path === "/public/config") return next();
+
+
+  // ✅ returnUrl Shopify Billing (après acceptation abonnement)
+  if (req.path === "/billing/return") return next();
 
   const token = extractBearerToken(req);
   if (!token) return apiError(res, 401, "Session token manquant");
@@ -1585,8 +1595,48 @@ router.get("/api/settings/support-bundle", (req, res) => {
 });
 
 // =====================================================
-// PLAN ROUTES ✅ NOUVEAU (Free/Standard/Premium)
+// PLAN ROUTES ✅ Billing Shopify (AppSubscription)
 // =====================================================
+
+// Helper: map planId -> billing config
+function getBillingConfigForPlan(planId, interval = "monthly") {
+  const pid = String(planId || "").toLowerCase();
+  if (!planManager || !planManager.PLANS || !planManager.PLANS[pid]) return null;
+
+  const p = planManager.PLANS[pid];
+
+  // Free = pas de billing
+  if (pid === "free" || Number(p.price || 0) <= 0) return null;
+
+  const isYearly = String(interval || "monthly").toLowerCase() === "yearly";
+  const price = isYearly ? Number(p.priceYearly || 0) : Number(p.price || 0);
+
+  return {
+    name: String(p.name || pid),
+    price,
+    currencyCode: String(p.currency || "EUR").toUpperCase(),
+    interval: isYearly ? "ANNUAL" : "EVERY_30_DAYS",
+  };
+}
+
+function buildBillingReturnUrl(shop, planId, interval) {
+  const base = String(process.env.RENDER_PUBLIC_URL || "").replace(/\/+$/, "");
+  if (!base) throw new Error("RENDER_PUBLIC_URL manquant pour Billing returnUrl");
+  const q = new URLSearchParams({
+    shop: normalizeShopDomain(shop),
+    planId: String(planId || "").toLowerCase(),
+    interval: String(interval || "monthly").toLowerCase(),
+  });
+  return `${base}/api/billing/return?${q.toString()}`;
+}
+
+function isBillingTestMode() {
+  // en prod => false par défaut
+  const v = String(process.env.SHOPIFY_BILLING_TEST || "").trim().toLowerCase();
+  if (v === "true" || v === "1") return true;
+  if (v === "false" || v === "0") return false;
+  return process.env.NODE_ENV !== "production";
+}
 
 // Info sur le plan actuel
 router.get("/api/plan", (req, res) => {
@@ -1594,8 +1644,8 @@ router.get("/api/plan", (req, res) => {
     const shop = getShop(req);
     console.log(`📋 API /api/plan called - shop from request: "${shop}"`);
     console.log(`   Query params: ${JSON.stringify(req.query)}`);
-    console.log(`   Headers x-shop-domain: ${req.headers['x-shop-domain']}`);
-    
+    console.log(`   Headers x-shop-domain: ${req.headers["x-shop-domain"]}`);
+
     if (!shop) return apiError(res, 400, "Shop introuvable");
     if (!planManager) return apiError(res, 500, "PlanManager non disponible");
 
@@ -1617,41 +1667,213 @@ router.get("/api/plans", (req, res) => {
   });
 });
 
-// Changer de plan (simulation - en prod, utiliser Shopify Billing API)
+// ✅ Retour Billing Shopify (après acceptation abonnement)
+// IMPORTANT: cette route passe SANS session token (bypass dans requireApiAuth)
+router.get("/api/billing/return", (req, res) => {
+  safeJson(req, res, async () => {
+    const shop = getShop(req);
+    const planId = String(req.query?.planId || "").toLowerCase();
+    const interval = String(req.query?.interval || "monthly").toLowerCase();
+
+    if (!shop) return apiError(res, 400, "Shop introuvable (billing return)");
+    if (!planManager) return apiError(res, 500, "PlanManager non disponible");
+    if (!planId || !planManager.PLANS[planId]) return apiError(res, 400, `planId invalide: ${planId}`);
+
+    // Si bypass => on fixe direct (pas besoin de billing)
+    const bypassPlan = planManager.getBypassPlan ? planManager.getBypassPlan(shop) : null;
+    if (bypassPlan) {
+      const result = planManager.setShopPlan(shop, bypassPlan, {
+        id: `bypass_${Date.now()}`,
+        status: "active",
+        startedAt: new Date().toISOString(),
+        interval: "lifetime",
+      });
+      return res.type("html").send(`
+        <div style="font-family:system-ui;padding:24px">
+          <h2>✅ Plan activé (bypass)</h2>
+          <p>Boutique: <b>${shop}</b></p>
+          <p>Plan: <b>${String(bypassPlan).toUpperCase()}</b></p>
+          <p>Tu peux fermer cette page.</p>
+        </div>
+      `);
+    }
+
+    // Vérifier que Shopify a bien un abonnement actif
+    const subs = await getActiveAppSubscriptions(shop);
+
+    // On prend le plus récent (souvent 1 seul)
+    const chosen = Array.isArray(subs) && subs.length ? subs[0] : null;
+
+    if (!chosen?.id) {
+      // Le marchand a peut-être fermé avant de confirmer
+      return res.type("html").send(`
+        <div style="font-family:system-ui;padding:24px">
+          <h2>⚠️ Abonnement non détecté</h2>
+          <p>Boutique: <b>${shop}</b></p>
+          <p>Aucun abonnement actif trouvé côté Shopify.</p>
+          <p>Retourne dans l’app et relance l’upgrade.</p>
+        </div>
+      `);
+    }
+
+    // Stocker localement (source de vérité app = plan.json)
+    const result = planManager.setShopPlan(shop, planId, {
+      id: chosen.id,
+      status: String(chosen.status || "ACTIVE").toLowerCase(), // "active" / "trialing" etc (best effort)
+      startedAt: chosen.createdAt || new Date().toISOString(),
+      expiresAt: null,
+      interval: interval === "yearly" ? "annual" : "monthly",
+    });
+
+    logEvent("billing_confirmed", { shop, planId, subId: chosen.id, status: chosen.status }, "info");
+
+    return res.type("html").send(`
+      <div style="font-family:system-ui;padding:24px">
+        <h2>✅ Abonnement activé</h2>
+        <p>Boutique: <b>${shop}</b></p>
+        <p>Plan: <b>${planId.toUpperCase()}</b></p>
+        <p>Statut: <b>${String(chosen.status || "")}</b></p>
+        <p>Tu peux fermer cette page et retourner dans l’app.</p>
+      </div>
+    `);
+  });
+});
+
+// ✅ Upgrade: crée un abonnement Shopify et renvoie confirmationUrl
 router.post("/api/plan/upgrade", (req, res) => {
-  safeJson(req, res, () => {
+  safeJson(req, res, async () => {
     const shop = getShop(req);
     if (!shop) return apiError(res, 400, "Shop introuvable");
     if (!planManager) return apiError(res, 500, "PlanManager non disponible");
 
     const planId = String(req.body?.planId || "").toLowerCase();
-    if (!planManager.PLANS[planId]) {
-      return apiError(res, 400, `Plan inconnu: ${planId}`);
+    const interval = String(req.body?.interval || "monthly").toLowerCase(); // "monthly" | "yearly"
+
+    if (!planManager.PLANS[planId]) return apiError(res, 400, `Plan inconnu: ${planId}`);
+    if (planId === "free") {
+      // Si l’utilisateur downgrade vers free => passe par cancel
+      return apiError(res, 400, "Pour revenir en Free, utilise /api/plan/cancel");
     }
 
-    // En production, ici on créerait un AppSubscription via Shopify Billing API
-    // Pour le moment, on simule le changement de plan
-    const result = planManager.setShopPlan(shop, planId, {
-      id: `sub_${Date.now()}`,
-      status: "active",
-      startedAt: new Date().toISOString(),
+    // ✅ Bypass billing => on fixe direct sans Shopify
+    const bypassPlan = planManager.getBypassPlan ? planManager.getBypassPlan(shop) : null;
+    if (bypassPlan) {
+      const result = planManager.setShopPlan(shop, bypassPlan, {
+        id: `bypass_${Date.now()}`,
+        status: "active",
+        startedAt: new Date().toISOString(),
+        interval: "lifetime",
+      });
+      logEvent("plan_upgraded_bypass", { shop, planId: bypassPlan }, "info");
+      return res.json({ success: true, bypass: true, ...result });
+    }
+
+    // ✅ Si déjà un abonnement actif Shopify => on évite doublon
+    const existingSubs = await getActiveAppSubscriptions(shop);
+    if (Array.isArray(existingSubs) && existingSubs.length) {
+      return res.status(409).json({
+        error: "billing_already_active",
+        message: "Un abonnement Shopify est déjà actif pour cette boutique. Annule avant de recréer.",
+        subscriptions: existingSubs.map((s) => ({ id: s.id, name: s.name, status: s.status })),
+      });
+    }
+
+    const billingCfg = getBillingConfigForPlan(planId, interval);
+    if (!billingCfg) return apiError(res, 400, "Plan non billable (config)");
+
+    const returnUrl = buildBillingReturnUrl(shop, planId, interval);
+
+    // Trial: 14 jours par défaut (désactivable)
+    const skipTrial = req.body?.skipTrial === true;
+    const trialDays = skipTrial ? 0 : 14;
+
+    const created = await createAppSubscription(shop, {
+      name: billingCfg.name,
+      returnUrl,
+      price: billingCfg.price,
+      currencyCode: billingCfg.currencyCode,
+      interval: billingCfg.interval,
+      trialDays,
+      test: isBillingTestMode(),
     });
 
-    logEvent("plan_upgraded", { shop, planId }, "info");
-    res.json({ success: true, ...result });
+    if (created.userErrors && created.userErrors.length) {
+      return res.status(400).json({
+        error: "billing_user_errors",
+        message: "Shopify a refusé la création d’abonnement",
+        userErrors: created.userErrors,
+      });
+    }
+
+    if (!created.confirmationUrl) {
+      return res.status(500).json({
+        error: "billing_no_confirmation_url",
+        message: "Aucune confirmationUrl retournée par Shopify",
+      });
+    }
+
+    logEvent("billing_subscription_created", { shop, planId, interval, trialDays }, "info");
+
+    // IMPORTANT: le front doit ouvrir confirmationUrl (top level)
+    return res.json({
+      success: true,
+      planId,
+      interval,
+      trialDays,
+      confirmationUrl: created.confirmationUrl,
+      returnUrl,
+    });
   });
 });
 
-// Annuler l'abonnement
+// ✅ Cancel: annule l’abonnement Shopify + downgrade local en Free
 router.post("/api/plan/cancel", (req, res) => {
-  safeJson(req, res, () => {
+  safeJson(req, res, async () => {
     const shop = getShop(req);
     if (!shop) return apiError(res, 400, "Shop introuvable");
     if (!planManager) return apiError(res, 500, "PlanManager non disponible");
 
+    // Bypass => on ne cancel pas Shopify (il n’y a rien), et ça restera bypass
+    const bypassPlan = planManager.getBypassPlan ? planManager.getBypassPlan(shop) : null;
+    if (bypassPlan) {
+      const current = planManager.getShopPlan(shop);
+      return res.json({
+        success: true,
+        bypass: true,
+        message: "Boutique en bypass billing: annulation Shopify non applicable.",
+        current,
+      });
+    }
+
+    const subs = await getActiveAppSubscriptions(shop);
+    const sub = Array.isArray(subs) && subs.length ? subs[0] : null;
+
+    // S’il n’y a rien côté Shopify, on downgrade quand même localement
+    if (!sub?.id) {
+      const result = planManager.cancelSubscription(shop);
+      logEvent("plan_cancelled_no_shopify_sub", { shop }, "warn");
+      return res.json({ success: true, shopifyCancelled: false, ...result });
+    }
+
+    const cancelled = await cancelAppSubscription(shop, sub.id, { prorate: true, reason: "OTHER" });
+
+    if (cancelled.userErrors && cancelled.userErrors.length) {
+      return res.status(400).json({
+        error: "billing_cancel_user_errors",
+        message: "Shopify a refusé l’annulation",
+        userErrors: cancelled.userErrors,
+      });
+    }
+
     const result = planManager.cancelSubscription(shop);
-    logEvent("plan_cancelled", { shop }, "info");
-    res.json({ success: true, ...result });
+
+    logEvent("plan_cancelled", { shop, subId: sub.id }, "info");
+    return res.json({
+      success: true,
+      shopifyCancelled: true,
+      cancelled: { id: cancelled.cancelledId, status: cancelled.status },
+      ...result,
+    });
   });
 });
 
@@ -1663,7 +1885,7 @@ router.get("/api/plan/check/:action", (req, res) => {
     if (!planManager) return apiError(res, 500, "PlanManager non disponible");
 
     const action = String(req.params.action);
-    
+
     // Context pour certaines vérifications
     const context = {};
     if (action === "add_product") {

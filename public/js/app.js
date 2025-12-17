@@ -3,105 +3,134 @@
   'use strict';
 
   const API_BASE = '/api';
-  
-// ============================================
-// SHOPIFY APP BRIDGE & SESSION TOKEN (FIX)
-// ============================================
 
-let appBridgeApp = null;     // instance createApp()
-let sessionToken = null;
-let apiKeyCache = null;
+  // ============================================
+  // SHOPIFY APP BRIDGE & SESSION TOKEN (FIX)
+  // ============================================
 
-function getHostFromUrl() {
-  const urlParams = new URLSearchParams(window.location.search);
-  return urlParams.get('host');
-}
+  let appBridgeApp = null;     // instance createApp()
+  let sessionToken = null;
+  let apiKeyCache = null;
 
-async function loadPublicConfig() {
-  if (apiKeyCache) return apiKeyCache;
-  const res = await fetch('/api/public/config', { headers: { 'Accept': 'application/json' } });
-  const json = await res.json().catch(() => ({}));
-  apiKeyCache = String(json.apiKey || '').trim();
-  return apiKeyCache;
-}
-
-async function initAppBridge() {
-  const host = getHostFromUrl();
-  if (!host) {
-    console.warn('⚠️ host manquant dans l’URL (app embedded ?)');
-    return false;
+  function getHostFromUrl() {
+    const urlParams = new URLSearchParams(window.location.search);
+    return urlParams.get('host');
   }
 
-  const apiKey = await loadPublicConfig();
-  if (!apiKey) {
-    console.warn('⚠️ apiKey introuvable via /api/public/config');
-    return false;
+  async function loadPublicConfig() {
+    if (apiKeyCache) return apiKeyCache;
+    const res = await fetch('/api/public/config', { headers: { 'Accept': 'application/json' } });
+    const json = await res.json().catch(() => ({}));
+    apiKeyCache = String(json.apiKey || '').trim();
+    return apiKeyCache;
   }
 
-  const AB = window['app-bridge'];
-  if (!AB || typeof AB.createApp !== 'function') {
-    console.warn('⚠️ @shopify/app-bridge non chargé (window["app-bridge"] absent)');
-    return false;
+  async function initAppBridge() {
+    const host = getHostFromUrl();
+    if (!host) {
+      console.warn('⚠️ host manquant dans l’URL (app embedded ?)');
+      return false;
+    }
+
+    const apiKey = await loadPublicConfig();
+    if (!apiKey) {
+      console.warn('⚠️ apiKey introuvable via /api/public/config');
+      return false;
+    }
+
+    const AB = window['app-bridge'];
+    if (!AB || typeof AB.createApp !== 'function') {
+      console.warn('⚠️ @shopify/app-bridge non chargé (window["app-bridge"] absent)');
+      return false;
+    }
+
+    appBridgeApp = AB.createApp({
+      apiKey,
+      host,
+      forceRedirect: true,
+    });
+
+    console.log('🔗 App Bridge créé (createApp)');
+    return true;
   }
 
-  appBridgeApp = AB.createApp({
-    apiKey,
-    host,
-    forceRedirect: true,
-  });
+  async function getSessionToken() {
+    if (sessionToken) return sessionToken;
+    if (!appBridgeApp) return null;
 
-  console.log('🔗 App Bridge créé (createApp)');
-  return true;
-}
+    const ABU = window['app-bridge-utils'];
+    if (!ABU || typeof ABU.getSessionToken !== 'function') {
+      console.warn('⚠️ @shopify/app-bridge-utils non chargé (getSessionToken indisponible)');
+      return null;
+    }
 
-async function getSessionToken() {
-  if (sessionToken) return sessionToken;
-  if (!appBridgeApp) return null;
-
-  const ABU = window['app-bridge-utils'];
-  if (!ABU || typeof ABU.getSessionToken !== 'function') {
-    console.warn('⚠️ @shopify/app-bridge-utils non chargé (getSessionToken indisponible)');
-    return null;
+    try {
+      sessionToken = await ABU.getSessionToken(appBridgeApp);
+      return sessionToken;
+    } catch (e) {
+      console.warn('⚠️ Erreur getSessionToken(App Bridge):', e);
+      return null;
+    }
   }
 
-  try {
-    sessionToken = await ABU.getSessionToken(appBridgeApp);
-    return sessionToken;
-  } catch (e) {
-    console.warn('⚠️ Erreur getSessionToken(App Bridge):', e);
-    return null;
-  }
-}
-
-// Fetch avec authentification automatique
-async function authFetch(url, options = {}) {
-  const token = await getSessionToken();
-
-  const headers = {
-    ...(options.headers || {}),
-    'Content-Type': 'application/json',
-  };
-
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  } else {
-    // utile en debug
-    console.warn('⚠️ Session token absent -> requête non authentifiée:', url);
+  function clearSessionToken() {
+    sessionToken = null;
   }
 
-  return fetch(url, { ...options, headers });
-}
-  
+  // Fetch avec authentification automatique (+ retry 401)
+  async function authFetch(url, options = {}) {
+    const token = await getSessionToken();
+
+    const headers = {
+      ...(options.headers || {}),
+      'Accept': 'application/json',
+    };
+
+    // On ne met Content-Type: application/json que si on envoie vraiment un body JSON
+    const hasBody = options.body !== undefined && options.body !== null;
+    if (hasBody && !(options.body instanceof FormData)) {
+      headers['Content-Type'] = headers['Content-Type'] || 'application/json';
+    }
+
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    } else {
+      console.warn('⚠️ Session token absent -> requête non authentifiée:', url);
+    }
+
+    const doFetch = () => fetch(url, { ...options, headers });
+
+    let res = await doFetch();
+
+    // Si token expiré / invalide : on clear et on retente 1 fois
+    if (res.status === 401 && token) {
+      console.warn('⚠️ 401 détecté -> refresh session token et retry:', url);
+      clearSessionToken();
+
+      const token2 = await getSessionToken();
+      if (token2) {
+        headers['Authorization'] = `Bearer ${token2}`;
+      } else {
+        delete headers['Authorization'];
+      }
+
+      res = await doFetch();
+    }
+
+    return res;
+  }
+
   // ============================================
   // SHOP DETECTION
   // ============================================
-  
+
   function getShopFromUrl() {
-    // 1. Depuis l'URL (query param)
     const urlParams = new URLSearchParams(window.location.search);
+
+    // 1. Depuis l'URL (query param)
     const shopParam = urlParams.get('shop');
     if (shopParam) return shopParam;
-    
+
     // 2. Depuis le host param (Shopify embedded)
     const hostParam = urlParams.get('host');
     if (hostParam) {
@@ -111,29 +140,28 @@ async function authFetch(url, options = {}) {
         if (match) return match[1];
       } catch (e) {}
     }
-    
+
     // 3. Depuis localStorage (cache)
     const cached = localStorage.getItem('stockmanager_shop');
     if (cached) return cached;
-    
-    // 4. Fallback pour dev
+
     return null;
   }
-  
+
   const CURRENT_SHOP = getShopFromUrl();
-  
-  // Sauvegarder pour les prochaines fois
+
   if (CURRENT_SHOP) {
     localStorage.setItem('stockmanager_shop', CURRENT_SHOP);
     console.log('🏪 Shop détecté:', CURRENT_SHOP);
   }
-  
-  // Helper pour ajouter le shop aux requêtes
+
   function apiUrl(endpoint) {
     const separator = endpoint.includes('?') ? '&' : '?';
-    return CURRENT_SHOP ? `${API_BASE}${endpoint}${separator}shop=${encodeURIComponent(CURRENT_SHOP)}` : `${API_BASE}${endpoint}`;
+    return CURRENT_SHOP
+      ? `${API_BASE}${endpoint}${separator}shop=${encodeURIComponent(CURRENT_SHOP)}`
+      : `${API_BASE}${endpoint}`;
   }
-  
+
   const FEATURES = {
     hasBatchTracking: { plan: 'pro', name: 'Lots & DLC', icon: '🏷️' },
     hasSuppliers: { plan: 'pro', name: 'Fournisseurs', icon: '🏭' },
@@ -162,13 +190,14 @@ async function authFetch(url, options = {}) {
   async function init() {
     console.log('🚀 Stock Manager Pro initializing...');
     console.log('🏪 Shop:', CURRENT_SHOP || 'NON DÉTECTÉ');
-    
-// ✅ Initialiser App Bridge AVANT les appels /api/*
-await initAppBridge();
 
-setupNavigation();
-await loadPlanInfo();
+    // ✅ Initialiser App Bridge AVANT les appels /api/*
+    await initAppBridge();
+
+    setupNavigation();
+    await loadPlanInfo();
     await loadProducts();
+
     renderTab('dashboard');
     updatePlanWidget();
     console.log('✅ Ready');
@@ -203,7 +232,7 @@ await loadPlanInfo();
 
   function toggleSidebar() {
     state.sidebarOpen = !state.sidebarOpen;
-    document.getElementById('sidebar').classList.toggle('collapsed', !state.sidebarOpen);
+    document.getElementById('sidebar')?.classList.toggle('collapsed', !state.sidebarOpen);
   }
 
   // ============================================
@@ -212,6 +241,8 @@ await loadPlanInfo();
 
   function renderTab(tab) {
     const content = document.getElementById('pageContent');
+    if (!content) return;
+
     const renderers = {
       dashboard: renderDashboard,
       products: renderProducts,
@@ -224,7 +255,7 @@ await loadPlanInfo();
       inventory: () => renderLockedOrContent('hasInventoryCount', renderInventory),
       settings: renderSettings,
     };
-    
+
     const renderer = renderers[tab] || renderDashboard;
     if (typeof renderer === 'function') {
       const result = renderer(content);
@@ -234,6 +265,7 @@ await loadPlanInfo();
 
   function renderLockedOrContent(featureKey, contentRenderer) {
     const content = document.getElementById('pageContent');
+    if (!content) return;
     if (!hasFeature(featureKey)) {
       renderLockedFeature(content, featureKey);
     } else {
@@ -249,7 +281,7 @@ await loadPlanInfo();
     const totalStock = state.products.reduce((s, p) => s + (p.totalGrams || 0), 0);
     const totalValue = state.products.reduce((s, p) => s + ((p.totalGrams || 0) * (p.averageCostPerGram || 0)), 0);
     const lowStock = state.products.filter(p => (p.totalGrams || 0) < 100).length;
-    
+
     c.innerHTML = `
       <div class="page-header">
         <div>
@@ -511,6 +543,8 @@ await loadPlanInfo();
     closeModal();
     const { title, content, footer, size = '' } = opts;
     const container = document.getElementById('modalsContainer');
+    if (!container) return;
+
     container.innerHTML = `
       <div class="modal-backdrop active" onclick="app.closeModal()"></div>
       <div class="modal active ${size ? `modal-${size}` : ''}">
@@ -525,7 +559,8 @@ await loadPlanInfo();
   }
 
   function closeModal() {
-    document.getElementById('modalsContainer').innerHTML = '';
+    const el = document.getElementById('modalsContainer');
+    if (el) el.innerHTML = '';
   }
 
   function showAddProductModal() {
@@ -567,7 +602,11 @@ await loadPlanInfo();
         <div class="form-group">
           <label class="form-label">Produit</label>
           <select class="form-select" id="restockProduct">
-            ${state.products.map(p => `<option value="${p.id}" ${p.id === productId ? 'selected' : ''}>${escapeHtml(p.name || p.title)}</option>`).join('')}
+            ${state.products.map(p => `
+              <option value="${p.id}" ${p.id === productId ? 'selected' : ''}>
+                ${escapeHtml(p.name || p.title || 'Sans nom')}
+              </option>
+            `).join('')}
           </select>
         </div>
         <div class="form-row">
@@ -601,7 +640,11 @@ await loadPlanInfo();
         <div class="form-group">
           <label class="form-label">Produit</label>
           <select class="form-select" id="adjustProduct">
-            ${state.products.map(p => `<option value="${p.id}" ${p.id === productId ? 'selected' : ''}>${escapeHtml(p.name || p.title)} (${formatWeight(p.totalGrams || 0)})</option>`).join('')}
+            ${state.products.map(p => `
+              <option value="${p.id}" ${p.id === productId ? 'selected' : ''}>
+                ${escapeHtml(p.name || p.title || 'Sans nom')} (${formatWeight(p.totalGrams || 0)})
+              </option>
+            `).join('')}
           </select>
         </div>
         <div class="form-group">
@@ -690,6 +733,8 @@ await loadPlanInfo();
 
   function showToast(message, type = 'info', duration = 4000) {
     const container = document.getElementById('toastContainer');
+    if (!container) return;
+
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
     const icons = { success: '✅', error: '❌', warning: '⚠️', info: 'ℹ️' };
@@ -710,6 +755,7 @@ await loadPlanInfo();
         const data = await res.json();
         state.plan = { id: data.current?.planId || 'free', limits: data.limits || { maxProducts: 2 } };
         console.log('📋 Plan chargé:', state.plan.id);
+        updatePlanWidget();
       } else {
         console.warn('Plan load failed:', res.status);
       }
@@ -720,7 +766,12 @@ await loadPlanInfo();
     try {
       const res = await authFetch(apiUrl('/products'));
       if (res.ok) state.products = await res.json();
-    } catch (e) { console.warn('Products load error', e); state.products = []; }
+    } catch (e) {
+      console.warn('Products load error', e);
+      state.products = [];
+    } finally {
+      updatePlanWidget();
+    }
   }
 
   async function saveProduct() {
@@ -728,11 +779,25 @@ await loadPlanInfo();
     const stock = parseFloat(document.getElementById('productStock')?.value) || 0;
     const cost = parseFloat(document.getElementById('productCost')?.value) || 0;
     if (!name) { showToast('Nom requis', 'error'); return; }
+
     try {
-      const res = await authFetch(apiUrl('/products'), { method: 'POST', body: JSON.stringify({ name, totalGrams: stock, averageCostPerGram: cost }) });
-      if (res.ok) { showToast('Produit ajouté', 'success'); closeModal(); await loadProducts(); renderTab(state.currentTab); }
-      else throw new Error();
-    } catch (e) { showToast('Erreur', 'error'); }
+      const res = await authFetch(apiUrl('/products'), {
+        method: 'POST',
+        body: JSON.stringify({ name, totalGrams: stock, averageCostPerGram: cost })
+      });
+
+      if (res.ok) {
+        showToast('Produit ajouté', 'success');
+        closeModal();
+        await loadProducts();
+        renderTab(state.currentTab);
+        updatePlanWidget();
+      } else {
+        throw new Error();
+      }
+    } catch (e) {
+      showToast('Erreur', 'error');
+    }
   }
 
   async function saveRestock() {
@@ -740,11 +805,25 @@ await loadPlanInfo();
     const qty = parseFloat(document.getElementById('restockQty')?.value);
     const price = parseFloat(document.getElementById('restockPrice')?.value) || 0;
     if (!productId || !qty) { showToast('Champs requis', 'error'); return; }
+
     try {
-      const res = await authFetch(apiUrl(`/products/${productId}/restock`), { method: 'POST', body: JSON.stringify({ grams: qty, costPerGram: price }) });
-      if (res.ok) { showToast('Stock mis à jour', 'success'); closeModal(); await loadProducts(); renderTab(state.currentTab); }
-      else throw new Error();
-    } catch (e) { showToast('Erreur', 'error'); }
+      const res = await authFetch(apiUrl(`/products/${productId}/restock`), {
+        method: 'POST',
+        body: JSON.stringify({ grams: qty, costPerGram: price })
+      });
+
+      if (res.ok) {
+        showToast('Stock mis à jour', 'success');
+        closeModal();
+        await loadProducts();
+        renderTab(state.currentTab);
+        updatePlanWidget();
+      } else {
+        throw new Error();
+      }
+    } catch (e) {
+      showToast('Erreur', 'error');
+    }
   }
 
   async function saveAdjustment() {
@@ -752,11 +831,25 @@ await loadPlanInfo();
     const type = document.querySelector('input[name="adjustType"]:checked')?.value;
     const qty = parseFloat(document.getElementById('adjustQty')?.value);
     if (!productId || !qty) { showToast('Champs requis', 'error'); return; }
+
     try {
-      const res = await authFetch(apiUrl(`/products/${productId}/adjust`), { method: 'POST', body: JSON.stringify({ type, grams: qty }) });
-      if (res.ok) { showToast('Ajustement appliqué', 'success'); closeModal(); await loadProducts(); renderTab(state.currentTab); }
-      else throw new Error();
-    } catch (e) { showToast('Erreur', 'error'); }
+      const res = await authFetch(apiUrl(`/products/${productId}/adjust`), {
+        method: 'POST',
+        body: JSON.stringify({ type, grams: qty })
+      });
+
+      if (res.ok) {
+        showToast('Ajustement appliqué', 'success');
+        closeModal();
+        await loadProducts();
+        renderTab(state.currentTab);
+        updatePlanWidget();
+      } else {
+        throw new Error();
+      }
+    } catch (e) {
+      showToast('Erreur', 'error');
+    }
   }
 
   function syncShopify() { showToast('Synchronisation...', 'info'); }
@@ -770,7 +863,8 @@ await loadPlanInfo();
   function updatePlanWidget() {
     const w = document.getElementById('planWidget');
     if (!w) return;
-    const max = state.plan.limits.maxProducts || 2;
+    const max = state.plan?.limits?.maxProducts ?? 2;
+
     w.innerHTML = `
       <div class="plan-info">
         <span class="plan-name">Plan ${getPlanName(state.plan.id)}</span>
@@ -784,13 +878,20 @@ await loadPlanInfo();
   function getPlanPrice(id) { return { starter: 14.99, pro: 39.99, business: 79.99, enterprise: 199 }[id] || 0; }
   function formatWeight(g) { return g >= 1000 ? (g / 1000).toFixed(2) + ' kg' : g.toFixed(0) + ' g'; }
   function formatCurrency(a) { return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(a); }
+
   function getStockStatus(g) {
     if (g <= 0) return { class: 'critical', label: 'Rupture', icon: '❌' };
     if (g < 50) return { class: 'critical', label: 'Critique', icon: '🔴' };
     if (g < 200) return { class: 'low', label: 'Bas', icon: '🟡' };
     return { class: 'good', label: 'OK', icon: '🟢' };
   }
-  function escapeHtml(s) { if (!s) return ''; const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+  function escapeHtml(s) {
+    if (!s) return '';
+    const d = document.createElement('div');
+    d.textContent = String(s);
+    return d.innerHTML;
+  }
 
   // ============================================
   // EXPORTS
