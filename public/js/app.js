@@ -5,6 +5,59 @@
   const API_BASE = '/api';
   
   // ============================================
+  // SHOPIFY APP BRIDGE & SESSION TOKEN
+  // ============================================
+  
+  let appBridge = null;
+  let sessionToken = null;
+  
+  function initAppBridge() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const host = urlParams.get('host');
+    
+    if (window.shopify && host) {
+      try {
+        appBridge = window.shopify;
+        console.log('🔗 Shopify App Bridge initialisé');
+        return true;
+      } catch (e) {
+        console.warn('⚠️ Erreur App Bridge:', e);
+      }
+    }
+    return false;
+  }
+  
+  async function getSessionToken() {
+    if (sessionToken) return sessionToken;
+    
+    try {
+      if (appBridge && appBridge.idToken) {
+        sessionToken = await appBridge.idToken();
+        console.log('🔑 Session token obtenu');
+        return sessionToken;
+      }
+    } catch (e) {
+      console.warn('⚠️ Erreur session token:', e);
+    }
+    return null;
+  }
+  
+  // Fetch avec authentification automatique
+  async function authFetch(url, options = {}) {
+    const token = await getSessionToken();
+    const headers = {
+      ...options.headers,
+      'Content-Type': 'application/json',
+    };
+    
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    
+    return fetch(url, { ...options, headers });
+  }
+  
+  // ============================================
   // SHOP DETECTION
   // ============================================
   
@@ -74,6 +127,10 @@
   async function init() {
     console.log('🚀 Stock Manager Pro initializing...');
     console.log('🏪 Shop:', CURRENT_SHOP || 'NON DÉTECTÉ');
+    
+    // Initialiser App Bridge pour l'authentification
+    initAppBridge();
+    
     setupNavigation();
     await loadPlanInfo();
     await loadProducts();
@@ -613,18 +670,20 @@
 
   async function loadPlanInfo() {
     try {
-      const res = await fetch(apiUrl('/plan'));
+      const res = await authFetch(apiUrl('/plan'));
       if (res.ok) {
         const data = await res.json();
         state.plan = { id: data.current?.planId || 'free', limits: data.limits || { maxProducts: 2 } };
         console.log('📋 Plan chargé:', state.plan.id);
+      } else {
+        console.warn('Plan load failed:', res.status);
       }
     } catch (e) { console.warn('Plan load error', e); }
   }
 
   async function loadProducts() {
     try {
-      const res = await fetch(apiUrl('/products'));
+      const res = await authFetch(apiUrl('/products'));
       if (res.ok) state.products = await res.json();
     } catch (e) { console.warn('Products load error', e); state.products = []; }
   }
@@ -635,7 +694,7 @@
     const cost = parseFloat(document.getElementById('productCost')?.value) || 0;
     if (!name) { showToast('Nom requis', 'error'); return; }
     try {
-      const res = await fetch(apiUrl('/products'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, totalGrams: stock, averageCostPerGram: cost }) });
+      const res = await authFetch(apiUrl('/products'), { method: 'POST', body: JSON.stringify({ name, totalGrams: stock, averageCostPerGram: cost }) });
       if (res.ok) { showToast('Produit ajouté', 'success'); closeModal(); await loadProducts(); renderTab(state.currentTab); }
       else throw new Error();
     } catch (e) { showToast('Erreur', 'error'); }
@@ -647,7 +706,7 @@
     const price = parseFloat(document.getElementById('restockPrice')?.value) || 0;
     if (!productId || !qty) { showToast('Champs requis', 'error'); return; }
     try {
-      const res = await fetch(apiUrl(`/products/${productId}/restock`), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ grams: qty, costPerGram: price }) });
+      const res = await authFetch(apiUrl(`/products/${productId}/restock`), { method: 'POST', body: JSON.stringify({ grams: qty, costPerGram: price }) });
       if (res.ok) { showToast('Stock mis à jour', 'success'); closeModal(); await loadProducts(); renderTab(state.currentTab); }
       else throw new Error();
     } catch (e) { showToast('Erreur', 'error'); }
@@ -659,7 +718,7 @@
     const qty = parseFloat(document.getElementById('adjustQty')?.value);
     if (!productId || !qty) { showToast('Champs requis', 'error'); return; }
     try {
-      const res = await fetch(apiUrl(`/products/${productId}/adjust`), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type, grams: qty }) });
+      const res = await authFetch(apiUrl(`/products/${productId}/adjust`), { method: 'POST', body: JSON.stringify({ type, grams: qty }) });
       if (res.ok) { showToast('Ajustement appliqué', 'success'); closeModal(); await loadProducts(); renderTab(state.currentTab); }
       else throw new Error();
     } catch (e) { showToast('Erreur', 'error'); }
