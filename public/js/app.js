@@ -184,10 +184,31 @@ async function ensureSessionOrRedirect() {
 
   async function init() {
     console.log('[Init] Stock Manager Pro');
-    if (!CURRENT_SHOP || window.top === window.self) {
-      document.body.innerHTML = '<div style="padding:40px"><h2>Application Shopify</h2><p>Ouvrez depuis l\'admin Shopify.</p></div>';
-      return;
-    }
+var host = getHostFromUrl();
+
+// 1) Si on est hors iframe (ouverture directe), on force le flow OAuth Shopify
+if (window.top === window.self) {
+  if (CURRENT_SHOP) {
+    window.location.href = '/api/auth/start?shop=' + encodeURIComponent(CURRENT_SHOP);
+    return;
+  }
+  document.body.innerHTML =
+    '<div style="padding:40px"><h2>Application Shopify</h2><p>Paramètre shop manquant.</p></div>';
+  return;
+}
+
+// 2) Si on est bien embedded mais host manquant, on force aussi OAuth (pour récupérer un host clean)
+if (!host && CURRENT_SHOP) {
+  window.top.location.href = '/api/auth/start?shop=' + encodeURIComponent(CURRENT_SHOP);
+  return;
+}
+
+// 3) Si shop manquant, on ne peut rien faire
+if (!CURRENT_SHOP) {
+  document.body.innerHTML =
+    '<div style="padding:40px"><h2>Application Shopify</h2><p>Paramètre shop manquant.</p></div>';
+  return;
+}
 var ready = await initAppBridge();
 if (!ready) { console.warn('[Init] AppBridge fail'); return; }
 
@@ -195,6 +216,7 @@ var okSession = await ensureSessionOrRedirect();
 if (!okSession) return;
 
     setupNavigation();
+await ensureOAuthInstalled();
     await loadPlanInfo();
     await loadProducts();
     renderTab('dashboard');
@@ -469,6 +491,21 @@ if (!okSession) return;
   // ==========================================
   // API
   // ==========================================
+async function ensureOAuthInstalled() {
+  try {
+    var res = await authFetch(apiUrl('/debug/shopify'));
+    if (res.status === 401) {
+      var j = await res.json().catch(function(){ return null; });
+      if (j && j.reauthUrl) {
+        // ⚠️ top-level redirect obligatoire dans une app embedded
+        window.top.location.href = j.reauthUrl;
+        return false;
+      }
+    }
+  } catch (e) {}
+  return true;
+}
+
   async function loadPlanInfo() {
     var url = apiUrl('/plan');
     if (!url) return;

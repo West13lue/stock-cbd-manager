@@ -304,7 +304,6 @@ function requireApiAuth(req, res, next) {
     hint: 'This endpoint must be called from an embedded Shopify app'
   });
 }
-;
 
   const verified = verifySessionToken(token);
   if (!verified.ok) return apiError(res, 401, verified.error);
@@ -340,20 +339,26 @@ function safeJson(req, res, fn) {
     const status = Number(info?.statusCode || 0);
     if (status !== 401) return false;
 
-    // âœ… Token invalide/rÃ©voquÃ© => purge + renvoi URL de rÃ©auth
+    // ✅ Token invalide/révoqué => purge + renvoi URL de réauth
     if (resolvedShop) {
       try {
         tokenStore?.removeToken?.(resolvedShop);
       } catch {}
 
-      const reauthUrl = `/api/auth/start?shop=${encodeURIComponent(resolvedShop)}`;
-return res.status(401).json({
-  error: "reauth_required",
-  message: "Shopify authentication required",
-  shop: req.resolvedShop || getShop(req),
-  reauthUrl: `/api/auth/start?shop=${encodeURIComponent(req.resolvedShop || getShop(req))}`,
-});
+      return res.status(401).json({
+        error: "reauth_required",
+        message: "Shopify authentication required",
+        shop: resolvedShop,
+        reauthUrl: `/api/auth/start?shop=${encodeURIComponent(resolvedShop)}`,
+      });
+    }
 
+    return res.status(401).json({
+      error: "reauth_required",
+      message: "Shopify authentication required",
+      reauthUrl: "/api/auth/start",
+    });
+  };
 
     return res.status(401).json({
       error: "reauth_required",
