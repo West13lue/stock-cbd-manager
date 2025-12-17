@@ -1,4 +1,4 @@
-// app-new.js — Stock Manager Pro - Main Application
+// app.js — Stock Manager Pro - Main Application
 (function() {
   'use strict';
 
@@ -155,12 +155,12 @@
     console.log('🏪 Shop détecté:', CURRENT_SHOP);
   }
 
-  function apiUrl(endpoint) {
-    const separator = endpoint.includes('?') ? '&' : '?';
-    return CURRENT_SHOP
-      ? `${API_BASE}${endpoint}${separator}shop=${encodeURIComponent(CURRENT_SHOP)}`
-      : `${API_BASE}${endpoint}`;
-  }
+function apiUrl(endpoint) {
+  if (!CURRENT_SHOP) return null;
+  const separator = endpoint.includes('?') ? '&' : '?';
+  return `${API_BASE}${endpoint}${separator}shop=${encodeURIComponent(CURRENT_SHOP)}`;
+}
+
 
   const FEATURES = {
     hasBatchTracking: { plan: 'pro', name: 'Lots & DLC', icon: '🏷️' },
@@ -187,21 +187,32 @@
   // INIT
   // ============================================
 
-  async function init() {
-    console.log('🚀 Stock Manager Pro initializing...');
-    console.log('🏪 Shop:', CURRENT_SHOP || 'NON DÉTECTÉ');
+async function init() {
+  console.log('🚀 Stock Manager Pro initializing...');
+  console.log('🏪 Shop:', CURRENT_SHOP || 'NON DÉTECTÉ');
 
-    // ✅ Initialiser App Bridge AVANT les appels /api/*
-    await initAppBridge();
-
-    setupNavigation();
-    await loadPlanInfo();
-    await loadProducts();
-
-    renderTab('dashboard');
-    updatePlanWidget();
-    console.log('✅ Ready');
+  // ⛔ STOP si pas de shop (refresh hors iframe Shopify)
+  if (!CURRENT_SHOP) {
+    console.warn('⏳ En attente du contexte Shopify (shop absent)');
+    return;
   }
+
+  // ⛔ STOP si App Bridge non prêt
+  const bridgeReady = await initAppBridge();
+  if (!bridgeReady) {
+    console.warn('⏳ App Bridge non prêt');
+    return;
+  }
+
+  setupNavigation();
+  await loadPlanInfo();
+  await loadProducts();
+
+  renderTab('dashboard');
+  updatePlanWidget();
+  console.log('✅ Ready');
+}
+
 
   // ============================================
   // NAVIGATION
@@ -748,31 +759,37 @@
   // API
   // ============================================
 
-  async function loadPlanInfo() {
-    try {
-      const res = await authFetch(apiUrl('/plan'));
-      if (res.ok) {
-        const data = await res.json();
-        state.plan = { id: data.current?.planId || 'free', limits: data.limits || { maxProducts: 2 } };
-        console.log('📋 Plan chargé:', state.plan.id);
-        updatePlanWidget();
-      } else {
-        console.warn('Plan load failed:', res.status);
-      }
-    } catch (e) { console.warn('Plan load error', e); }
-  }
+async function loadPlanInfo() {
+  const url = apiUrl('/plan');
+  if (!url) return;
 
-  async function loadProducts() {
-    try {
-      const res = await authFetch(apiUrl('/products'));
-      if (res.ok) state.products = await res.json();
-    } catch (e) {
-      console.warn('Products load error', e);
-      state.products = [];
-    } finally {
+  try {
+    const res = await authFetch(url);
+    if (res.ok) {
+      const data = await res.json();
+      state.plan = { id: data.current?.planId || 'free', limits: data.limits || { maxProducts: 2 } };
+      console.log('📋 Plan chargé:', state.plan.id);
       updatePlanWidget();
     }
+  } catch (e) {
+    console.warn('Plan load error', e);
   }
+}
+
+async function loadProducts() {
+  const url = apiUrl('/products');
+  if (!url) return;
+
+  try {
+    const res = await authFetch(url);
+    if (res.ok) state.products = await res.json();
+  } catch (e) {
+    console.warn('Products load error', e);
+    state.products = [];
+  } finally {
+    updatePlanWidget();
+  }
+}
 
   async function saveProduct() {
     const name = document.getElementById('productName')?.value;
