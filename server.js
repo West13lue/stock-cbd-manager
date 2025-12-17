@@ -294,7 +294,7 @@ function requireApiAuth(req, res, next) {
 
 
   // âœ… returnUrl Shopify Billing (aprÃ¨s acceptation abonnement)
-  if (req.path === "/billing/return") return next();
+  if (req.path === "/billing/return" || req.path === "/api/billing/return") return next();
 
   const token = extractBearerToken(req);
   if (!token) {
@@ -2294,6 +2294,46 @@ app.post("/webhooks/shop/redact", express.raw({ type: "application/json" }), asy
     res.sendStatus(200);
   } catch (err) {
     logEvent("webhook_shop_redact_error", { error: err.message }, "error");
+    res.sendStatus(500);
+  }
+});
+
+// ✅ Webhook pour les mises à jour d'abonnement (Shopify Billing)
+app.post("/webhooks/app_subscriptions/update", express.raw({ type: "application/json" }), async (req, res) => {
+  try {
+    if (!requireVerifiedWebhook(req, res)) return res.sendStatus(401);
+
+    const headerShop = String(req.get("X-Shopify-Shop-Domain") || "").trim();
+    const payload = JSON.parse(req.body.toString("utf8") || "{}");
+    const shop = normalizeShopDomain(headerShop || "");
+    
+    if (!shop) {
+      logEvent("webhook_subscription_no_shop", { headerShop }, "warn");
+      return res.sendStatus(200);
+    }
+
+    const subscriptionId = payload?.app_subscription?.admin_graphql_api_id || payload?.id;
+    const status = String(payload?.app_subscription?.status || payload?.status || "").toLowerCase();
+
+    logEvent("webhook_subscription_update", { shop, subscriptionId, status }, "info");
+
+    // Si l'abonnement est annulé/expiré, downgrade vers Free
+    if (status === "cancelled" || status === "expired" || status === "frozen") {
+      if (planManager) {
+        planManager.cancelSubscription(shop);
+        logEvent("subscription_auto_cancelled", { shop, status }, "info");
+      }
+    }
+
+    // Si l'abonnement est actif (après trial ou renouvellement)
+    if (status === "active") {
+      // On pourrait mettre à jour le statut local si nécessaire
+      logEvent("subscription_confirmed_active", { shop }, "info");
+    }
+
+    res.sendStatus(200);
+  } catch (err) {
+    logEvent("webhook_subscription_error", { error: err.message }, "error");
     res.sendStatus(500);
   }
 });
