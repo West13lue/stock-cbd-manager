@@ -1,45 +1,45 @@
-// app.js — Stock Manager Pro - Main Application
-(function() {
-  'use strict';
+// public/js/app.js — Stock Manager Pro - Main Application (FULL, prêt à coller)
+(function () {
+  "use strict";
 
-  const API_BASE = '/api';
+  const API_BASE = "/api";
 
   // ============================================
-  // SHOPIFY APP BRIDGE & SESSION TOKEN (FIX)
+  // SHOPIFY APP BRIDGE & SESSION TOKEN
   // ============================================
 
-  let appBridgeApp = null;     // instance createApp()
+  let appBridgeApp = null; // instance createApp()
   let sessionToken = null;
   let apiKeyCache = null;
 
   function getHostFromUrl() {
     const urlParams = new URLSearchParams(window.location.search);
-    return urlParams.get('host');
+    return urlParams.get("host");
   }
 
   async function loadPublicConfig() {
     if (apiKeyCache) return apiKeyCache;
-    const res = await fetch('/api/public/config', { headers: { 'Accept': 'application/json' } });
+    const res = await fetch("/api/public/config", { headers: { Accept: "application/json" } });
     const json = await res.json().catch(() => ({}));
-    apiKeyCache = String(json.apiKey || '').trim();
+    apiKeyCache = String(json.apiKey || "").trim();
     return apiKeyCache;
   }
 
   async function initAppBridge() {
     const host = getHostFromUrl();
     if (!host) {
-      console.warn('⚠️ host manquant dans l’URL (app embedded ?)');
+      console.warn("⚠️ host manquant dans l’URL (app embedded ?)");
       return false;
     }
 
     const apiKey = await loadPublicConfig();
     if (!apiKey) {
-      console.warn('⚠️ apiKey introuvable via /api/public/config');
+      console.warn("⚠️ apiKey introuvable via /api/public/config");
       return false;
     }
 
-    const AB = window['app-bridge'];
-    if (!AB || typeof AB.createApp !== 'function') {
+    const AB = window["app-bridge"];
+    if (!AB || typeof AB.createApp !== "function") {
       console.warn('⚠️ @shopify/app-bridge non chargé (window["app-bridge"] absent)');
       return false;
     }
@@ -50,7 +50,7 @@
       forceRedirect: true,
     });
 
-    console.log('🔗 App Bridge créé (createApp)');
+    console.log("🔗 App Bridge créé (createApp)");
     return true;
   }
 
@@ -58,9 +58,9 @@
     if (sessionToken) return sessionToken;
     if (!appBridgeApp) return null;
 
-    const ABU = window['app-bridge-utils'];
-    if (!ABU || typeof ABU.getSessionToken !== 'function') {
-      console.warn('⚠️ @shopify/app-bridge-utils non chargé (getSessionToken indisponible)');
+    const ABU = window["app-bridge-utils"];
+    if (!ABU || typeof ABU.getSessionToken !== "function") {
+      console.warn("⚠️ @shopify/app-bridge-utils non chargé (getSessionToken indisponible)");
       return null;
     }
 
@@ -68,7 +68,7 @@
       sessionToken = await ABU.getSessionToken(appBridgeApp);
       return sessionToken;
     } catch (e) {
-      console.warn('⚠️ Erreur getSessionToken(App Bridge):', e);
+      console.warn("⚠️ Erreur getSessionToken(App Bridge):", e);
       return null;
     }
   }
@@ -77,42 +77,38 @@
     sessionToken = null;
   }
 
-  // Fetch avec authentification automatique (+ retry 401)
   async function authFetch(url, options = {}) {
+    if (!url) throw new Error("URL manquante (apiUrl a renvoyé null)");
+
     const token = await getSessionToken();
 
     const headers = {
       ...(options.headers || {}),
-      'Accept': 'application/json',
+      Accept: "application/json",
     };
 
-    // On ne met Content-Type: application/json que si on envoie vraiment un body JSON
     const hasBody = options.body !== undefined && options.body !== null;
     if (hasBody && !(options.body instanceof FormData)) {
-      headers['Content-Type'] = headers['Content-Type'] || 'application/json';
+      headers["Content-Type"] = headers["Content-Type"] || "application/json";
     }
 
     if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
+      headers["Authorization"] = `Bearer ${token}`;
     } else {
-      console.warn('⚠️ Session token absent -> requête non authentifiée:', url);
+      console.warn("⚠️ Session token absent -> requête non authentifiée:", url);
     }
 
     const doFetch = () => fetch(url, { ...options, headers });
 
     let res = await doFetch();
 
-    // Si token expiré / invalide : on clear et on retente 1 fois
     if (res.status === 401 && token) {
-      console.warn('⚠️ 401 détecté -> refresh session token et retry:', url);
+      console.warn("⚠️ 401 détecté -> refresh session token et retry:", url);
       clearSessionToken();
 
       const token2 = await getSessionToken();
-      if (token2) {
-        headers['Authorization'] = `Bearer ${token2}`;
-      } else {
-        delete headers['Authorization'];
-      }
+      if (token2) headers["Authorization"] = `Bearer ${token2}`;
+      else delete headers["Authorization"];
 
       res = await doFetch();
     }
@@ -127,12 +123,10 @@
   function getShopFromUrl() {
     const urlParams = new URLSearchParams(window.location.search);
 
-    // 1. Depuis l'URL (query param)
-    const shopParam = urlParams.get('shop');
+    const shopParam = urlParams.get("shop");
     if (shopParam) return shopParam;
 
-    // 2. Depuis le host param (Shopify embedded)
-    const hostParam = urlParams.get('host');
+    const hostParam = urlParams.get("host");
     if (hostParam) {
       try {
         const decoded = atob(hostParam);
@@ -141,96 +135,102 @@
       } catch (e) {}
     }
 
-    // 3. Depuis localStorage (cache)
-    const cached = localStorage.getItem('stockmanager_shop');
+    const cached = localStorage.getItem("stockmanager_shop");
     if (cached) return cached;
 
     return null;
   }
 
   const CURRENT_SHOP = getShopFromUrl();
-
   if (CURRENT_SHOP) {
-    localStorage.setItem('stockmanager_shop', CURRENT_SHOP);
-    console.log('🏪 Shop détecté:', CURRENT_SHOP);
+    localStorage.setItem("stockmanager_shop", CURRENT_SHOP);
+    console.log("🏪 Shop détecté:", CURRENT_SHOP);
   }
 
-function apiUrl(endpoint) {
-  if (!CURRENT_SHOP) return null;
-  const separator = endpoint.includes('?') ? '&' : '?';
-  return `${API_BASE}${endpoint}${separator}shop=${encodeURIComponent(CURRENT_SHOP)}`;
-}
+  function apiUrl(endpoint) {
+    if (!CURRENT_SHOP) return null;
+    const separator = endpoint.includes("?") ? "&" : "?";
+    return `${API_BASE}${endpoint}${separator}shop=${encodeURIComponent(CURRENT_SHOP)}`;
+  }
 
+  // ============================================
+  // PLANS / FEATURES
+  // ============================================
 
   const FEATURES = {
-    hasBatchTracking: { plan: 'pro', name: 'Lots & DLC', icon: '🏷️' },
-    hasSuppliers: { plan: 'pro', name: 'Fournisseurs', icon: '🏭' },
-    hasPurchaseOrders: { plan: 'business', name: 'Bons de commande', icon: '📝' },
-    hasForecast: { plan: 'business', name: 'Prévisions', icon: '🔮' },
-    hasKits: { plan: 'business', name: 'Kits & Bundles', icon: '🧩' },
-    hasAnalytics: { plan: 'pro', name: 'Analytics', icon: '📈' },
-    hasInventoryCount: { plan: 'pro', name: 'Inventaire', icon: '📋' },
+    hasBatchTracking: { plan: "pro", name: "Lots & DLC", icon: "🏷️" },
+    hasSuppliers: { plan: "pro", name: "Fournisseurs", icon: "🏭" },
+    hasPurchaseOrders: { plan: "business", name: "Bons de commande", icon: "📝" },
+    hasForecast: { plan: "business", name: "Prévisions", icon: "🔮" },
+    hasKits: { plan: "business", name: "Kits & Bundles", icon: "🧩" },
+    hasAnalytics: { plan: "pro", name: "Analytics", icon: "📈" },
+    hasInventoryCount: { plan: "pro", name: "Inventaire", icon: "📋" },
   };
 
-  const PLAN_HIERARCHY = ['free', 'starter', 'pro', 'business', 'enterprise'];
+  const PLAN_HIERARCHY = ["free", "starter", "pro", "business", "enterprise"];
 
   const state = {
-    currentTab: 'dashboard',
-    plan: { id: 'free', limits: { maxProducts: 2 } },
+    currentTab: "dashboard",
+    plan: { id: "free", limits: { maxProducts: 2 } },
     products: [],
     loading: false,
     sidebarOpen: true,
     shop: CURRENT_SHOP,
+    searchQuery: "",
+    notificationsOpen: false,
+    userMenuOpen: false,
   };
 
   // ============================================
   // INIT
   // ============================================
 
-async function init() {
-  console.log('🚀 Stock Manager Pro initializing...');
-  console.log('🏪 Shop:', CURRENT_SHOP || 'NON DÉTECTÉ');
+  async function init() {
+    console.log("🚀 Stock Manager Pro initializing...");
+    console.log("🏪 Shop:", CURRENT_SHOP || "NON DÉTECTÉ");
 
-if (!CURRENT_SHOP || window.top === window.self) {
-  console.warn('⛔ App ouverte hors iframe Shopify');
+    // Si pas dans l’admin Shopify (iframe), on affiche un message propre
+    if (!CURRENT_SHOP || window.top === window.self) {
+      console.warn("⛔ App ouverte hors iframe Shopify");
 
-  const msg = document.createElement('div');
-  msg.style.padding = '40px';
-  msg.style.fontFamily = 'sans-serif';
-  msg.innerHTML = `
-    <h2>⚠️ Application Shopify</h2>
-    <p>Cette application doit être ouverte depuis l’admin Shopify.</p>
-  `;
+      const msg = document.createElement("div");
+      msg.style.padding = "40px";
+      msg.style.fontFamily = "Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif";
+      msg.innerHTML = `
+        <h2>⚠️ Application Shopify</h2>
+        <p>Cette application doit être ouverte depuis l’admin Shopify.</p>
+      `;
 
-  document.body.innerHTML = '';
-  document.body.appendChild(msg);
-  return;
-}
+      document.body.innerHTML = "";
+      document.body.appendChild(msg);
+      return;
+    }
 
-  // ⛔ STOP si App Bridge non prêt
-  const bridgeReady = await initAppBridge();
-  if (!bridgeReady) {
-    console.warn('⏳ App Bridge non prêt');
-    return;
+    const bridgeReady = await initAppBridge();
+    if (!bridgeReady) {
+      console.warn("⏳ App Bridge non prêt");
+      return;
+    }
+
+    setupNavigation();
+    setupGlobalSearch();
+
+    await loadPlanInfo();
+    await loadProducts();
+
+    renderTab("dashboard");
+    updatePlanWidget();
+    updateSyncStatus("ok", "Synchronisé");
+    console.log("✅ Ready");
   }
-
-  setupNavigation();
-  await loadPlanInfo();
-  await loadProducts();
-
-  renderTab('dashboard');
-  updatePlanWidget();
-  console.log('✅ Ready');
-}
-
 
   // ============================================
   // NAVIGATION
   // ============================================
 
   function setupNavigation() {
-    document.querySelectorAll('.nav-item[data-tab]').forEach(item => {
-      item.addEventListener('click', (e) => {
+    document.querySelectorAll(".nav-item[data-tab]").forEach((item) => {
+      item.addEventListener("click", (e) => {
         e.preventDefault();
         const tab = item.dataset.tab;
         const feature = item.dataset.feature;
@@ -245,15 +245,31 @@ if (!CURRENT_SHOP || window.top === window.self) {
 
   function navigateTo(tab) {
     state.currentTab = tab;
-    document.querySelectorAll('.nav-item').forEach(item => {
-      item.classList.toggle('active', item.dataset.tab === tab);
+    document.querySelectorAll(".nav-item").forEach((item) => {
+      item.classList.toggle("active", item.dataset.tab === tab);
     });
     renderTab(tab);
   }
 
   function toggleSidebar() {
     state.sidebarOpen = !state.sidebarOpen;
-    document.getElementById('sidebar')?.classList.toggle('collapsed', !state.sidebarOpen);
+    document.getElementById("sidebar")?.classList.toggle("collapsed", !state.sidebarOpen);
+  }
+
+  // ============================================
+  // GLOBAL SEARCH
+  // ============================================
+
+  function setupGlobalSearch() {
+    const input = document.getElementById("globalSearch");
+    if (!input) return;
+
+    const debounced = debounce(() => {
+      state.searchQuery = String(input.value || "").trim().toLowerCase();
+      if (state.currentTab === "products" || state.currentTab === "dashboard") renderTab(state.currentTab);
+    }, 150);
+
+    input.addEventListener("input", debounced);
   }
 
   // ============================================
@@ -261,31 +277,31 @@ if (!CURRENT_SHOP || window.top === window.self) {
   // ============================================
 
   function renderTab(tab) {
-    const content = document.getElementById('pageContent');
+    const content = document.getElementById("pageContent");
     if (!content) return;
 
     const renderers = {
       dashboard: renderDashboard,
       products: renderProducts,
-      batches: () => renderLockedOrContent('hasBatchTracking', renderBatches),
-      suppliers: () => renderLockedOrContent('hasSuppliers', renderSuppliers),
-      orders: () => renderLockedOrContent('hasPurchaseOrders', renderOrders),
-      forecast: () => renderLockedOrContent('hasForecast', renderForecast),
-      kits: () => renderLockedOrContent('hasKits', renderKits),
-      analytics: () => renderLockedOrContent('hasAnalytics', renderAnalytics),
-      inventory: () => renderLockedOrContent('hasInventoryCount', renderInventory),
+      batches: () => renderLockedOrContent("hasBatchTracking", renderBatches),
+      suppliers: () => renderLockedOrContent("hasSuppliers", renderSuppliers),
+      orders: () => renderLockedOrContent("hasPurchaseOrders", renderOrders),
+      forecast: () => renderLockedOrContent("hasForecast", renderForecast),
+      kits: () => renderLockedOrContent("hasKits", renderKits),
+      analytics: () => renderLockedOrContent("hasAnalytics", renderAnalytics),
+      inventory: () => renderLockedOrContent("hasInventoryCount", renderInventory),
       settings: renderSettings,
     };
 
     const renderer = renderers[tab] || renderDashboard;
-    if (typeof renderer === 'function') {
+    if (typeof renderer === "function") {
       const result = renderer(content);
-      if (typeof result === 'string') content.innerHTML = result;
+      if (typeof result === "string") content.innerHTML = result;
     }
   }
 
   function renderLockedOrContent(featureKey, contentRenderer) {
-    const content = document.getElementById('pageContent');
+    const content = document.getElementById("pageContent");
     if (!content) return;
     if (!hasFeature(featureKey)) {
       renderLockedFeature(content, featureKey);
@@ -298,10 +314,25 @@ if (!CURRENT_SHOP || window.top === window.self) {
   // DASHBOARD
   // ============================================
 
+  function getVisibleProducts() {
+    const q = state.searchQuery;
+    if (!q) return state.products;
+
+    return state.products.filter((p) => {
+      const name = String(p.name || p.title || "").toLowerCase();
+      return name.includes(q);
+    });
+  }
+
   function renderDashboard(c) {
-    const totalStock = state.products.reduce((s, p) => s + (p.totalGrams || 0), 0);
-    const totalValue = state.products.reduce((s, p) => s + ((p.totalGrams || 0) * (p.averageCostPerGram || 0)), 0);
-    const lowStock = state.products.filter(p => (p.totalGrams || 0) < 100).length;
+    const visible = getVisibleProducts();
+
+    const totalStock = visible.reduce((s, p) => s + (Number(p.totalGrams) || 0), 0);
+    const totalValue = visible.reduce(
+      (s, p) => s + (Number(p.totalGrams) || 0) * (Number(p.averageCostPerGram) || 0),
+      0
+    );
+    const lowStock = visible.filter((p) => (Number(p.totalGrams) || 0) < 100).length;
 
     c.innerHTML = `
       <div class="page-header">
@@ -318,7 +349,7 @@ if (!CURRENT_SHOP || window.top === window.self) {
       <div class="stats-grid">
         <div class="stat-card">
           <div class="stat-icon">📦</div>
-          <div class="stat-value">${state.products.length}</div>
+          <div class="stat-value">${visible.length}</div>
           <div class="stat-label">Produits</div>
         </div>
         <div class="stat-card">
@@ -333,7 +364,7 @@ if (!CURRENT_SHOP || window.top === window.self) {
         </div>
         <div class="stat-card">
           <div class="stat-icon">⚠️</div>
-          <div class="stat-value ${lowStock > 0 ? 'text-warning' : ''}">${lowStock}</div>
+          <div class="stat-value ${lowStock > 0 ? "text-warning" : ""}">${lowStock}</div>
           <div class="stat-label">Stock bas</div>
         </div>
       </div>
@@ -344,7 +375,7 @@ if (!CURRENT_SHOP || window.top === window.self) {
           <button class="btn btn-ghost btn-sm" onclick="app.navigateTo('products')">Voir tout →</button>
         </div>
         <div class="card-body" style="padding:0">
-          ${state.products.length > 0 ? renderProductsTable(state.products.slice(0, 5)) : renderEmptyProducts()}
+          ${visible.length > 0 ? renderProductsTable(visible.slice(0, 5)) : renderEmptyProducts()}
         </div>
       </div>
 
@@ -353,21 +384,26 @@ if (!CURRENT_SHOP || window.top === window.self) {
   }
 
   function renderLockedFeatureCards() {
-    if (state.plan.id === 'enterprise') return '';
+    if (state.plan.id === "enterprise") return "";
     const locked = Object.entries(FEATURES).filter(([k]) => !hasFeature(k));
-    if (locked.length === 0) return '';
+    if (locked.length === 0) return "";
 
     return `
       <div class="mt-xl">
         <h3 class="mb-lg text-secondary">🔓 Débloquez plus de fonctionnalités</h3>
         <div class="stats-grid">
-          ${locked.slice(0, 3).map(([k, f]) => `
+          ${locked
+            .slice(0, 3)
+            .map(
+              ([k, f]) => `
             <div class="stat-card" style="cursor:pointer;opacity:0.7" onclick="app.showFeatureLockedModal('${k}')">
               <div class="stat-icon">${f.icon}</div>
               <div class="stat-value" style="font-size:16px">${f.name}</div>
-              <span class="badge badge-${f.plan === 'pro' ? 'info' : 'warning'}">${f.plan.toUpperCase()}</span>
+              <span class="badge badge-${f.plan === "pro" ? "info" : "warning"}">${f.plan.toUpperCase()}</span>
             </div>
-          `).join('')}
+          `
+            )
+            .join("")}
         </div>
       </div>
     `;
@@ -378,11 +414,13 @@ if (!CURRENT_SHOP || window.top === window.self) {
   // ============================================
 
   function renderProducts(c) {
+    const visible = getVisibleProducts();
+
     c.innerHTML = `
       <div class="page-header">
         <div>
           <h1 class="page-title">Produits</h1>
-          <p class="page-subtitle">${state.products.length} produit(s)</p>
+          <p class="page-subtitle">${visible.length} produit(s)${state.searchQuery ? " (filtré)" : ""}</p>
         </div>
         <div class="page-actions">
           <button class="btn btn-secondary" onclick="app.importFromShopify()">📥 Import</button>
@@ -391,36 +429,53 @@ if (!CURRENT_SHOP || window.top === window.self) {
       </div>
       <div class="card">
         <div class="card-body" style="padding:0">
-          ${state.products.length > 0 ? renderProductsTable(state.products) : renderEmptyProducts()}
+          ${visible.length > 0 ? renderProductsTable(visible) : renderEmptyProducts()}
         </div>
       </div>
     `;
+  }
+
+  function getProductId(p) {
+    return String(p.productId || p.id || p.product_id || p.productID || "").trim();
   }
 
   function renderProductsTable(products) {
     return `
       <div class="table-container">
         <table class="data-table">
-          <thead><tr><th>Produit</th><th>Stock</th><th>CMP</th><th>Valeur</th><th>Statut</th><th></th></tr></thead>
+          <thead>
+            <tr>
+              <th>Produit</th>
+              <th>Stock</th>
+              <th>CMP</th>
+              <th>Valeur</th>
+              <th>Statut</th>
+              <th></th>
+            </tr>
+          </thead>
           <tbody>
-            ${products.map(p => {
-              const stock = p.totalGrams || 0;
-              const cmp = p.averageCostPerGram || 0;
-              const status = getStockStatus(stock);
-              return `
-                <tr>
-                  <td><div class="cell-primary">${escapeHtml(p.name || p.title || 'Sans nom')}</div></td>
-                  <td class="cell-mono font-bold">${formatWeight(stock)}</td>
-                  <td class="cell-mono">${formatCurrency(cmp)}/g</td>
-                  <td class="cell-mono">${formatCurrency(stock * cmp)}</td>
-                  <td><span class="stock-badge ${status.class}">${status.icon} ${status.label}</span></td>
-                  <td class="cell-actions">
-                    <button class="btn btn-ghost btn-xs" onclick="app.showRestockModal('${p.productId}')">📥</button>
-                    <button class="btn btn-ghost btn-xs" onclick="app.showAdjustModal('${p.productId}')">✏️</button>
-                  </td>
-                </tr>
-              `;
-            }).join('')}
+            ${products
+              .map((p) => {
+                const pid = getProductId(p);
+                const stock = Number(p.totalGrams) || 0;
+                const cmp = Number(p.averageCostPerGram) || 0;
+                const status = getStockStatus(stock);
+
+                return `
+                  <tr>
+                    <td><div class="cell-primary">${escapeHtml(p.name || p.title || "Sans nom")}</div></td>
+                    <td class="cell-mono font-bold">${formatWeight(stock)}</td>
+                    <td class="cell-mono">${formatCurrency(cmp)}/g</td>
+                    <td class="cell-mono">${formatCurrency(stock * cmp)}</td>
+                    <td><span class="stock-badge ${status.class}">${status.icon} ${status.label}</span></td>
+                    <td class="cell-actions">
+                      <button class="btn btn-ghost btn-xs" onclick="app.showRestockModal('${escapeAttr(pid)}')">📥</button>
+                      <button class="btn btn-ghost btn-xs" onclick="app.showAdjustModal('${escapeAttr(pid)}')">✏️</button>
+                    </td>
+                  </tr>
+                `;
+              })
+              .join("")}
           </tbody>
         </table>
       </div>
@@ -439,29 +494,46 @@ if (!CURRENT_SHOP || window.top === window.self) {
   }
 
   // ============================================
-  // LOCKED FEATURES
+  // FEATURES PAGES (PRO/BIZ) + STUB ACTIONS
   // ============================================
 
-  function renderBatches(c) { c.innerHTML = renderFeaturePage('Lots & DLC', '🏷️', 'Traçabilité et DLC', 'showAddBatchModal'); }
-  function renderSuppliers(c) { c.innerHTML = renderFeaturePage('Fournisseurs', '🏭', 'Gérez vos fournisseurs', 'showAddSupplierModal'); }
-  function renderOrders(c) { c.innerHTML = renderFeaturePage('Commandes', '📝', 'Bons de commande', 'showCreateOrderModal'); }
-  function renderForecast(c) { c.innerHTML = renderFeaturePage('Prévisions', '🔮', 'Anticipez les ruptures', null); }
-  function renderKits(c) { c.innerHTML = renderFeaturePage('Kits', '🧩', 'Produits composés', 'showCreateKitModal'); }
-  function renderAnalytics(c) { c.innerHTML = renderFeaturePage('Analytics', '📈', 'Statistiques', null); }
-  function renderInventory(c) { c.innerHTML = renderFeaturePage('Inventaire', '📋', 'Comptage physique', 'startInventory'); }
+  function renderBatches(c) {
+    c.innerHTML = renderFeaturePage("Lots & DLC", "🏷️", "Traçabilité et DLC", "showAddBatchModal");
+  }
+  function renderSuppliers(c) {
+    c.innerHTML = renderFeaturePage("Fournisseurs", "🏭", "Gérez vos fournisseurs", "showAddSupplierModal");
+  }
+  function renderOrders(c) {
+    c.innerHTML = renderFeaturePage("Commandes", "📝", "Bons de commande", "showCreateOrderModal");
+  }
+  function renderForecast(c) {
+    c.innerHTML = renderFeaturePage("Prévisions", "🔮", "Anticipez les ruptures", null);
+  }
+  function renderKits(c) {
+    c.innerHTML = renderFeaturePage("Kits & Bundles", "🧩", "Produits composés", "showCreateKitModal");
+  }
+  function renderAnalytics(c) {
+    c.innerHTML = renderFeaturePage("Analytics", "📈", "Statistiques", null);
+  }
+  function renderInventory(c) {
+    c.innerHTML = renderFeaturePage("Inventaire", "📋", "Comptage physique", "startInventory");
+  }
 
   function renderFeaturePage(title, icon, subtitle, action) {
     return `
       <div class="page-header">
         <div><h1 class="page-title">${icon} ${title}</h1><p class="page-subtitle">${subtitle}</p></div>
-        ${action ? `<button class="btn btn-primary" onclick="app.${action}()">➕ Nouveau</button>` : ''}
+        ${action ? `<button class="btn btn-primary" onclick="app.${action}()">➕ Nouveau</button>` : ""}
       </div>
-      <div class="card"><div class="card-body">
-        <div class="empty-state" style="min-height:250px">
-          <div class="empty-icon">${icon}</div>
-          <p class="empty-description">Aucun élément pour le moment</p>
+      <div class="card">
+        <div class="card-body">
+          <div class="empty-state" style="min-height:250px">
+            <div class="empty-icon">${icon}</div>
+            <p class="empty-description">Aucun élément pour le moment</p>
+            <p class="text-secondary text-sm">Cette page est prête côté UI. Il reste à brancher les endpoints API si besoin.</p>
+          </div>
         </div>
-      </div></div>
+      </div>
     `;
   }
 
@@ -484,7 +556,7 @@ if (!CURRENT_SHOP || window.top === window.self) {
           <h2 class="lock-title">Fonctionnalité ${f.plan.toUpperCase()}</h2>
           <p class="lock-description">${getFeatureDescription(featureKey)}</p>
           <div class="lock-benefits">
-            ${benefits.map(b => `<span class="lock-benefit"><span class="lock-benefit-icon">✓</span>${b}</span>`).join('')}
+            ${benefits.map((b) => `<span class="lock-benefit"><span class="lock-benefit-icon">✓</span>${b}</span>`).join("")}
           </div>
           <button class="btn btn-upgrade btn-lg" onclick="app.showUpgradeModal('${f.plan}')">⬆️ Passer au ${f.plan.toUpperCase()}</button>
           <p class="lock-plan">À partir de <strong>${getPlanPrice(f.plan)}€/mois</strong></p>
@@ -495,34 +567,34 @@ if (!CURRENT_SHOP || window.top === window.self) {
 
   function hasFeature(featureKey) {
     const planIdx = PLAN_HIERARCHY.indexOf(state.plan.id);
-    const reqIdx = PLAN_HIERARCHY.indexOf(FEATURES[featureKey]?.plan || 'free');
+    const reqIdx = PLAN_HIERARCHY.indexOf(FEATURES[featureKey]?.plan || "free");
     return planIdx >= reqIdx;
   }
 
   function getFeatureDescription(k) {
     const d = {
-      hasBatchTracking: 'Suivez vos lots avec les dates de péremption et assurez une traçabilité complète.',
-      hasSuppliers: 'Gérez votre carnet fournisseurs, comparez les prix et l\'historique achats.',
-      hasPurchaseOrders: 'Créez des bons de commande, suivez les réceptions et créez les lots auto.',
-      hasForecast: 'L\'IA analyse vos ventes pour prédire les ruptures et suggérer les commandes.',
-      hasKits: 'Créez des produits composés avec stock et coût calculés automatiquement.',
-      hasAnalytics: 'Statistiques détaillées : CA, marges, tendances et top produits.',
-      hasInventoryCount: 'Inventaires physiques assistés avec rapport d\'écarts et ajustements auto.',
+      hasBatchTracking: "Suivez vos lots avec les dates de péremption et assurez une traçabilité complète.",
+      hasSuppliers: "Gérez votre carnet fournisseurs, comparez les prix et l'historique achats.",
+      hasPurchaseOrders: "Créez des bons de commande, suivez les réceptions et créez les lots auto.",
+      hasForecast: "L'IA analyse vos ventes pour prédire les ruptures et suggérer les commandes.",
+      hasKits: "Créez des produits composés avec stock et coût calculés automatiquement.",
+      hasAnalytics: "Statistiques détaillées : CA, marges, tendances et top produits.",
+      hasInventoryCount: "Inventaires physiques assistés avec rapport d'écarts et ajustements auto.",
     };
-    return d[k] || 'Fonctionnalité premium.';
+    return d[k] || "Fonctionnalité premium.";
   }
 
   function getFeatureBenefits(k) {
     const b = {
-      hasBatchTracking: ['Traçabilité', 'Alertes DLC', 'FIFO auto'],
-      hasSuppliers: ['Comparaison prix', 'Historique', 'Contacts'],
-      hasPurchaseOrders: ['Workflow complet', 'Réceptions', 'Lots auto'],
-      hasForecast: ['Prédiction IA', 'Suggestions', 'Zéro rupture'],
-      hasKits: ['Stock calculé', 'Coût auto', 'Bundles'],
-      hasAnalytics: ['CA & marges', 'Graphiques', 'Export'],
-      hasInventoryCount: ['Comptage guidé', 'Écarts', 'Ajustements'],
+      hasBatchTracking: ["Traçabilité", "Alertes DLC", "FIFO auto"],
+      hasSuppliers: ["Comparaison prix", "Historique", "Contacts"],
+      hasPurchaseOrders: ["Workflow complet", "Réceptions", "Lots auto"],
+      hasForecast: ["Prédiction IA", "Suggestions", "Zéro rupture"],
+      hasKits: ["Stock calculé", "Coût auto", "Bundles"],
+      hasAnalytics: ["CA & marges", "Graphiques", "Export"],
+      hasInventoryCount: ["Comptage guidé", "Écarts", "Ajustements"],
     };
-    return b[k] || ['Premium'];
+    return b[k] || ["Premium"];
   }
 
   // ============================================
@@ -532,18 +604,28 @@ if (!CURRENT_SHOP || window.top === window.self) {
   function renderSettings(c) {
     c.innerHTML = `
       <div class="page-header"><h1 class="page-title">Paramètres</h1></div>
+
       <div class="card mb-lg">
         <div class="card-header"><h3 class="card-title">👤 Mon plan</h3></div>
         <div class="card-body">
           <div class="flex items-center justify-between">
             <div>
               <div class="font-bold">${getPlanName(state.plan.id)}</div>
-              <div class="text-secondary text-sm">${state.products.length}/${state.plan.limits.maxProducts === Infinity ? '∞' : state.plan.limits.maxProducts} produits</div>
+              <div class="text-secondary text-sm">${state.products.length}/${state.plan.limits.maxProducts === Infinity ? "∞" : state.plan.limits.maxProducts} produits</div>
             </div>
-            ${state.plan.id !== 'enterprise' ? '<button class="btn btn-upgrade" onclick="app.showUpgradeModal()">⬆️ Upgrade</button>' : ''}
+            ${state.plan.id !== "enterprise" ? '<button class="btn btn-upgrade" onclick="app.showUpgradeModal()">⬆️ Upgrade</button>' : ""}
           </div>
         </div>
       </div>
+
+      <div class="card mb-lg">
+        <div class="card-header"><h3 class="card-title">🔔 Notifications</h3></div>
+        <div class="card-body">
+          <p class="text-secondary text-sm">Bientôt : alertes stock bas, DLC, ruptures, etc.</p>
+          <button class="btn btn-secondary" onclick="app.toggleNotifications()">Tester</button>
+        </div>
+      </div>
+
       <div class="card">
         <div class="card-header"><h3 class="card-title">⚙️ Général</h3></div>
         <div class="card-body">
@@ -562,31 +644,31 @@ if (!CURRENT_SHOP || window.top === window.self) {
 
   function showModal(opts) {
     closeModal();
-    const { title, content, footer, size = '' } = opts;
-    const container = document.getElementById('modalsContainer');
+    const { title, content, footer, size = "" } = opts;
+    const container = document.getElementById("modalsContainer");
     if (!container) return;
 
     container.innerHTML = `
       <div class="modal-backdrop active" onclick="app.closeModal()"></div>
-      <div class="modal active ${size ? `modal-${size}` : ''}">
+      <div class="modal active ${size ? `modal-${size}` : ""}">
         <div class="modal-header">
           <h2 class="modal-title">${title}</h2>
           <button class="modal-close" onclick="app.closeModal()">×</button>
         </div>
         <div class="modal-body">${content}</div>
-        ${footer ? `<div class="modal-footer">${footer}</div>` : ''}
+        ${footer ? `<div class="modal-footer">${footer}</div>` : ""}
       </div>
     `;
   }
 
   function closeModal() {
-    const el = document.getElementById('modalsContainer');
-    if (el) el.innerHTML = '';
+    const el = document.getElementById("modalsContainer");
+    if (el) el.innerHTML = "";
   }
 
   function showAddProductModal() {
     showModal({
-      title: '➕ Ajouter un produit',
+      title: "➕ Ajouter un produit",
       content: `
         <div class="form-group">
           <label class="form-label required">Nom</label>
@@ -618,16 +700,17 @@ if (!CURRENT_SHOP || window.top === window.self) {
 
   function showRestockModal(productId) {
     showModal({
-      title: '📥 Réapprovisionner',
+      title: "📥 Réapprovisionner",
       content: `
         <div class="form-group">
           <label class="form-label">Produit</label>
           <select class="form-select" id="restockProduct">
-            ${state.products.map(p => `
-              <option value="${p.id}" ${p.id === productId ? 'selected' : ''}>
-                ${escapeHtml(p.name || p.title || 'Sans nom')}
-              </option>
-            `).join('')}
+            ${state.products
+              .map((p) => {
+                const pid = getProductId(p);
+                return `<option value="${escapeAttr(pid)}" ${pid === productId ? "selected" : ""}>${escapeHtml(p.name || p.title || "Sans nom")}</option>`;
+              })
+              .join("")}
           </select>
         </div>
         <div class="form-row">
@@ -656,21 +739,23 @@ if (!CURRENT_SHOP || window.top === window.self) {
 
   function showAdjustModal(productId) {
     showModal({
-      title: '✏️ Ajuster le stock',
+      title: "✏️ Ajuster le stock",
       content: `
         <div class="form-group">
           <label class="form-label">Produit</label>
           <select class="form-select" id="adjustProduct">
-            ${state.products.map(p => `
-              <option value="${p.id}" ${p.id === productId ? 'selected' : ''}>
-                ${escapeHtml(p.name || p.title || 'Sans nom')} (${formatWeight(p.totalGrams || 0)})
-              </option>
-            `).join('')}
+            ${state.products
+              .map((p) => {
+                const pid = getProductId(p);
+                const g = Number(p.totalGrams) || 0;
+                return `<option value="${escapeAttr(pid)}" ${pid === productId ? "selected" : ""}>${escapeHtml(p.name || p.title || "Sans nom")} (${formatWeight(g)})</option>`;
+              })
+              .join("")}
           </select>
         </div>
         <div class="form-group">
           <label class="form-label">Type</label>
-          <div style="display:flex;gap:var(--space-lg)">
+          <div style="display:flex;gap:var(--space-lg);flex-wrap:wrap">
             <label><input type="radio" name="adjustType" value="add" checked> ➕ Ajouter</label>
             <label><input type="radio" name="adjustType" value="remove"> ➖ Retirer</label>
             <label><input type="radio" name="adjustType" value="set"> 🎯 Définir</label>
@@ -693,32 +778,35 @@ if (!CURRENT_SHOP || window.top === window.self) {
 
   function showUpgradeModal(recommended) {
     const plans = [
-      { id: 'starter', name: 'Starter', price: 14.99, products: 15, features: ['Catégories', 'Import Shopify', 'Valeur stock'] },
-      { id: 'pro', name: 'Pro', price: 39.99, products: 75, badge: 'POPULAIRE', features: ['Lots & DLC', 'Fournisseurs', 'Analytics', 'Inventaire'] },
-      { id: 'business', name: 'Business', price: 79.99, products: '∞', badge: 'BEST', features: ['Prévisions IA', 'Kits', 'Commandes', 'Multi-users'] },
+      { id: "starter", name: "Starter", price: 14.99, products: 15, features: ["Catégories", "Import Shopify", "Valeur stock"] },
+      { id: "pro", name: "Pro", price: 39.99, products: 75, badge: "POPULAIRE", features: ["Lots & DLC", "Fournisseurs", "Analytics", "Inventaire"] },
+      { id: "business", name: "Business", price: 79.99, products: "∞", badge: "BEST", features: ["Prévisions IA", "Kits", "Commandes", "Multi-users"] },
     ];
 
     showModal({
-      title: '⬆️ Choisir un plan',
-      size: 'xl',
+      title: "⬆️ Choisir un plan",
+      size: "xl",
       content: `
         <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:var(--space-lg)">
-          ${plans.map(p => `
-            <div class="card" style="${p.id === recommended ? 'border:2px solid var(--accent-primary)' : ''}">
-              ${p.badge ? `<div class="badge badge-${p.badge === 'POPULAIRE' ? 'info' : 'warning'}" style="position:absolute;top:-8px;right:16px">${p.badge}</div>` : ''}
+          ${plans
+            .map((p) => `
+            <div class="card" style="position:relative;${p.id === recommended ? "border:2px solid var(--accent-primary)" : ""}">
+              ${p.badge ? `<div class="badge badge-${p.badge === "POPULAIRE" ? "info" : "warning"}" style="position:absolute;top:-8px;right:16px">${p.badge}</div>` : ""}
               <div class="card-body text-center" style="position:relative">
                 <h3>${p.name}</h3>
                 <div style="font-size:28px;font-weight:700">${p.price}<span style="font-size:12px;color:var(--text-secondary)">€/mois</span></div>
                 <div class="text-secondary text-sm mb-md">${p.products} produits</div>
-                <ul style="text-align:left;list-style:none;margin-bottom:var(--space-lg)">
-                  ${p.features.map(f => `<li style="padding:4px 0"><span style="color:var(--success)">✓</span> ${f}</li>`).join('')}
+                <ul style="text-align:left;list-style:none;margin-bottom:var(--space-lg);padding-left:0">
+                  ${p.features.map((f) => `<li style="padding:4px 0"><span style="color:var(--success)">✓</span> ${f}</li>`).join("")}
                 </ul>
-                <button class="btn ${state.plan.id === p.id ? 'btn-secondary' : 'btn-primary'} btn-sm" style="width:100%" ${state.plan.id === p.id ? 'disabled' : `onclick="app.upgradeTo('${p.id}')"`}>
-                  ${state.plan.id === p.id ? 'Actuel' : 'Choisir'}
+                <button class="btn ${state.plan.id === p.id ? "btn-secondary" : "btn-primary"} btn-sm" style="width:100%"
+                  ${state.plan.id === p.id ? "disabled" : `onclick="app.upgradeTo('${p.id}')"`}>
+                  ${state.plan.id === p.id ? "Actuel" : "Choisir"}
                 </button>
               </div>
             </div>
-          `).join('')}
+          `)
+            .join("")}
         </div>
       `,
       footer: '<button class="btn btn-ghost" onclick="app.closeModal()">Fermer</button>',
@@ -728,6 +816,7 @@ if (!CURRENT_SHOP || window.top === window.self) {
   function showFeatureLockedModal(featureKey) {
     const f = FEATURES[featureKey];
     const benefits = getFeatureBenefits(featureKey);
+
     showModal({
       title: `🔒 ${f.name}`,
       content: `
@@ -736,7 +825,7 @@ if (!CURRENT_SHOP || window.top === window.self) {
           <h3>Passez au ${f.plan.toUpperCase()}</h3>
           <p class="text-secondary mb-lg">${getFeatureDescription(featureKey)}</p>
           <div class="lock-benefits mb-lg" style="justify-content:center">
-            ${benefits.map(b => `<span class="lock-benefit"><span class="lock-benefit-icon">✓</span>${b}</span>`).join('')}
+            ${benefits.map((b) => `<span class="lock-benefit"><span class="lock-benefit-icon">✓</span>${b}</span>`).join("")}
           </div>
           <p class="text-secondary text-sm">À partir de <strong class="text-accent">${getPlanPrice(f.plan)}€/mois</strong></p>
         </div>
@@ -748,265 +837,428 @@ if (!CURRENT_SHOP || window.top === window.self) {
     });
   }
 
+  // ====== Stubs “actions” pour éviter les onclick undefined ======
+
+  function showAddBatchModal() {
+    showModal({
+      title: "🏷️ Nouveau lot",
+      content: `<p class="text-secondary">UI prête. Branche l’API lots ici quand tu veux.</p>`,
+      footer: `<button class="btn btn-ghost" onclick="app.closeModal()">Fermer</button>`,
+    });
+  }
+
+  function showAddSupplierModal() {
+    showModal({
+      title: "🏭 Nouveau fournisseur",
+      content: `<p class="text-secondary">UI prête. Branche l’API fournisseurs ici.</p>`,
+      footer: `<button class="btn btn-ghost" onclick="app.closeModal()">Fermer</button>`,
+    });
+  }
+
+  function showCreateOrderModal() {
+    showModal({
+      title: "📝 Nouveau bon de commande",
+      content: `<p class="text-secondary">UI prête. Branche l’API commandes ici.</p>`,
+      footer: `<button class="btn btn-ghost" onclick="app.closeModal()">Fermer</button>`,
+    });
+  }
+
+  function showCreateKitModal() {
+    showModal({
+      title: "🧩 Nouveau kit / bundle",
+      content: `<p class="text-secondary">UI prête. Branche l’API kits ici.</p>`,
+      footer: `<button class="btn btn-ghost" onclick="app.closeModal()">Fermer</button>`,
+    });
+  }
+
+  function startInventory() {
+    showToast("Inventaire : bientôt disponible (UI OK)", "info");
+  }
+
   // ============================================
   // TOAST
   // ============================================
 
-  function showToast(message, type = 'info', duration = 4000) {
-    const container = document.getElementById('toastContainer');
+  function showToast(message, type = "info", duration = 4000) {
+    const container = document.getElementById("toastContainer");
     if (!container) return;
 
-    const toast = document.createElement('div');
+    const toast = document.createElement("div");
     toast.className = `toast ${type}`;
-    const icons = { success: '✅', error: '❌', warning: '⚠️', info: 'ℹ️' };
-    toast.innerHTML = `<span class="toast-icon">${icons[type]}</span><div class="toast-content"><div class="toast-message">${escapeHtml(message)}</div></div><button class="toast-close" onclick="this.parentElement.remove()">×</button>`;
+    const icons = { success: "✅", error: "❌", warning: "⚠️", info: "ℹ️" };
+    toast.innerHTML = `
+      <span class="toast-icon">${icons[type] || "ℹ️"}</span>
+      <div class="toast-content"><div class="toast-message">${escapeHtml(message)}</div></div>
+      <button class="toast-close" onclick="this.parentElement.remove()">×</button>
+    `;
+
     container.appendChild(toast);
-    requestAnimationFrame(() => toast.classList.add('visible'));
-    if (duration > 0) setTimeout(() => { toast.classList.add('removing'); setTimeout(() => toast.remove(), 300); }, duration);
+    requestAnimationFrame(() => toast.classList.add("visible"));
+
+    if (duration > 0) {
+      setTimeout(() => {
+        toast.classList.add("removing");
+        setTimeout(() => toast.remove(), 300);
+      }, duration);
+    }
+  }
+
+  // ============================================
+  // SYNC STATUS (TOPBAR)
+  // ============================================
+
+  function updateSyncStatus(kind, text) {
+    const el = document.getElementById("syncStatus");
+    if (!el) return;
+
+    el.classList.remove("is-ok", "is-warn", "is-bad");
+    if (kind === "ok") el.classList.add("is-ok");
+    if (kind === "warn") el.classList.add("is-warn");
+    if (kind === "bad") el.classList.add("is-bad");
+
+    const t = el.querySelector(".sync-text");
+    if (t) t.textContent = text || "";
   }
 
   // ============================================
   // API
   // ============================================
 
-async function loadPlanInfo() {
-  const url = apiUrl('/plan');
-  if (!url) return;
-
-  try {
-    const res = await authFetch(url);
-    if (res.ok) {
-      const data = await res.json();
-      state.plan = { id: data.current?.planId || 'free', limits: data.limits || { maxProducts: 2 } };
-      console.log('📋 Plan chargé:', state.plan.id);
-      updatePlanWidget();
-    }
-  } catch (e) {
-    console.warn('Plan load error', e);
-  }
-}
-
-async function loadProducts() {
-  const url = apiUrl('/stock'); // ✅ route existante côté server
-  if (!url) return;
-
-  try {
-    const res = await authFetch(url);
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      console.warn('Products load error', err);
-      state.products = [];
-      return;
-    }
-
-    const data = await res.json().catch(() => ({}));
-    // server renvoie { products, categories }
-    state.products = Array.isArray(data.products) ? data.products : [];
-  } catch (e) {
-    console.warn('Products load error', e);
-    state.products = [];
-  } finally {
-    updatePlanWidget();
-  }
-}
-
-  async function saveProduct() {
-    const name = document.getElementById('productName')?.value;
-    const stock = parseFloat(document.getElementById('productStock')?.value) || 0;
-    const cost = parseFloat(document.getElementById('productCost')?.value) || 0;
-    if (!name) { showToast('Nom requis', 'error'); return; }
+  async function loadPlanInfo() {
+    const url = apiUrl("/plan");
+    if (!url) return;
 
     try {
-      const res = await authFetch(apiUrl('/products'), {
-        method: 'POST',
-        body: JSON.stringify({ name, totalGrams: stock, averageCostPerGram: cost })
-      });
-
+      const res = await authFetch(url);
       if (res.ok) {
-        showToast('Produit ajouté', 'success');
-        closeModal();
-        await loadProducts();
-        renderTab(state.currentTab);
+        const data = await res.json().catch(() => ({}));
+        state.plan = { id: data.current?.planId || "free", limits: data.limits || { maxProducts: 2 } };
+        console.log("📋 Plan chargé:", state.plan.id);
         updatePlanWidget();
       } else {
-        throw new Error();
+        updateSyncStatus("warn", "Plan non chargé");
       }
     } catch (e) {
-      showToast('Erreur', 'error');
+      console.warn("Plan load error", e);
+      updateSyncStatus("warn", "Plan non chargé");
     }
   }
 
-async function saveRestock() {
-  const productId = document.getElementById('restockProduct')?.value;
-  const qty = parseFloat(document.getElementById('restockQty')?.value);
-  const price = parseFloat(document.getElementById('restockPrice')?.value) || 0;
+  async function loadProducts() {
+    const url = apiUrl("/stock");
+    if (!url) return;
 
-  if (!productId || !qty) { showToast('Champs requis', 'error'); return; }
+    updateSyncStatus("warn", "Chargement…");
 
-  try {
-    const res = await authFetch(apiUrl('/restock'), {
-      method: 'POST',
-      body: JSON.stringify({
-        productId,
-        grams: qty,
-        purchasePricePerGram: price
-      })
-    });
+    try {
+      const res = await authFetch(url);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        console.warn("Products load error", err);
+        state.products = [];
+        updateSyncStatus("bad", "Erreur stock");
+        return;
+      }
 
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      console.warn('Restock error:', data);
-      showToast(data?.error || 'Erreur', 'error');
-      return;
-    }
-
-    showToast('Stock mis à jour', 'success');
-    closeModal();
-    await loadProducts();
-    renderTab(state.currentTab);
-    updatePlanWidget();
-  } catch (e) {
-    console.error(e);
-    showToast('Erreur', 'error');
-  }
-}
-
-
-async function saveAdjustment() {
-  const productId = document.getElementById('adjustProduct')?.value;
-  const type = document.querySelector('input[name="adjustType"]:checked')?.value;
-  const qty = parseFloat(document.getElementById('adjustQty')?.value);
-
-  if (!productId || !qty) { showToast('Champs requis', 'error'); return; }
-
-  // Backend: /api/products/:productId/adjust-total attend gramsDelta (positif/negatif)
-  let gramsDelta = qty;
-  if (type === 'remove') gramsDelta = -Math.abs(qty);
-  if (type === 'add') gramsDelta = Math.abs(qty);
-
-  if (type === 'set') {
-    showToast("Mode 'Définir' pas supporté par l’API actuelle (ajustement delta uniquement).", 'warning');
-    return;
-  }
-
-  try {
-    const res = await authFetch(apiUrl(`/products/${encodeURIComponent(productId)}/adjust-total`), {
-      method: 'POST',
-      body: JSON.stringify({ gramsDelta })
-    });
-
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      console.warn('Adjust error:', data);
-      showToast(data?.error || 'Erreur', 'error');
-      return;
-    }
-
-    showToast('Ajustement appliqué', 'success');
-    closeModal();
-    await loadProducts();
-    renderTab(state.currentTab);
-    updatePlanWidget();
-  } catch (e) {
-    console.error(e);
-    showToast('Erreur', 'error');
-  }
-}
-
-  function syncShopify() { showToast('Synchronisation...', 'info'); }
-  function importFromShopify() { showToast('Import Shopify...', 'info'); }
-  async function upgradeTo(planId, interval = 'monthly') {
-  try {
-    showToast('Redirection vers Shopify Billing…', 'info', 2000);
-
-    const res = await authFetch(apiUrl('/plan/upgrade'), {
-      method: 'POST',
-      body: JSON.stringify({ planId, interval })
-    });
-
-    const data = await res.json();
-
-    // 🟣 Cas bypass (/ dev)
-    if (data.bypass) {
-      showToast('Plan activé (bypass)', 'success');
-      await loadPlanInfo();
+      const data = await res.json().catch(() => ({}));
+      state.products = Array.isArray(data.products) ? data.products : [];
+      updateSyncStatus("ok", "Synchronisé");
+    } catch (e) {
+      console.warn("Products load error", e);
+      state.products = [];
+      updateSyncStatus("bad", "Erreur stock");
+    } finally {
       updatePlanWidget();
-      closeModal();
-      return;
     }
-
-    // 🟣 Cas NORMAL Shopify Billing
-    if (data.confirmationUrl) {
-      // ⚠️ OBLIGATOIRE : redirection top-level
-      window.top.location.href = data.confirmationUrl;
-      return;
-    }
-
-    throw new Error('Aucune confirmationUrl retournée');
-  } catch (e) {
-    console.error('Billing error', e);
-    showToast('Erreur lors de l’activation du plan', 'error');
   }
-}
+
+  async function saveProduct() {
+    const name = document.getElementById("productName")?.value;
+    const stock = parseFloat(document.getElementById("productStock")?.value) || 0;
+    const cost = parseFloat(document.getElementById("productCost")?.value) || 0;
+
+    if (!name) {
+      showToast("Nom requis", "error");
+      return;
+    }
+
+    try {
+      const res = await authFetch(apiUrl("/products"), {
+        method: "POST",
+        body: JSON.stringify({ name, totalGrams: stock, averageCostPerGram: cost }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        showToast(data?.error || "Erreur", "error");
+        return;
+      }
+
+      showToast("Produit ajouté", "success");
+      closeModal();
+      await loadProducts();
+      renderTab(state.currentTab);
+      updatePlanWidget();
+    } catch (e) {
+      console.error(e);
+      showToast("Erreur", "error");
+    }
+  }
+
+  async function saveRestock() {
+    const productId = document.getElementById("restockProduct")?.value;
+    const qty = parseFloat(document.getElementById("restockQty")?.value);
+    const price = parseFloat(document.getElementById("restockPrice")?.value) || 0;
+
+    if (!productId || !qty) {
+      showToast("Champs requis", "error");
+      return;
+    }
+
+    try {
+      const res = await authFetch(apiUrl("/restock"), {
+        method: "POST",
+        body: JSON.stringify({
+          productId,
+          grams: qty,
+          purchasePricePerGram: price,
+        }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        console.warn("Restock error:", data);
+        showToast(data?.error || "Erreur", "error");
+        return;
+      }
+
+      showToast("Stock mis à jour", "success");
+      closeModal();
+      await loadProducts();
+      renderTab(state.currentTab);
+      updatePlanWidget();
+    } catch (e) {
+      console.error(e);
+      showToast("Erreur", "error");
+    }
+  }
+
+  async function saveAdjustment() {
+    const productId = document.getElementById("adjustProduct")?.value;
+    const type = document.querySelector('input[name="adjustType"]:checked')?.value;
+    const qty = parseFloat(document.getElementById("adjustQty")?.value);
+
+    if (!productId || !qty) {
+      showToast("Champs requis", "error");
+      return;
+    }
+
+    let gramsDelta = qty;
+    if (type === "remove") gramsDelta = -Math.abs(qty);
+    if (type === "add") gramsDelta = Math.abs(qty);
+
+    if (type === "set") {
+      showToast("Mode 'Définir' pas supporté par l’API actuelle (ajustement delta uniquement).", "warning");
+      return;
+    }
+
+    try {
+      const res = await authFetch(apiUrl(`/products/${encodeURIComponent(productId)}/adjust-total`), {
+        method: "POST",
+        body: JSON.stringify({ gramsDelta }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        console.warn("Adjust error:", data);
+        showToast(data?.error || "Erreur", "error");
+        return;
+      }
+
+      showToast("Ajustement appliqué", "success");
+      closeModal();
+      await loadProducts();
+      renderTab(state.currentTab);
+      updatePlanWidget();
+    } catch (e) {
+      console.error(e);
+      showToast("Erreur", "error");
+    }
+  }
+
+  function syncShopify() {
+    showToast("Synchronisation…", "info", 1200);
+    loadProducts().then(() => renderTab(state.currentTab));
+  }
+
+  function importFromShopify() {
+    showToast("Import Shopify (stub UI)", "info");
+  }
+
+  async function upgradeTo(planId, interval = "monthly") {
+    try {
+      showToast("Redirection vers Shopify Billing…", "info", 2000);
+
+      const res = await authFetch(apiUrl("/plan/upgrade"), {
+        method: "POST",
+        body: JSON.stringify({ planId, interval }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (data.bypass) {
+        showToast("Plan activé (bypass)", "success");
+        await loadPlanInfo();
+        updatePlanWidget();
+        closeModal();
+        return;
+      }
+
+      if (data.confirmationUrl) {
+        window.top.location.href = data.confirmationUrl;
+        return;
+      }
+
+      throw new Error("Aucune confirmationUrl retournée");
+    } catch (e) {
+      console.error("Billing error", e);
+      showToast("Erreur lors de l’activation du plan", "error");
+    }
+  }
 
   // ============================================
-  // HELPERS
+  // PLAN WIDGET (SIDEBAR)
   // ============================================
 
   function updatePlanWidget() {
-    const w = document.getElementById('planWidget');
+    const w = document.getElementById("planWidget");
     if (!w) return;
+
     const max = state.plan?.limits?.maxProducts ?? 2;
 
     w.innerHTML = `
       <div class="plan-info">
         <span class="plan-name">Plan ${getPlanName(state.plan.id)}</span>
-        <span class="plan-usage">${state.products.length}/${max === Infinity ? '∞' : max} produits</span>
+        <span class="plan-usage">${state.products.length}/${max === Infinity ? "∞" : max} produits</span>
       </div>
-      ${state.plan.id !== 'enterprise' ? '<button class="btn btn-upgrade btn-sm" onclick="app.showUpgradeModal()">Upgrade</button>' : ''}
+      ${state.plan.id !== "enterprise" ? '<button class="btn btn-upgrade btn-sm" onclick="app.showUpgradeModal()">Upgrade</button>' : ""}
     `;
   }
 
-  function getPlanName(id) { return { free: 'Free', starter: 'Starter', pro: 'Pro', business: 'Business', enterprise: 'Enterprise' }[id] || 'Free'; }
-  function getPlanPrice(id) { return { starter: 14.99, pro: 39.99, business: 79.99, enterprise: 199 }[id] || 0; }
-  function formatWeight(g) { return g >= 1000 ? (g / 1000).toFixed(2) + ' kg' : g.toFixed(0) + ' g'; }
-  function formatCurrency(a) { return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(a); }
+  // ============================================
+  // TOPBAR MENUS (STUB)
+  // ============================================
+
+  function toggleNotifications() {
+    showToast("Notifications bientôt disponibles", "info");
+  }
+
+  function toggleUserMenu() {
+    showToast("Menu utilisateur bientôt disponible", "info");
+  }
+
+  // ============================================
+  // HELPERS
+  // ============================================
+
+  function getPlanName(id) {
+    return { free: "Free", starter: "Starter", pro: "Pro", business: "Business", enterprise: "Enterprise" }[id] || "Free";
+  }
+
+  function getPlanPrice(id) {
+    return { starter: 14.99, pro: 39.99, business: 79.99, enterprise: 199 }[id] || 0;
+  }
+
+  function formatWeight(g) {
+    const n = Number(g) || 0;
+    return n >= 1000 ? (n / 1000).toFixed(2) + " kg" : n.toFixed(0) + " g";
+  }
+
+  function formatCurrency(a) {
+    const n = Number(a) || 0;
+    return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(n);
+  }
 
   function getStockStatus(g) {
-    if (g <= 0) return { class: 'critical', label: 'Rupture', icon: '❌' };
-    if (g < 50) return { class: 'critical', label: 'Critique', icon: '🔴' };
-    if (g < 200) return { class: 'low', label: 'Bas', icon: '🟡' };
-    return { class: 'good', label: 'OK', icon: '🟢' };
+    const n = Number(g) || 0;
+    if (n <= 0) return { class: "critical", label: "Rupture", icon: "❌" };
+    if (n < 50) return { class: "critical", label: "Critique", icon: "🔴" };
+    if (n < 200) return { class: "low", label: "Bas", icon: "🟡" };
+    return { class: "good", label: "OK", icon: "🟢" };
   }
 
   function escapeHtml(s) {
-    if (!s) return '';
-    const d = document.createElement('div');
+    if (s === null || s === undefined) return "";
+    const d = document.createElement("div");
     d.textContent = String(s);
     return d.innerHTML;
   }
 
-function toggleNotifications() {
-  showToast('Notifications bientôt disponibles', 'info');
-}
+  function escapeAttr(s) {
+    return String(s || "")
+      .replace(/&/g, "&amp;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+  }
 
-function toggleUserMenu() {
-  showToast('Menu utilisateur bientôt disponible', 'info');
-}
+  function debounce(fn, wait) {
+    let t = null;
+    return function (...args) {
+      clearTimeout(t);
+      t = setTimeout(() => fn.apply(this, args), wait);
+    };
+  }
 
   // ============================================
   // EXPORTS
   // ============================================
 
-window.app = {
-  init, navigateTo, toggleSidebar,
-  toggleNotifications, toggleUserMenu,
-  showModal, closeModal, showAddProductModal, showRestockModal, showAdjustModal, showUpgradeModal, showFeatureLockedModal,
-  saveProduct, saveRestock, saveAdjustment, syncShopify, importFromShopify, upgradeTo,
-  showToast,
-  get state() { return state; },
-};
+  window.app = {
+    init,
+    navigateTo,
+    toggleSidebar,
 
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+    toggleNotifications,
+    toggleUserMenu,
+
+    showModal,
+    closeModal,
+
+    // Products
+    showAddProductModal,
+    showRestockModal,
+    showAdjustModal,
+    saveProduct,
+    saveRestock,
+    saveAdjustment,
+
+    // Plans
+    showUpgradeModal,
+    showFeatureLockedModal,
+    upgradeTo,
+    updatePlanWidget,
+
+    // Features stubs (pour “toutes les features”)
+    showAddBatchModal,
+    showAddSupplierModal,
+    showCreateOrderModal,
+    showCreateKitModal,
+    startInventory,
+
+    // API actions
+    syncShopify,
+    importFromShopify,
+
+    // UI
+    showToast,
+
+    get state() {
+      return state;
+    },
+  };
+
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
   else init();
 })();

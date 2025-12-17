@@ -697,10 +697,83 @@ router.get("/api/server-info", (req, res) => {
   });
 });
 
-router.get("/api/stock", (req, res) => {
-  safeJson(req, res, () => {
+// ✅ COMPAT FRONT: POST /api/products (ajout manuel)
+// Front envoie: { name, totalGrams, averageCostPerGram }
+router.post("/api/products", (req, res) => {
+  safeJson(req, res, async () => {
     const shop = getShop(req);
     if (!shop) return apiError(res, 400, "Shop introuvable");
+
+    const name = String(req.body?.name || "").trim();
+    const totalGrams = Number(req.body?.totalGrams ?? 0);
+    const averageCostPerGram = Number(req.body?.averageCostPerGram ?? 0);
+
+    if (!name) return apiError(res, 400, "name requis");
+    if (!Number.isFinite(totalGrams) || totalGrams < 0) return apiError(res, 400, "totalGrams invalide");
+    if (!Number.isFinite(averageCostPerGram) || averageCostPerGram < 0)
+      return apiError(res, 400, "averageCostPerGram invalide");
+
+    // Limite plan: add_product
+    if (planManager) {
+      const snapshot = stock.getCatalogSnapshot ? stock.getCatalogSnapshot(shop) : { products: [] };
+      const currentCount = Array.isArray(snapshot.products) ? snapshot.products.length : 0;
+      const check = planManager.checkLimit(shop, "add_product", { currentProductCount: currentCount });
+      if (!check.allowed) {
+        return res.status(403).json({
+          error: "plan_limit",
+          message: check.reason,
+          upgrade: check.upgrade,
+          feature: "max_products",
+          limit: check.limit,
+          current: check.current,
+        });
+      }
+    }
+
+    // On crée un productId "manuel" (pas lié Shopify)
+    const productId = `manual_${Date.now()}`;
+
+    // On insère via la même mécanique que l'import Shopify
+    // Variante "1g" factice (inventoryItemId=0 => jamais push Shopify)
+    if (typeof stock.upsertImportedProductConfig !== "function") {
+      return apiError(res, 500, "stock.upsertImportedProductConfig introuvable");
+    }
+    if (typeof stock.restockProduct !== "function") {
+      return apiError(res, 500, "stock.restockProduct introuvable");
+    }
+
+    const created = stock.upsertImportedProductConfig(shop, {
+      productId,
+      name,
+      variants: { "1": { gramsPerUnit: 1, inventoryItemId: 0 } },
+      categoryIds: [],
+    });
+
+    // Stock initial + CMP (si coût > 0)
+    let updated = created;
+    if (totalGrams > 0 || averageCostPerGram > 0) {
+      updated = await stock.restockProduct(shop, productId, totalGrams, averageCostPerGram);
+    }
+
+    if (movementStore.addMovement) {
+      movementStore.addMovement(
+        {
+          source: "manual_product_created",
+          productId,
+          productName: updated?.name || name,
+          gramsDelta: totalGrams || 0,
+          purchasePricePerGram: averageCostPerGram > 0 ? averageCostPerGram : undefined,
+          totalAfter: updated?.totalGrams ?? totalGrams ?? 0,
+          shop,
+        },
+        shop
+      );
+    }
+
+    return res.json({ success: true, product: updated });
+  });
+});
+
 
     const { sort = "alpha", category = "" } = req.query;
 
@@ -1274,10 +1347,32 @@ router.post("/api/import/product", (req, res) => {
   });
 });
 
-router.post("/api/restock", (req, res) => {
+// ✅ Sync Shopify: repush les niveaux d'inventaire calculés par l'app
+router.post("/api/shopify/sync", (req, res) => {
   safeJson(req, res, async () => {
     const shop = getShop(req);
     if (!shop) return apiError(res, 400, "Shop introuvable");
+
+    const snapshot = stock.getCatalogSnapshot ? stock.getCatalogSnapshot(shop) : { products: [] };
+    const products = Array.isArray(snapshot.products) ? snapshot.products : [];
+
+    let pushed = 0;
+    let skipped = 0;
+    const errors = [];
+
+    for (const p of products) {
+      try {
+        // pushProductInventoryToShopify ignore les variants sans inventoryItemId
+        await pushProductInventoryToShopify(shop, p);
+        pushed++;
+      } catch (e) {
+        errors.push({ productId: p?.productId, message: e?.message });
+      }
+    }
+
+    res.json({ success: true, pushed, skipped, errorsCount: errors.length, errors });
+  });
+});
 
     const productId = String(req.body?.productId || "").trim();
     const grams = Number(req.body?.grams);
