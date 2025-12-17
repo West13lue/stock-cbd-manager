@@ -1,4 +1,4 @@
-// app.js - Stock Manager Pro (FIXED v3)
+// app.js - Stock Manager Pro (FIXED v4 - no ?shop= on API calls; rely on Session Token)
 (function () {
   "use strict";
 
@@ -10,6 +10,35 @@
   function getHostFromUrl() {
     var urlParams = new URLSearchParams(window.location.search);
     return urlParams.get("host");
+  }
+
+  function getShopFromUrl() {
+    var urlParams = new URLSearchParams(window.location.search);
+    var shop = urlParams.get("shop");
+    if (shop) return shop;
+
+    var host = urlParams.get("host");
+    if (host) {
+      try {
+        var d = atob(host);
+        var m = d.match(/([^/]+\.myshopify\.com)/);
+        if (m) return m[1];
+      } catch (e) {}
+    }
+
+    return localStorage.getItem("stockmanager_shop") || null;
+  }
+
+  var CURRENT_SHOP = getShopFromUrl();
+  if (CURRENT_SHOP) {
+    localStorage.setItem("stockmanager_shop", CURRENT_SHOP);
+    console.log("[Shop]", CURRENT_SHOP);
+  }
+
+  // ✅ IMPORTANT: API calls should NOT include ?shop=... in an embedded app.
+  // The server should resolve shop from the Session Token (JWT) for security + Shopify review.
+  function apiUrl(endpoint) {
+    return API_BASE + endpoint;
   }
 
   async function loadPublicConfig() {
@@ -61,7 +90,7 @@
     sessionToken = null;
   }
 
-  // ✅ IMPORTANT: authFetch DOIT être correctement fermée, sinon tout le reste du fichier casse.
+  // ✅ authFetch correctly closed + sends Session Token
   async function authFetch(url, options) {
     options = options || {};
     var token = await getSessionToken();
@@ -76,7 +105,7 @@
 
     var res = await doFetch();
 
-    // retry 401 une fois
+    // retry 401 once
     if (res.status === 401 && token) {
       clearSessionToken();
       var t2 = await getSessionToken();
@@ -84,7 +113,7 @@
       res = await doFetch();
     }
 
-    // 🔐 OAuth AUTO si token manquant / révoqué
+    // 🔐 OAuth AUTO if token missing/revoked
     if (res.status === 401) {
       var data = null;
       try {
@@ -100,34 +129,6 @@
     }
 
     return res;
-  } // ✅ FIN authFetch
-
-  function getShopFromUrl() {
-    var urlParams = new URLSearchParams(window.location.search);
-    var shop = urlParams.get("shop");
-    if (shop) return shop;
-
-    var host = urlParams.get("host");
-    if (host) {
-      try {
-        var d = atob(host);
-        var m = d.match(/([^/]+\.myshopify\.com)/);
-        if (m) return m[1];
-      } catch (e) {}
-    }
-
-    return localStorage.getItem("stockmanager_shop") || null;
-  }
-
-  var CURRENT_SHOP = getShopFromUrl();
-  if (CURRENT_SHOP) {
-    localStorage.setItem("stockmanager_shop", CURRENT_SHOP);
-    console.log("[Shop]", CURRENT_SHOP);
-  }
-
-  function apiUrl(endpoint) {
-    if (!CURRENT_SHOP) return null;
-    return API_BASE + endpoint + (endpoint.includes("?") ? "&" : "?") + "shop=" + encodeURIComponent(CURRENT_SHOP);
   }
 
   var PLAN_HIERARCHY = ["free", "starter", "pro", "business", "enterprise"];
@@ -203,7 +204,7 @@
 
     var host = getHostFromUrl();
 
-    // 1) Si on est hors iframe, on force OAuth
+    // 1) If not embedded, force OAuth
     if (window.top === window.self) {
       if (CURRENT_SHOP) {
         window.location.href = "/api/auth/start?shop=" + encodeURIComponent(CURRENT_SHOP);
@@ -214,13 +215,13 @@
       return;
     }
 
-    // 2) embedded mais host manquant → OAuth
+    // 2) embedded but host missing → OAuth
     if (!host && CURRENT_SHOP) {
       window.top.location.href = "/api/auth/start?shop=" + encodeURIComponent(CURRENT_SHOP);
       return;
     }
 
-    // 3) shop manquant
+    // 3) shop missing
     if (!CURRENT_SHOP) {
       document.body.innerHTML =
         '<div style="padding:40px"><h2>Application Shopify</h2><p>Paramètre shop manquant.</p></div>';
@@ -628,7 +629,6 @@
   }
 
   function showUpgradeModal() {
-    // inchangé (ton code original)
     var plans = [
       { id: "starter", name: "Starter", price: 14.99, prods: "15", feats: ["Categories", "Import Shopify", "Valeur stock"] },
       { id: "pro", name: "Pro", price: 39.99, prods: "75", badge: "POPULAIRE", feats: ["Lots & DLC", "Fournisseurs", "Analytics", "Inventaire"] },
@@ -700,29 +700,22 @@
   }
 
   async function loadPlanInfo() {
-    var url = apiUrl("/plan");
-    if (!url) return;
     try {
-      var res = await authFetch(url);
+      var res = await authFetch(apiUrl("/plan"));
       if (!res.ok) return;
       var data = await res.json();
-      console.log("[Plan] API response:", data);
 
       state.planId = (data.current && data.current.planId) || data.planId || "free";
       state.planName = (data.current && data.current.name) || state.planId.charAt(0).toUpperCase() + state.planId.slice(1);
       state.limits = data.limits || {};
-
-      console.log("[Plan] Loaded:", state.planId, state.limits);
     } catch (e) {
       console.warn("[Plan] Error:", e);
     }
   }
 
   async function loadProducts() {
-    var url = apiUrl("/stock");
-    if (!url) return;
     try {
-      var res = await authFetch(url);
+      var res = await authFetch(apiUrl("/stock"));
       if (!res.ok) {
         state.products = [];
         return;
