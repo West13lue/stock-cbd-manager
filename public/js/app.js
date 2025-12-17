@@ -388,51 +388,32 @@
       "</div></div>";
   }
 
-  function renderTable(products) {
-    var rows = products
-      .map(function (p) {
-        var s = p.totalGrams || 0,
-          cost = p.averageCostPerGram || 0;
-        var st = getStatus(s);
-        return (
-          '<tr class="product-row" data-product-id="' + esc(p.productId) + '" onclick="app.openProductDetails(\'' + esc(p.productId) + '\')" style="cursor:pointer">' +
-          "<td>" +
-          esc(p.name || p.title || "Sans nom") +
-          "</td>" +
-          "<td>" +
-          formatWeight(s) +
-          "</td><td>" +
-          formatCurrency(cost) +
-          "/g</td>" +
-          "<td>" +
-          formatCurrency(s * cost) +
-          "</td>" +
-          '<td><span class="stock-badge ' +
-          st.c +
-          '">' +
-          st.i +
-          " " +
-          st.l +
-          "</span></td>" +
-          '<td class="cell-actions" onclick="event.stopPropagation()">' +
-          '<button class="btn btn-ghost btn-xs" onclick="app.showRestockModal(\'' +
-          p.productId +
-          "')\">+</button>" +
-          '<button class="btn btn-ghost btn-xs" onclick="app.showAdjustModal(\'' +
-          p.productId +
-          "')\">Edit</button>" +
-          '<button class="btn btn-ghost btn-xs" onclick="app.openProductDetails(\'' +
-          p.productId +
-          "')\">👁</button></td></tr>"
-        );
-      })
-      .join("");
-    return (
-      '<table class="data-table"><thead><tr><th>Produit</th><th>Stock</th><th>CMP</th><th>Valeur</th><th>Statut</th><th></th></tr></thead><tbody>' +
-      rows +
-      "</tbody></table>"
-    );
-  }
+function renderTable(products) {
+  var rows = products
+    .map(function (p) {
+      var s = p.totalGrams || 0,
+        cost = p.averageCostPerGram || 0;
+      var st = getStatus(s);
+      return (
+        '<tr class="product-row" onclick="app.openProductDetails(\'' + esc(p.productId) + '\')" style="cursor:pointer">' +
+        "<td>" + esc(p.name || p.title || "Sans nom") + "</td>" +
+        "<td>" + formatWeight(s) + "</td>" +
+        "<td>" + formatCurrency(cost) + "/g</td>" +
+        "<td>" + formatCurrency(s * cost) + "</td>" +
+        '<td><span class="stock-badge ' + st.c + '">' + st.i + " " + st.l + "</span></td>" +
+        '<td class="cell-actions" onclick="event.stopPropagation()">' +
+        '<button class="btn btn-ghost btn-xs" onclick="app.showRestockModal(\'' + p.productId + "')\">+</button>" +
+        '<button class="btn btn-ghost btn-xs" onclick="app.showAdjustModal(\'' + p.productId + "')\">Edit</button>" +
+        '<button class="btn btn-ghost btn-xs" onclick="app.openProductDetails(\'' + p.productId + "')\">Details</button></td></tr>"
+      );
+    })
+    .join("");
+  return (
+    '<table class="data-table"><thead><tr><th>Produit</th><th>Stock</th><th>CMP</th><th>Valeur</th><th>Statut</th><th></th></tr></thead><tbody>' +
+    rows +
+    "</tbody></table>"
+  );
+}
 
   function renderEmpty() {
     return (
@@ -1071,7 +1052,109 @@
     }
   }
 
+// ============================================
+// FICHE DETAIL PRODUIT
+// ============================================
+async function openProductDetails(productId) {
+  if (!productId) return;
+  showModal({
+    title: "Chargement...",
+    size: "xl",
+    content: '<div class="text-center" style="padding:40px"><div class="spinner"></div></div>',
+  });
+  try {
+    var res = await authFetch(apiUrl("/products/" + encodeURIComponent(productId)));
+    if (!res.ok) {
+      var err = await res.json().catch(function() { return {}; });
+      showToast(err.error || "Erreur chargement", "error");
+      closeModal();
+      return;
+    }
+    var data = await res.json();
+    renderProductDetails(data);
+  } catch (e) {
+    showToast("Erreur: " + e.message, "error");
+    closeModal();
+  }
+}
+
+function renderProductDetails(data) {
+  var p = data.product;
+  var variants = data.variantStats || [];
+  var summary = data.summary || {};
+  var statusClass = p.stockStatus || "good";
+  var statusLabel = p.stockLabel || "OK";
+
+  var variantsRows = variants.map(function(v) {
+    var barWidth = Math.min(100, Math.max(5, v.shareByUnits || 0));
+    return '<tr><td class="cell-primary">' + v.gramsPerUnit + 'g</td>' +
+      '<td class="cell-mono">' + (v.inventoryItemId || '-') + '</td>' +
+      '<td style="font-weight:600">' + v.canSell + ' unites</td>' +
+      '<td>' + formatWeight(v.gramsEquivalent) + '</td>' +
+      '<td style="width:150px"><div class="variant-bar-container">' +
+      '<div class="variant-bar" style="width:' + barWidth + '%"></div>' +
+      '<span class="variant-bar-label">' + v.shareByUnits.toFixed(1) + '%</span></div></td></tr>';
+  }).join("");
+
+  var chartBars = variants.map(function(v, i) {
+    var maxCanSell = Math.max.apply(null, variants.map(function(x) { return x.canSell; })) || 1;
+    var heightPercent = Math.round((v.canSell / maxCanSell) * 100);
+    var colors = ['#6366f1', '#8b5cf6', '#06b6d4', '#10b981', '#f59e0b', '#ef4444'];
+    return '<div class="chart-bar-wrapper"><div class="chart-bar" style="height:' + heightPercent + '%;background:' + colors[i % 6] + '"></div>' +
+      '<div class="chart-bar-label">' + v.gramsPerUnit + 'g</div><div class="chart-bar-value">' + v.canSell + '</div></div>';
+  }).join("");
+
+  var content = 
+    '<div class="product-detail-header"><div class="product-detail-title"><h2>' + esc(p.name) + '</h2>' +
+    '<span class="stock-badge ' + statusClass + '">' + statusLabel + '</span></div></div>' +
+    '<div class="product-detail-stats">' +
+    '<div class="detail-stat"><div class="detail-stat-value">' + formatWeight(p.totalGrams) + '</div><div class="detail-stat-label">Stock total</div></div>' +
+    '<div class="detail-stat"><div class="detail-stat-value">' + formatCurrency(p.averageCostPerGram) + '/g</div><div class="detail-stat-label">CMP</div></div>' +
+    '<div class="detail-stat"><div class="detail-stat-value">' + formatCurrency(p.stockValue) + '</div><div class="detail-stat-label">Valeur</div></div>' +
+    '<div class="detail-stat"><div class="detail-stat-value">' + summary.variantCount + '</div><div class="detail-stat-label">Variantes</div></div></div>' +
+    '<div class="product-detail-actions">' +
+    '<button class="btn btn-primary btn-sm" onclick="app.closeModal();app.showRestockModal(\'' + p.productId + '\')">Reappro</button>' +
+    '<button class="btn btn-secondary btn-sm" onclick="app.closeModal();app.showAdjustModal(\'' + p.productId + '\')">Ajuster</button>' +
+    '<button class="btn btn-ghost btn-sm" onclick="app.showEditCMPModal(\'' + p.productId + '\',' + p.averageCostPerGram + ')">Modifier CMP</button></div>' +
+    '<div class="product-detail-section"><h3 class="section-title">Capacite de vente par variante</h3>' +
+    '<div class="chart-container"><div class="simple-bar-chart">' + chartBars + '</div></div></div>' +
+    '<div class="product-detail-section"><h3 class="section-title">Detail des variantes</h3>' +
+    '<table class="data-table data-table-compact"><thead><tr><th>Grammage</th><th>Inventory ID</th><th>Unites</th><th>Equivalent</th><th>Repartition</th></tr></thead>' +
+    '<tbody>' + variantsRows + '</tbody></table></div>' +
+    '<div class="product-detail-info"><strong>Mode Pool Global</strong> - Le stock est partage entre toutes les variantes.</div>';
+
+  showModal({ title: "Fiche produit", size: "xl", content: content, footer: '<button class="btn btn-ghost" onclick="app.closeModal()">Fermer</button>' });
+}
+
+function showEditCMPModal(productId, currentCMP) {
+  closeModal();
+  showModal({
+    title: "Modifier le CMP",
+    content: '<p class="text-secondary mb-md">CMP actuel: <strong>' + formatCurrency(currentCMP) + '/g</strong></p>' +
+      '<div class="form-group"><label class="form-label">Nouveau CMP (EUR/g)</label>' +
+      '<input type="number" class="form-input" id="newCMP" value="' + currentCMP + '" step="0.01" min="0"></div>',
+    footer: '<button class="btn btn-ghost" onclick="app.closeModal()">Annuler</button>' +
+      '<button class="btn btn-primary" onclick="app.saveCMP(\'' + productId + '\')">Enregistrer</button>',
+  });
+}
+
+async function saveCMP(productId) {
+  var input = document.getElementById("newCMP");
+  var newCMP = parseFloat(input ? input.value : 0);
+  if (!Number.isFinite(newCMP) || newCMP < 0) { showToast("Valeur invalide", "error"); return; }
+  try {
+    var res = await authFetch(apiUrl("/products/" + encodeURIComponent(productId) + "/average-cost"), {
+      method: "PATCH", body: JSON.stringify({ averageCostPerGram: newCMP }),
+    });
+    if (res.ok) { showToast("CMP mis a jour", "success"); closeModal(); await loadProducts(); renderTab(state.currentTab); }
+    else { var e = await res.json(); showToast(e.error || "Erreur", "error"); }
+  } catch (e) { showToast("Erreur: " + e.message, "error"); }
+}
+
   window.app = {
+openProductDetails: openProductDetails,
+showEditCMPModal: showEditCMPModal,
+saveCMP: saveCMP,
     init: init,
     navigateTo: navigateTo,
     toggleSidebar: toggleSidebar,
