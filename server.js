@@ -360,12 +360,28 @@ function safeJson(req, res, fn) {
     });
   };
 
-    return res.status(401).json({
-      error: "reauth_required",
-      message: "RÃ©auth Shopify requise.",
-      reauthUrl: "/api/auth/start",
-    });
-  };
+  try {
+    const out = fn();
+    if (out && typeof out.then === "function") {
+      return out.catch((e) => {
+        const info = extractShopifyError(e);
+        logEvent("api_error", { shop: resolvedShop || undefined, ...info }, "error");
+
+        if (handleAuthErrorIfNeeded(info)) return;
+
+        return apiError(res, info.statusCode || 500, info.message || "Erreur serveur", info);
+      });
+    }
+    return out;
+  } catch (e) {
+    const info = extractShopifyError(e);
+    logEvent("api_error", { shop: resolvedShop || undefined, ...info }, "error");
+
+    if (handleAuthErrorIfNeeded(info)) return;
+
+    return apiError(res, info.statusCode || 500, info.message || "Erreur serveur", info);
+  }
+}
 
   try {
     const out = fn();
