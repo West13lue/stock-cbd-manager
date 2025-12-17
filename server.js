@@ -2067,6 +2067,15 @@ app.post("/webhooks/orders/create", express.raw({ type: "application/json" }), a
 app.use("/", router);
 app.use("/apps/:appSlug", router);
 
+// ============================================
+// ROUTES PRO (Batches, Suppliers, PO, Forecast, Kits, Inventory)
+// ============================================
+try {
+  require('./server-pro-routes')(app);
+} catch (e) {
+  console.warn('⚠️ Routes PRO non chargées:', e.message);
+}
+
 app.listen(PORT, "0.0.0.0", () => {
   logEvent("server_started", { port: PORT, indexHtml: INDEX_HTML, apiAuthRequired: API_AUTH_REQUIRED });
   console.log("✅ Server running on port", PORT);
