@@ -286,23 +286,34 @@ function extractBearerToken(req) {
 function requireApiAuth(req, res, next) {
   if (!API_AUTH_REQUIRED) return next();
 
-  // Laisse passer lâ€™OAuth install/callback
+  // Laisse passer l’OAuth install/callback
   if (req.path === "/auth/start" || req.path === "/auth/callback") return next();
 
-  // âœ… config publique (front App Bridge)
+  // ✅ config publique (front App Bridge)
   if (req.path === "/public/config") return next();
 
-
-  // âœ… returnUrl Shopify Billing (aprÃ¨s acceptation abonnement)
+  // ✅ returnUrl Shopify Billing (après acceptation abonnement)
   if (req.path === "/billing/return" || req.path === "/api/billing/return") return next();
 
   const token = extractBearerToken(req);
   if (!token) {
-  return res.status(401).json({
-    error: 'unauthorized',
-    reason: 'missing_session_token',
-    hint: 'This endpoint must be called from an embedded Shopify app'
-  });
+    return res.status(401).json({
+      error: "unauthorized",
+      reason: "missing_session_token",
+      hint: "This endpoint must be called from an embedded Shopify app",
+    });
+  }
+
+  const verified = verifySessionToken(token);
+  if (!verified.ok) return apiError(res, 401, verified.error);
+
+  const shop = parseShopFromDestOrIss(verified.payload);
+  if (!shop) return apiError(res, 401, "Shop introuvable dans le session token");
+
+  req.shopDomain = shop;
+  req.sessionTokenPayload = verified.payload;
+
+  next();
 }
 
   const verified = verifySessionToken(token);
@@ -368,7 +379,6 @@ function safeJson(req, res, fn) {
         logEvent("api_error", { shop: resolvedShop || undefined, ...info }, "error");
 
         if (handleAuthErrorIfNeeded(info)) return;
-
         return apiError(res, info.statusCode || 500, info.message || "Erreur serveur", info);
       });
     }
@@ -378,30 +388,6 @@ function safeJson(req, res, fn) {
     logEvent("api_error", { shop: resolvedShop || undefined, ...info }, "error");
 
     if (handleAuthErrorIfNeeded(info)) return;
-
-    return apiError(res, info.statusCode || 500, info.message || "Erreur serveur", info);
-  }
-}
-
-  try {
-    const out = fn();
-    if (out && typeof out.then === "function") {
-      return out.catch((e) => {
-        const info = extractShopifyError(e);
-        logEvent("api_error", { shop: resolvedShop || undefined, ...info }, "error");
-
-        if (handleAuthErrorIfNeeded(info)) return;
-
-        return apiError(res, info.statusCode || 500, info.message || "Erreur serveur", info);
-      });
-    }
-    return out;
-  } catch (e) {
-    const info = extractShopifyError(e);
-    logEvent("api_error", { shop: resolvedShop || undefined, ...info }, "error");
-
-    if (handleAuthErrorIfNeeded(info)) return;
-
     return apiError(res, info.statusCode || 500, info.message || "Erreur serveur", info);
   }
 }
