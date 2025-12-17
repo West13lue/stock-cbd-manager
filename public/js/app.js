@@ -191,11 +191,21 @@ async function init() {
   console.log('🚀 Stock Manager Pro initializing...');
   console.log('🏪 Shop:', CURRENT_SHOP || 'NON DÉTECTÉ');
 
-  // ⛔ STOP si pas de shop (refresh hors iframe Shopify)
-  if (!CURRENT_SHOP) {
-    console.warn('⏳ En attente du contexte Shopify (shop absent)');
-    return;
-  }
+if (!CURRENT_SHOP || window.top === window.self) {
+  console.warn('⛔ App ouverte hors iframe Shopify');
+
+  const msg = document.createElement('div');
+  msg.style.padding = '40px';
+  msg.style.fontFamily = 'sans-serif';
+  msg.innerHTML = `
+    <h2>⚠️ Application Shopify</h2>
+    <p>Cette application doit être ouverte depuis l’admin Shopify.</p>
+  `;
+
+  document.body.innerHTML = '';
+  document.body.appendChild(msg);
+  return;
+}
 
   // ⛔ STOP si App Bridge non prêt
   const bridgeReady = await initAppBridge();

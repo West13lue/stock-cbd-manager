@@ -297,7 +297,14 @@ function requireApiAuth(req, res, next) {
   if (req.path === "/billing/return") return next();
 
   const token = extractBearerToken(req);
-  if (!token) return apiError(res, 401, "Session token manquant");
+  if (!token) {
+  return res.status(401).json({
+    error: 'unauthorized',
+    reason: 'missing_session_token',
+    hint: 'This endpoint must be called from an embedded Shopify app'
+  });
+}
+;
 
   const verified = verifySessionToken(token);
   if (!verified.ok) return apiError(res, 401, verified.error);
