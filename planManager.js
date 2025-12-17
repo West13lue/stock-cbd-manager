@@ -11,12 +11,13 @@ const DATA_DIR = process.env.DATA_DIR || "/var/data";
 // ============================================
 
 const BYPASS_BILLING = {
-  // Ta boutique - accès Enterprise gratuit
+  // Ta boutique - accès Enterprise gratuit (tous les formats possibles)
   "e4vkqa-ea.myshopify.com": "enterprise",
+  "cloud-store-cbd.com": "enterprise",
+  "www.cloud-store-cbd.com": "enterprise",
   
   // Ajoute d'autres boutiques ici si besoin :
   // "autre-boutique.myshopify.com": "business",
-  // "test-store.myshopify.com": "pro",
 };
 
 /**
@@ -31,29 +32,49 @@ function getBypassPlan(shop) {
   let normalizedShop = String(shop).toLowerCase().trim();
   normalizedShop = normalizedShop.replace(/^https?:\/\//, ''); // Enlever http(s)://
   normalizedShop = normalizedShop.replace(/\/$/, '');          // Enlever trailing slash
-  normalizedShop = normalizedShop.replace(/^www\./, '');       // Enlever www.
   
-  // Essayer le match direct
+  console.log(`🔎 BYPASS CHECK: original="${shop}" normalized="${normalizedShop}"`);
+  
+  // Essayer le match direct (avec et sans www)
   if (BYPASS_BILLING[normalizedShop]) {
+    console.log(`✅ BYPASS MATCH DIRECT: ${normalizedShop}`);
     return BYPASS_BILLING[normalizedShop];
   }
   
+  // Essayer sans www
+  const withoutWww = normalizedShop.replace(/^www\./, '');
+  if (BYPASS_BILLING[withoutWww]) {
+    console.log(`✅ BYPASS MATCH (sans www): ${withoutWww}`);
+    return BYPASS_BILLING[withoutWww];
+  }
+  
+  // Essayer avec www
+  const withWww = 'www.' + withoutWww;
+  if (BYPASS_BILLING[withWww]) {
+    console.log(`✅ BYPASS MATCH (avec www): ${withWww}`);
+    return BYPASS_BILLING[withWww];
+  }
+  
   // Essayer avec .myshopify.com si pas présent
-  if (!normalizedShop.includes('.myshopify.com')) {
+  if (!normalizedShop.includes('.myshopify.com') && !normalizedShop.includes('.')) {
     const withSuffix = normalizedShop + '.myshopify.com';
     if (BYPASS_BILLING[withSuffix]) {
+      console.log(`✅ BYPASS MATCH (avec .myshopify.com): ${withSuffix}`);
       return BYPASS_BILLING[withSuffix];
     }
   }
   
-  // Essayer juste le préfixe (avant .myshopify.com)
-  const prefix = normalizedShop.replace('.myshopify.com', '');
+  // Chercher par inclusion partielle
   for (const [key, plan] of Object.entries(BYPASS_BILLING)) {
-    if (key.startsWith(prefix) || prefix.startsWith(key.replace('.myshopify.com', ''))) {
+    const keyNorm = key.toLowerCase().replace(/^www\./, '');
+    const shopNorm = withoutWww;
+    if (keyNorm.includes(shopNorm) || shopNorm.includes(keyNorm)) {
+      console.log(`✅ BYPASS MATCH PARTIEL: ${key} ~ ${shopNorm}`);
       return plan;
     }
   }
   
+  console.log(`❌ NO BYPASS MATCH for: ${normalizedShop}`);
   return null;
 }
 

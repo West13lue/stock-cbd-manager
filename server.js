@@ -1592,6 +1592,10 @@ router.get("/api/settings/support-bundle", (req, res) => {
 router.get("/api/plan", (req, res) => {
   safeJson(req, res, () => {
     const shop = getShop(req);
+    console.log(`📋 API /api/plan called - shop from request: "${shop}"`);
+    console.log(`   Query params: ${JSON.stringify(req.query)}`);
+    console.log(`   Headers x-shop-domain: ${req.headers['x-shop-domain']}`);
+    
     if (!shop) return apiError(res, 400, "Shop introuvable");
     if (!planManager) return apiError(res, 500, "PlanManager non disponible");
 
@@ -1600,6 +1604,7 @@ router.get("/api/plan", (req, res) => {
     const productCount = Array.isArray(snapshot.products) ? snapshot.products.length : 0;
 
     const planInfo = planManager.getPlanInfoForUI(shop, productCount);
+    console.log(`   Plan result: ${planInfo.current?.planId} (bypass: ${planInfo.bypass || false})`);
     res.json(planInfo);
   });
 });
