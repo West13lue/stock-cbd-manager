@@ -632,14 +632,7 @@ router.get("/api/debug/shopify", (req, res) => {
   });
 });
 
-router.get("/api/settings", (req, res) => {
-  safeJson(req, res, () => {
-    const shop = getShop(req);
-    if (!shop) return apiError(res, 400, "Shop introuvable");
-    const settings = (settingsStore?.loadSettings && settingsStore.loadSettings(shop)) || {};
-    res.json({ shop, settings });
-  });
-});
+// NOTE: /api/settings endpoint is in settings routes section (line ~1660)
 
 router.get("/api/shopify/locations", (req, res) => {
   safeJson(req, res, async () => {
