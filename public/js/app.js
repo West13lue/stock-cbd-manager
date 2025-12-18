@@ -717,6 +717,12 @@
         // Mettre a jour le cache local
         if (!settingsData[section]) settingsData[section] = {};
         settingsData[section][key] = value;
+        
+        // Rafraichir l'affichage si c'est un parametre d'affichage
+        if (section === "currency" || section === "units" || section === "general") {
+          // Re-render la page courante pour appliquer les nouveaux formats
+          renderTab(state.currentTab);
+        }
       } else {
         var e = await res.json();
         showToast(e.error || "Erreur", "error");
@@ -1227,12 +1233,73 @@
     }
   }
 
-  function formatWeight(g) {
-    return g >= 1000 ? (g / 1000).toFixed(2) + " kg" : g.toFixed(0) + " g";
+  function formatWeight(grams) {
+    // Utiliser les settings si disponibles
+    var unit = "g";
+    var precision = 0;
+    
+    if (settingsData && settingsData.units) {
+      unit = settingsData.units.weightUnit || "g";
+      precision = settingsData.units.weightPrecision || 1;
+    }
+    
+    // Facteurs de conversion depuis grammes
+    var factors = {
+      g: 1,
+      kg: 1000,
+      oz: 28.3495,
+      lb: 453.592
+    };
+    
+    var factor = factors[unit] || 1;
+    var value = grams / factor;
+    
+    // Formater selon la precision
+    if (unit === "g" && value >= 1000 && (!settingsData || !settingsData.units)) {
+      // Fallback: convertir en kg si > 1000g et pas de settings
+      return (grams / 1000).toFixed(2) + " kg";
+    }
+    
+    return value.toFixed(precision) + " " + unit;
   }
-  function formatCurrency(v) {
-    return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(v);
+  
+  function formatCurrency(value) {
+    // Utiliser les settings si disponibles
+    var code = "EUR";
+    var locale = "fr-FR";
+    var position = "after";
+    var symbol = "EUR";
+    
+    if (settingsData && settingsData.currency) {
+      code = settingsData.currency.code || "EUR";
+      symbol = settingsData.currency.symbol || code;
+      position = settingsData.currency.position || "after";
+    }
+    
+    if (settingsData && settingsData.general) {
+      var lang = settingsData.general.language || "fr";
+      var localeMap = {
+        fr: "fr-FR",
+        en: "en-US",
+        de: "de-DE",
+        es: "es-ES",
+        it: "it-IT"
+      };
+      locale = localeMap[lang] || "fr-FR";
+    }
+    
+    try {
+      return new Intl.NumberFormat(locale, { 
+        style: "currency", 
+        currency: code 
+      }).format(value);
+    } catch (e) {
+      // Fallback si devise invalide
+      var formatted = value.toFixed(2);
+      return position === "before" ? symbol + formatted : formatted + " " + symbol;
+    }
   }
+  
   function getStatus(g) {
     // Utiliser les seuils des settings si disponibles
     var criticalThreshold = 50;
