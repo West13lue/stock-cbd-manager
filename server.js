@@ -2696,9 +2696,11 @@ router.get("/api/analytics/sales", async (req, res) => {
         if (product) {
           // Chercher la variante pour les gramsPerUnit
           const fullProduct = products.find(p => p.productId === productId);
-          if (fullProduct && fullProduct.variants) {
+          if (fullProduct && Array.isArray(fullProduct.variants)) {
             const variant = fullProduct.variants.find(v => String(v.variantId) === variantId);
             gramsPerUnit = variant?.gramsPerUnit || 1;
+          } else {
+            gramsPerUnit = 1; // Fallback
           }
           
           const gramsSold = gramsPerUnit * quantity;
