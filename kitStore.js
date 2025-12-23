@@ -1,5 +1,5 @@
-// kitStore.js — Gestion des produits composés (Kits / Bundles)
-// Un kit est composé de plusieurs produits avec leurs quantités
+// kitStore.js - Gestion des Kits, Bundles et Recettes (BOM)
+// v1.0 - Bill of Materials, assemblage, mapping Shopify, calcul marges
 
 const fs = require("fs");
 const path = require("path");
@@ -7,74 +7,67 @@ const path = require("path");
 const DATA_DIR = process.env.DATA_DIR || "/var/data";
 
 // ============================================
-// Helpers
+// CONSTANTES
 // ============================================
 
-function sanitizeShop(shop) {
-  const s = String(shop || "").trim().toLowerCase();
-  return s ? s.replace(/[^a-z0-9._-]/g, "_") : "default";
-}
+const KIT_TYPE = {
+  KIT: "kit",           // Pack interne (coffret, box)
+  BUNDLE: "bundle",     // Bundle Shopify
+  RECIPE: "recipe",     // Recette de fabrication
+};
 
-function kitsFile(shop) {
-  const dir = path.join(DATA_DIR, sanitizeShop(shop));
+const KIT_STATUS = {
+  ACTIVE: "active",
+  DRAFT: "draft",
+  ARCHIVED: "archived",
+};
+
+const PRICING_MODE = {
+  FIXED: "fixed",           // Prix fixe défini
+  SUM_COMPONENTS: "sum",    // Prix = somme des composants
+  DISCOUNT_PCT: "discount", // Somme composants - X%
+};
+
+const UNIT_TYPE = {
+  GRAM: "g",
+  KILOGRAM: "kg",
+  UNIT: "unit",
+  MILLILITER: "ml",
+  LITER: "l",
+  PIECE: "pcs",
+};
+
+const EVENT_TYPE = {
+  SALE_CONSUME: "sale_consume",   // Vente = décrémente composants
+  ASSEMBLY: "assembly",           // Assemblage manuel
+  DISASSEMBLY: "disassembly",     // Désassemblage
+  ADJUSTMENT: "adjustment",       // Ajustement manuel
+  CREATED: "created",
+  UPDATED: "updated",
+  ARCHIVED: "archived",
+};
+
+// ============================================
+// HELPERS
+// ============================================
+
+function kitDir(shop) {
+  const dir = path.join(DATA_DIR, shop, "kits");
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  return path.join(dir, "kits.json");
+  return dir;
 }
 
-function generateId() {
-  return `kit_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+function kitFile(shop) {
+  return path.join(kitDir(shop), "kits.json");
 }
 
-// ============================================
-// STRUCTURE D'UN KIT
-// ============================================
-/*
-{
-  id: "kit_123",
-  name: "Pack Découverte CBD",
-  description: "3 variétés pour découvrir notre gamme",
-  sku: "PACK-DECOUVERTE",
-  
-  // Composants (recette)
-  components: [
-    { productId: "prod_1", productName: "CBD Premium", grams: 10 },
-    { productId: "prod_2", productName: "CBD Relax", grams: 10 },
-    { productId: "prod_3", productName: "CBD Sport", grams: 5 },
-  ],
-  
-  // Totaux
-  totalGrams: 25,
-  totalCost: 112.50,  // Somme des CMP des composants
-  
-  // Prix de vente
-  sellingPrice: 150,
-  margin: 37.50,
-  marginPercent: 25,
-  
-  // Shopify (optionnel)
-  shopifyProductId: "123456789",
-  shopifyVariantId: "987654321",
-  
-  // Stock
-  stockMethod: "calculated",  // calculated (basé sur composants) | fixed
-  fixedStock: null,
-  
-  // Statut
-  status: "active" | "inactive" | "draft",
-  
-  // Métadonnées
-  createdAt: "2025-01-01T00:00:00Z",
-  updatedAt: "2025-01-15T00:00:00Z",
+function eventsFile(shop) {
+  return path.join(kitDir(shop), "events.json");
 }
-*/
-
-// ============================================
-// CRUD Operations
-// ============================================
 
 function loadKits(shop) {
-  const file = kitsFile(shop);
   try {
+    const file = kitFile(shop);
     if (fs.existsSync(file)) {
       const data = JSON.parse(fs.readFileSync(file, "utf8"));
       return Array.isArray(data.kits) ? data.kits : [];
@@ -86,363 +79,925 @@ function loadKits(shop) {
 }
 
 function saveKits(shop, kits) {
-  const file = kitsFile(shop);
+  const file = kitFile(shop);
   const data = { updatedAt: new Date().toISOString(), kits };
   fs.writeFileSync(file + ".tmp", JSON.stringify(data, null, 2), "utf8");
   fs.renameSync(file + ".tmp", file);
   return kits;
 }
 
+function loadEvents(shop) {
+  try {
+    const file = eventsFile(shop);
+    if (fs.existsSync(file)) {
+      const data = JSON.parse(fs.readFileSync(file, "utf8"));
+      return Array.isArray(data.events) ? data.events : [];
+    }
+  } catch (e) {
+    console.warn("Erreur lecture events kits:", e.message);
+  }
+  return [];
+}
+
+function saveEvents(shop, events) {
+  const file = eventsFile(shop);
+  // Garder seulement les 1000 derniers événements
+  const trimmed = events.slice(-1000);
+  const data = { updatedAt: new Date().toISOString(), events: trimmed };
+  fs.writeFileSync(file + ".tmp", JSON.stringify(data, null, 2), "utf8");
+  fs.renameSync(file + ".tmp", file);
+  return trimmed;
+}
+
+function generateKitId() {
+  return `kit_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+}
+
+function generateItemId() {
+  return `item_${Date.now()}_${Math.random().toString(36).slice(2, 4)}`;
+}
+
+function generateEventId() {
+  return `evt_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+}
+
+// ============================================
+// CRUD KITS
+// ============================================
+
+/**
+ * Créer un kit/bundle/recette
+ */
 function createKit(shop, kitData) {
   const kits = loadKits(shop);
   
+  // Validation
+  if (!kitData.name || !kitData.name.trim()) {
+    throw new Error("Nom du kit requis");
+  }
+  
   const kit = {
-    id: generateId(),
-    name: String(kitData.name || "").trim(),
-    description: kitData.description || "",
-    sku: String(kitData.sku || "").trim().toUpperCase() || null,
+    id: generateKitId(),
+    name: kitData.name.trim(),
+    sku: kitData.sku || null,
+    type: kitData.type || KIT_TYPE.KIT,
+    status: kitData.status || KIT_STATUS.DRAFT,
     
-    components: (kitData.components || []).map(c => ({
-      productId: String(c.productId),
-      productName: c.productName || "",
-      grams: Number(c.grams || 0),
-    })),
+    // Pricing
+    pricingMode: kitData.pricingMode || PRICING_MODE.FIXED,
+    salePrice: Number(kitData.salePrice) || 0,
+    discountPercent: Number(kitData.discountPercent) || 0,
     
-    totalGrams: 0,
-    totalCost: 0,
+    // Catégorie et tags
+    categoryId: kitData.categoryId || null,
+    tags: Array.isArray(kitData.tags) ? kitData.tags : [],
     
-    sellingPrice: Number(kitData.sellingPrice || 0),
-    margin: 0,
-    marginPercent: 0,
-    
+    // Mapping Shopify
     shopifyProductId: kitData.shopifyProductId || null,
     shopifyVariantId: kitData.shopifyVariantId || null,
     
-    stockMethod: kitData.stockMethod || "calculated",
-    fixedStock: kitData.fixedStock || null,
+    // Stock du kit (si géré comme produit stockable)
+    isStockable: kitData.isStockable || false,
+    stockQuantity: Number(kitData.stockQuantity) || 0,
     
-    status: "active",
+    // Composants (BOM)
+    items: [],
     
+    // Métadonnées
+    notes: kitData.notes || "",
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
   
-  if (!kit.name) throw new Error("Nom du kit requis");
-  if (kit.components.length === 0) throw new Error("Au moins un composant requis");
-  
-  // Calculer les totaux
-  kit.totalGrams = kit.components.reduce((sum, c) => sum + c.grams, 0);
-  
   kits.push(kit);
   saveKits(shop, kits);
+  
+  // Log event
+  logEvent(shop, {
+    type: EVENT_TYPE.CREATED,
+    kitId: kit.id,
+    kitName: kit.name,
+    details: { type: kit.type, pricingMode: kit.pricingMode },
+  });
   
   return kit;
 }
 
+/**
+ * Récupérer un kit par ID
+ */
 function getKit(shop, kitId) {
   const kits = loadKits(shop);
   return kits.find(k => k.id === kitId) || null;
 }
 
+/**
+ * Récupérer un kit par SKU
+ */
 function getKitBySku(shop, sku) {
+  if (!sku) return null;
   const kits = loadKits(shop);
   return kits.find(k => k.sku && k.sku.toLowerCase() === sku.toLowerCase()) || null;
 }
 
+/**
+ * Récupérer un kit par Shopify variant ID
+ */
+function getKitByShopifyVariant(shop, variantId) {
+  if (!variantId) return null;
+  const kits = loadKits(shop);
+  return kits.find(k => k.shopifyVariantId === String(variantId)) || null;
+}
+
+/**
+ * Mettre à jour un kit
+ */
 function updateKit(shop, kitId, updates) {
   const kits = loadKits(shop);
   const index = kits.findIndex(k => k.id === kitId);
-  if (index === -1) throw new Error(`Kit non trouvé: ${kitId}`);
+  
+  if (index === -1) {
+    throw new Error("Kit non trouvé");
+  }
   
   const kit = kits[index];
+  const changes = {};
   
-  if (updates.name !== undefined) kit.name = String(updates.name).trim();
-  if (updates.description !== undefined) kit.description = updates.description;
-  if (updates.sku !== undefined) kit.sku = String(updates.sku).trim().toUpperCase() || null;
-  if (updates.sellingPrice !== undefined) kit.sellingPrice = Number(updates.sellingPrice);
-  if (updates.shopifyProductId !== undefined) kit.shopifyProductId = updates.shopifyProductId;
-  if (updates.shopifyVariantId !== undefined) kit.shopifyVariantId = updates.shopifyVariantId;
-  if (updates.stockMethod !== undefined) kit.stockMethod = updates.stockMethod;
-  if (updates.fixedStock !== undefined) kit.fixedStock = updates.fixedStock;
-  if (updates.status !== undefined) kit.status = updates.status;
+  // Champs modifiables
+  const allowedFields = [
+    "name", "sku", "type", "status", 
+    "pricingMode", "salePrice", "discountPercent",
+    "categoryId", "tags", "notes",
+    "shopifyProductId", "shopifyVariantId",
+    "isStockable", "stockQuantity"
+  ];
   
-  if (updates.components !== undefined) {
-    kit.components = updates.components.map(c => ({
-      productId: String(c.productId),
-      productName: c.productName || "",
-      grams: Number(c.grams || 0),
-    }));
-    kit.totalGrams = kit.components.reduce((sum, c) => sum + c.grams, 0);
+  for (const field of allowedFields) {
+    if (updates[field] !== undefined) {
+      changes[field] = { from: kit[field], to: updates[field] };
+      kit[field] = updates[field];
+    }
   }
   
   kit.updatedAt = new Date().toISOString();
-  
-  kits[index] = kit;
   saveKits(shop, kits);
+  
+  // Log event
+  logEvent(shop, {
+    type: EVENT_TYPE.UPDATED,
+    kitId: kit.id,
+    kitName: kit.name,
+    details: { changes },
+  });
+  
   return kit;
 }
 
-function deleteKit(shop, kitId) {
-  const kits = loadKits(shop);
-  const filtered = kits.filter(k => k.id !== kitId);
-  saveKits(shop, filtered);
-  return true;
+/**
+ * Archiver un kit
+ */
+function archiveKit(shop, kitId) {
+  return updateKit(shop, kitId, { status: KIT_STATUS.ARCHIVED });
 }
 
+/**
+ * Supprimer un kit (définitif)
+ */
+function deleteKit(shop, kitId) {
+  const kits = loadKits(shop);
+  const index = kits.findIndex(k => k.id === kitId);
+  
+  if (index === -1) {
+    throw new Error("Kit non trouvé");
+  }
+  
+  const kit = kits[index];
+  kits.splice(index, 1);
+  saveKits(shop, kits);
+  
+  // Log event
+  logEvent(shop, {
+    type: EVENT_TYPE.ARCHIVED,
+    kitId: kit.id,
+    kitName: kit.name,
+    details: { deleted: true },
+  });
+  
+  return { deleted: true, kit };
+}
+
+/**
+ * Lister les kits avec filtres
+ */
 function listKits(shop, options = {}) {
-  const { status, search } = options;
   let kits = loadKits(shop);
   
-  if (status) kits = kits.filter(k => k.status === status);
+  const { status, type, categoryId, search, includeArchived } = options;
   
+  // Filtres
+  if (!includeArchived) {
+    kits = kits.filter(k => k.status !== KIT_STATUS.ARCHIVED);
+  }
+  if (status) {
+    kits = kits.filter(k => k.status === status);
+  }
+  if (type) {
+    kits = kits.filter(k => k.type === type);
+  }
+  if (categoryId) {
+    kits = kits.filter(k => k.categoryId === categoryId);
+  }
   if (search) {
     const q = search.toLowerCase();
-    kits = kits.filter(k =>
+    kits = kits.filter(k => 
       k.name.toLowerCase().includes(q) ||
       (k.sku && k.sku.toLowerCase().includes(q))
     );
   }
   
+  // Tri alphabétique par défaut
+  kits.sort((a, b) => a.name.localeCompare(b.name));
+  
   return kits;
 }
 
 // ============================================
-// CALCUL DE STOCK & COÛT
+// GESTION DES COMPOSANTS (BOM)
 // ============================================
 
 /**
- * Calcule le stock disponible d'un kit (basé sur ses composants)
- * Le stock d'un kit = min(stock_composant / qty_composant)
+ * Ajouter un composant au kit
  */
-function calculateKitStock(shop, kitId, stockSnapshot) {
-  const kit = getKit(shop, kitId);
-  if (!kit) return { stock: 0, error: "Kit non trouvé" };
+function addKitItem(shop, kitId, itemData) {
+  const kits = loadKits(shop);
+  const kit = kits.find(k => k.id === kitId);
   
-  if (kit.stockMethod === "fixed") {
-    return { stock: kit.fixedStock || 0, method: "fixed" };
+  if (!kit) {
+    throw new Error("Kit non trouvé");
   }
   
-  let minKitsPossible = Infinity;
-  const componentDetails = [];
+  if (!itemData.productId) {
+    throw new Error("productId requis");
+  }
   
-  for (const component of kit.components) {
-    const productStock = stockSnapshot[component.productId]?.totalGrams || 0;
-    const kitsFromThisComponent = component.grams > 0 
-      ? Math.floor(productStock / component.grams)
-      : Infinity;
+  // Vérifier si le produit n'est pas déjà dans le kit
+  const existing = kit.items.find(i => 
+    i.productId === itemData.productId && 
+    (i.variantId || null) === (itemData.variantId || null)
+  );
+  
+  if (existing) {
+    throw new Error("Ce produit est déjà dans le kit");
+  }
+  
+  const item = {
+    id: generateItemId(),
+    productId: String(itemData.productId),
+    variantId: itemData.variantId ? String(itemData.variantId) : null,
+    productName: itemData.productName || "",
     
-    componentDetails.push({
-      productId: component.productId,
-      productName: component.productName,
-      gramsPerKit: component.grams,
-      stockAvailable: productStock,
-      kitsPossible: kitsFromThisComponent,
-      isLimiting: false,
-    });
+    quantity: Number(itemData.quantity) || 1,
+    unitType: itemData.unitType || UNIT_TYPE.GRAM,
     
-    if (kitsFromThisComponent < minKitsPossible) {
-      minKitsPossible = kitsFromThisComponent;
-    }
-  }
-  
-  // Marquer le composant limitant
-  for (const detail of componentDetails) {
-    if (detail.kitsPossible === minKitsPossible) {
-      detail.isLimiting = true;
-    }
-  }
-  
-  return {
-    stock: minKitsPossible === Infinity ? 0 : minKitsPossible,
-    method: "calculated",
-    componentDetails,
-    limitingFactor: componentDetails.find(d => d.isLimiting),
+    // Options avancées (PRO)
+    isOptional: itemData.isOptional || false,
+    choiceGroupId: itemData.choiceGroupId || null,
+    
+    // Pertes et arrondis
+    wastePct: Number(itemData.wastePct) || 0,
+    roundingRule: itemData.roundingRule || null,
+    
+    // Freebie (cadeau inclus)
+    isFreebie: itemData.isFreebie || false,
+    
+    // Prix override (si prix composant différent du CMP)
+    priceOverride: itemData.priceOverride !== undefined ? Number(itemData.priceOverride) : null,
+    
+    addedAt: new Date().toISOString(),
   };
+  
+  kit.items.push(item);
+  kit.updatedAt = new Date().toISOString();
+  saveKits(shop, kits);
+  
+  return { kit, item };
 }
 
 /**
- * Calcule le coût d'un kit (somme des CMP des composants)
+ * Mettre à jour un composant
  */
-function calculateKitCost(shop, kitId, stockSnapshot) {
-  const kit = getKit(shop, kitId);
-  if (!kit) return { cost: 0, error: "Kit non trouvé" };
+function updateKitItem(shop, kitId, itemId, updates) {
+  const kits = loadKits(shop);
+  const kit = kits.find(k => k.id === kitId);
   
+  if (!kit) {
+    throw new Error("Kit non trouvé");
+  }
+  
+  const item = kit.items.find(i => i.id === itemId);
+  if (!item) {
+    throw new Error("Composant non trouvé");
+  }
+  
+  // Champs modifiables
+  const allowedFields = [
+    "quantity", "unitType", "isOptional", "choiceGroupId",
+    "wastePct", "roundingRule", "isFreebie", "priceOverride", "productName"
+  ];
+  
+  for (const field of allowedFields) {
+    if (updates[field] !== undefined) {
+      item[field] = updates[field];
+    }
+  }
+  
+  item.updatedAt = new Date().toISOString();
+  kit.updatedAt = new Date().toISOString();
+  saveKits(shop, kits);
+  
+  return { kit, item };
+}
+
+/**
+ * Supprimer un composant
+ */
+function removeKitItem(shop, kitId, itemId) {
+  const kits = loadKits(shop);
+  const kit = kits.find(k => k.id === kitId);
+  
+  if (!kit) {
+    throw new Error("Kit non trouvé");
+  }
+  
+  const index = kit.items.findIndex(i => i.id === itemId);
+  if (index === -1) {
+    throw new Error("Composant non trouvé");
+  }
+  
+  const removed = kit.items.splice(index, 1)[0];
+  kit.updatedAt = new Date().toISOString();
+  saveKits(shop, kits);
+  
+  return { kit, removed };
+}
+
+// ============================================
+// CALCUL COÛTS & MARGES
+// ============================================
+
+/**
+ * Calculer le coût et la marge d'un kit
+ * @param {Object} kit - Le kit
+ * @param {Object} productCosts - Map productId -> { cmp, stock, name }
+ * @param {string} costMethod - "cmp" ou "fifo"
+ */
+function calculateKitCostAndMargin(kit, productCosts = {}, costMethod = "cmp") {
   let totalCost = 0;
-  const componentCosts = [];
+  let componentsPriceSum = 0;
+  const itemDetails = [];
+  const stockIssues = [];
   
-  for (const component of kit.components) {
-    const product = stockSnapshot[component.productId];
-    const cmp = product?.averageCostPerGram || 0;
-    const componentCost = cmp * component.grams;
+  for (const item of kit.items) {
+    const productData = productCosts[item.productId] || {};
+    const costPerUnit = item.priceOverride !== null ? item.priceOverride : (productData.cmp || 0);
     
-    componentCosts.push({
-      productId: component.productId,
-      productName: component.productName,
-      grams: component.grams,
-      cmpPerGram: cmp,
-      totalCost: componentCost,
+    // Quantité avec pertes
+    let effectiveQty = item.quantity;
+    if (item.wastePct > 0) {
+      effectiveQty = item.quantity * (1 + item.wastePct / 100);
+    }
+    
+    // Arrondi si spécifié
+    if (item.roundingRule) {
+      const rule = parseFloat(item.roundingRule);
+      if (rule > 0) {
+        effectiveQty = Math.ceil(effectiveQty / rule) * rule;
+      }
+    }
+    
+    const itemCost = effectiveQty * costPerUnit;
+    const itemPrice = item.isFreebie ? 0 : effectiveQty * costPerUnit; // Freebies = pas de revenu
+    
+    totalCost += itemCost;
+    componentsPriceSum += itemPrice;
+    
+    // Vérifier stock disponible
+    const availableStock = productData.stock || 0;
+    const hasStockIssue = availableStock < effectiveQty;
+    
+    if (hasStockIssue) {
+      stockIssues.push({
+        productId: item.productId,
+        productName: item.productName || productData.name || item.productId,
+        required: effectiveQty,
+        available: availableStock,
+        missing: effectiveQty - availableStock,
+      });
+    }
+    
+    itemDetails.push({
+      itemId: item.id,
+      productId: item.productId,
+      productName: item.productName || productData.name || item.productId,
+      quantity: item.quantity,
+      effectiveQuantity: effectiveQty,
+      unitType: item.unitType,
+      costPerUnit,
+      itemCost,
+      isFreebie: item.isFreebie,
+      isOptional: item.isOptional,
+      hasStockIssue,
+      availableStock,
     });
-    
-    totalCost += componentCost;
   }
   
-  const margin = kit.sellingPrice - totalCost;
-  const marginPercent = kit.sellingPrice > 0 ? (margin / kit.sellingPrice) * 100 : 0;
+  // Calculer le prix de vente selon le mode
+  let salePrice = 0;
+  switch (kit.pricingMode) {
+    case PRICING_MODE.FIXED:
+      salePrice = kit.salePrice || 0;
+      break;
+    case PRICING_MODE.SUM_COMPONENTS:
+      salePrice = componentsPriceSum;
+      break;
+    case PRICING_MODE.DISCOUNT_PCT:
+      salePrice = componentsPriceSum * (1 - (kit.discountPercent || 0) / 100);
+      break;
+    default:
+      salePrice = kit.salePrice || 0;
+  }
+  
+  // Marge
+  const margin = salePrice - totalCost;
+  const marginPercent = salePrice > 0 ? (margin / salePrice) * 100 : 0;
+  
+  // Alertes
+  const alerts = [];
+  if (marginPercent < 0) {
+    alerts.push({ type: "negative_margin", message: "Marge négative" });
+  } else if (marginPercent < 15) {
+    alerts.push({ type: "low_margin", message: "Marge faible (< 15%)" });
+  }
+  
+  if (stockIssues.length > 0) {
+    alerts.push({ type: "stock_issue", message: `${stockIssues.length} composant(s) en rupture`, stockIssues });
+  }
   
   return {
-    totalCost: roundTo(totalCost, 2),
-    sellingPrice: kit.sellingPrice,
-    margin: roundTo(margin, 2),
-    marginPercent: roundTo(marginPercent, 2),
-    componentCosts,
+    kitId: kit.id,
+    kitName: kit.name,
+    totalCost: Math.round(totalCost * 100) / 100,
+    salePrice: Math.round(salePrice * 100) / 100,
+    margin: Math.round(margin * 100) / 100,
+    marginPercent: Math.round(marginPercent * 10) / 10,
+    componentsPriceSum: Math.round(componentsPriceSum * 100) / 100,
+    pricingMode: kit.pricingMode,
+    itemCount: kit.items.length,
+    itemDetails,
+    stockIssues,
+    alerts,
+    hasIssues: alerts.length > 0,
   };
 }
 
+// ============================================
+// ASSEMBLAGE DE KITS
+// ============================================
+
 /**
- * Met à jour les coûts et marges d'un kit
+ * Assembler des kits (décrémenter composants, incrémenter stock kit)
+ * @returns {Object} Résultat de l'assemblage
  */
-function refreshKitCosts(shop, kitId, stockSnapshot) {
-  const costs = calculateKitCost(shop, kitId, stockSnapshot);
-  if (costs.error) return costs;
+function assembleKits(shop, kitId, quantity, options = {}) {
+  const { stockManager, batchStore, allowNegative = false, notes = "" } = options;
   
-  return updateKit(shop, kitId, {
-    totalCost: costs.totalCost,
-    margin: costs.margin,
-    marginPercent: costs.marginPercent,
-  });
-}
-
-// ============================================
-// DÉSTOCKAGE D'UN KIT
-// ============================================
-
-/**
- * Déstocke les composants d'un kit lors d'une vente
- * @returns {Array} Liste des déductions par composant
- */
-function deductKitComponents(shop, kitId, quantity = 1, stockManager) {
   const kit = getKit(shop, kitId);
-  if (!kit) throw new Error(`Kit non trouvé: ${kitId}`);
+  if (!kit) {
+    throw new Error("Kit non trouvé");
+  }
   
-  const deductions = [];
+  if (quantity <= 0) {
+    throw new Error("Quantité invalide");
+  }
   
-  for (const component of kit.components) {
-    const gramsToDeduct = component.grams * quantity;
+  const consumed = [];
+  const errors = [];
+  
+  // Pour chaque composant, vérifier et décrémenter le stock
+  for (const item of kit.items) {
+    if (item.isOptional) continue; // Skip optional items
     
-    deductions.push({
-      productId: component.productId,
-      productName: component.productName,
-      gramsDeducted: gramsToDeduct,
+    const qtyNeeded = item.quantity * quantity;
+    
+    // Appliquer pertes
+    let effectiveQty = qtyNeeded;
+    if (item.wastePct > 0) {
+      effectiveQty = qtyNeeded * (1 + item.wastePct / 100);
+    }
+    
+    // Vérifier stock disponible
+    if (stockManager) {
+      const currentStock = stockManager.getProductStock(shop, item.productId);
+      
+      if (currentStock < effectiveQty && !allowNegative) {
+        errors.push({
+          productId: item.productId,
+          productName: item.productName,
+          required: effectiveQty,
+          available: currentStock,
+          missing: effectiveQty - currentStock,
+        });
+        continue;
+      }
+    }
+    
+    consumed.push({
+      productId: item.productId,
+      productName: item.productName,
+      quantityPerKit: item.quantity,
+      totalQuantity: effectiveQty,
+      unitType: item.unitType,
     });
-    
-    // Appliquer la déduction via stockManager si fourni
-    if (stockManager && typeof stockManager.applyOrderToProduct === "function") {
-      stockManager.applyOrderToProduct(shop, component.productId, gramsToDeduct);
+  }
+  
+  // Si erreurs de stock, ne pas assembler
+  if (errors.length > 0) {
+    return {
+      success: false,
+      assembled: 0,
+      errors,
+      message: "Stock insuffisant pour certains composants",
+    };
+  }
+  
+  // Décrémenter les stocks des composants
+  for (const c of consumed) {
+    if (stockManager && typeof stockManager.adjustStock === "function") {
+      stockManager.adjustStock(shop, c.productId, -c.totalQuantity, {
+        reason: `Assemblage kit: ${kit.name} x${quantity}`,
+        source: "kit_assembly",
+        kitId: kit.id,
+      });
     }
   }
   
-  return {
-    kitId,
+  // Incrémenter le stock du kit si stockable
+  if (kit.isStockable) {
+    const kits = loadKits(shop);
+    const kitToUpdate = kits.find(k => k.id === kitId);
+    if (kitToUpdate) {
+      kitToUpdate.stockQuantity = (kitToUpdate.stockQuantity || 0) + quantity;
+      kitToUpdate.updatedAt = new Date().toISOString();
+      saveKits(shop, kits);
+    }
+  }
+  
+  // Log event
+  logEvent(shop, {
+    type: EVENT_TYPE.ASSEMBLY,
+    kitId: kit.id,
     kitName: kit.name,
     quantity,
-    totalGramsDeducted: kit.totalGrams * quantity,
-    deductions,
+    consumed,
+    notes,
+    source: "manual",
+  });
+  
+  return {
+    success: true,
+    assembled: quantity,
+    consumed,
+    newKitStock: kit.isStockable ? (kit.stockQuantity || 0) + quantity : null,
+    message: `${quantity} kit(s) assemblé(s) avec succès`,
   };
 }
 
 // ============================================
-// KITS POUR UN PRODUIT
+// CONSOMMATION LORS DE VENTES
 // ============================================
 
 /**
- * Trouve tous les kits qui contiennent un produit donné
+ * Consommer les composants d'un kit lors d'une vente
  */
-function getKitsContainingProduct(shop, productId) {
-  const kits = loadKits(shop);
+function consumeKitForSale(shop, kitId, quantity, options = {}) {
+  const { stockManager, orderId, orderNumber, source = "shopify" } = options;
   
-  return kits
-    .filter(k => k.components.some(c => c.productId === productId))
-    .map(k => ({
-      kitId: k.id,
-      kitName: k.name,
-      gramsInKit: k.components.find(c => c.productId === productId)?.grams || 0,
-    }));
-}
-
-// ============================================
-// STATS
-// ============================================
-
-function getKitStats(shop, stockSnapshot) {
-  const kits = loadKits(shop);
+  const kit = getKit(shop, kitId);
+  if (!kit) {
+    return { success: false, error: "Kit non trouvé" };
+  }
   
-  const stats = {
-    total: kits.length,
-    active: kits.filter(k => k.status === "active").length,
-    inactive: kits.filter(k => k.status !== "active").length,
-    totalValue: 0,
-    totalMargin: 0,
-    averageMarginPercent: 0,
-    outOfStock: 0,
-  };
+  const consumed = [];
   
-  let marginSum = 0;
-  let marginCount = 0;
-  
-  for (const kit of kits.filter(k => k.status === "active")) {
-    const stock = calculateKitStock(shop, kit.id, stockSnapshot);
-    const costs = calculateKitCost(shop, kit.id, stockSnapshot);
+  for (const item of kit.items) {
+    if (item.isOptional) continue;
     
-    if (stock.stock === 0) stats.outOfStock++;
+    let effectiveQty = item.quantity * quantity;
+    if (item.wastePct > 0) {
+      effectiveQty = effectiveQty * (1 + item.wastePct / 100);
+    }
     
-    stats.totalValue += kit.sellingPrice * stock.stock;
-    stats.totalMargin += costs.margin * stock.stock;
+    // Décrémenter le stock
+    if (stockManager && typeof stockManager.adjustStock === "function") {
+      stockManager.adjustStock(shop, item.productId, -effectiveQty, {
+        reason: `Vente kit: ${kit.name} x${quantity}`,
+        source: "kit_sale",
+        kitId: kit.id,
+        orderId,
+      });
+    }
     
-    if (costs.marginPercent > 0) {
-      marginSum += costs.marginPercent;
-      marginCount++;
+    consumed.push({
+      productId: item.productId,
+      productName: item.productName,
+      quantity: effectiveQty,
+      unitType: item.unitType,
+    });
+  }
+  
+  // Si kit stockable, décrémenter aussi son stock
+  if (kit.isStockable) {
+    const kits = loadKits(shop);
+    const kitToUpdate = kits.find(k => k.id === kitId);
+    if (kitToUpdate && kitToUpdate.stockQuantity >= quantity) {
+      kitToUpdate.stockQuantity -= quantity;
+      kitToUpdate.updatedAt = new Date().toISOString();
+      saveKits(shop, kits);
     }
   }
   
-  stats.averageMarginPercent = marginCount > 0 ? roundTo(marginSum / marginCount, 2) : 0;
+  // Log event
+  logEvent(shop, {
+    type: EVENT_TYPE.SALE_CONSUME,
+    kitId: kit.id,
+    kitName: kit.name,
+    quantity,
+    consumed,
+    orderId,
+    orderNumber,
+    source,
+  });
   
-  return stats;
+  return {
+    success: true,
+    consumed,
+    kitId: kit.id,
+    kitName: kit.name,
+    quantity,
+  };
 }
 
 // ============================================
-// HELPERS
+// SIMULATION
 // ============================================
 
-function roundTo(num, decimals) {
-  const factor = Math.pow(10, decimals);
-  return Math.round(num * factor) / factor;
+/**
+ * Simuler la vente de X kits
+ */
+function simulateKitSales(shop, kitId, quantity, productCosts = {}) {
+  const kit = getKit(shop, kitId);
+  if (!kit) {
+    throw new Error("Kit non trouvé");
+  }
+  
+  const costData = calculateKitCostAndMargin(kit, productCosts);
+  
+  // Calculer les stocks restants après vente
+  const stockAfterSale = [];
+  for (const item of costData.itemDetails) {
+    const currentStock = productCosts[item.productId]?.stock || 0;
+    const consumed = item.effectiveQuantity * quantity;
+    const remaining = currentStock - consumed;
+    
+    stockAfterSale.push({
+      productId: item.productId,
+      productName: item.productName,
+      currentStock,
+      consumed,
+      remaining,
+      inShortage: remaining < 0,
+    });
+  }
+  
+  return {
+    kitId: kit.id,
+    kitName: kit.name,
+    quantitySimulated: quantity,
+    
+    // Revenus
+    totalRevenue: Math.round(costData.salePrice * quantity * 100) / 100,
+    totalCost: Math.round(costData.totalCost * quantity * 100) / 100,
+    totalMargin: Math.round(costData.margin * quantity * 100) / 100,
+    marginPercent: costData.marginPercent,
+    
+    // Stock après simulation
+    stockAfterSale,
+    hasShortage: stockAfterSale.some(s => s.inShortage),
+    
+    // Capacité max de production
+    maxProducible: calculateMaxProducible(kit, productCosts),
+  };
+}
+
+/**
+ * Calculer le nombre max de kits produisibles
+ */
+function calculateMaxProducible(kit, productCosts = {}) {
+  let maxKits = Infinity;
+  
+  for (const item of kit.items) {
+    if (item.isOptional) continue;
+    
+    const availableStock = productCosts[item.productId]?.stock || 0;
+    let qtyNeeded = item.quantity;
+    if (item.wastePct > 0) {
+      qtyNeeded = qtyNeeded * (1 + item.wastePct / 100);
+    }
+    
+    if (qtyNeeded > 0) {
+      const possible = Math.floor(availableStock / qtyNeeded);
+      maxKits = Math.min(maxKits, possible);
+    }
+  }
+  
+  return maxKits === Infinity ? 0 : maxKits;
 }
 
 // ============================================
-// Exports
+// MAPPING SHOPIFY
+// ============================================
+
+/**
+ * Mapper un kit à un produit/variant Shopify
+ */
+function mapKitToShopify(shop, kitId, shopifyProductId, shopifyVariantId = null) {
+  const kits = loadKits(shop);
+  const kit = kits.find(k => k.id === kitId);
+  
+  if (!kit) {
+    throw new Error("Kit non trouvé");
+  }
+  
+  // Vérifier qu'aucun autre kit n'utilise ce variant
+  if (shopifyVariantId) {
+    const existing = kits.find(k => 
+      k.id !== kitId && k.shopifyVariantId === String(shopifyVariantId)
+    );
+    if (existing) {
+      throw new Error(`Ce variant est déjà mappé au kit "${existing.name}"`);
+    }
+  }
+  
+  kit.shopifyProductId = shopifyProductId ? String(shopifyProductId) : null;
+  kit.shopifyVariantId = shopifyVariantId ? String(shopifyVariantId) : null;
+  kit.updatedAt = new Date().toISOString();
+  
+  saveKits(shop, kits);
+  
+  return kit;
+}
+
+/**
+ * Supprimer le mapping Shopify
+ */
+function unmapKitFromShopify(shop, kitId) {
+  return mapKitToShopify(shop, kitId, null, null);
+}
+
+// ============================================
+// EVENTS / AUDIT
+// ============================================
+
+function logEvent(shop, eventData) {
+  const events = loadEvents(shop);
+  
+  const event = {
+    id: generateEventId(),
+    ...eventData,
+    createdAt: new Date().toISOString(),
+  };
+  
+  events.push(event);
+  saveEvents(shop, events);
+  
+  return event;
+}
+
+function getKitEvents(shop, kitId, options = {}) {
+  const { limit = 50, type } = options;
+  let events = loadEvents(shop);
+  
+  events = events.filter(e => e.kitId === kitId);
+  
+  if (type) {
+    events = events.filter(e => e.type === type);
+  }
+  
+  events.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  
+  return events.slice(0, limit);
+}
+
+// ============================================
+// STATS & KPIs
+// ============================================
+
+function getKitStats(shop, options = {}) {
+  const kits = listKits(shop, { includeArchived: false });
+  const events = loadEvents(shop);
+  
+  const { from, to } = options;
+  
+  // Filtrer events par période
+  let periodEvents = events;
+  if (from) {
+    periodEvents = periodEvents.filter(e => new Date(e.createdAt) >= new Date(from));
+  }
+  if (to) {
+    periodEvents = periodEvents.filter(e => new Date(e.createdAt) <= new Date(to));
+  }
+  
+  // Stats
+  const salesEvents = periodEvents.filter(e => e.type === EVENT_TYPE.SALE_CONSUME);
+  const assemblyEvents = periodEvents.filter(e => e.type === EVENT_TYPE.ASSEMBLY);
+  
+  const kitSalesMap = {};
+  for (const e of salesEvents) {
+    if (!kitSalesMap[e.kitId]) {
+      kitSalesMap[e.kitId] = { kitId: e.kitId, kitName: e.kitName, quantity: 0, events: 0 };
+    }
+    kitSalesMap[e.kitId].quantity += e.quantity || 0;
+    kitSalesMap[e.kitId].events++;
+  }
+  
+  const topKitsBySales = Object.values(kitSalesMap)
+    .sort((a, b) => b.quantity - a.quantity)
+    .slice(0, 5);
+  
+  return {
+    totalKits: kits.length,
+    activeKits: kits.filter(k => k.status === KIT_STATUS.ACTIVE).length,
+    draftKits: kits.filter(k => k.status === KIT_STATUS.DRAFT).length,
+    
+    // Période
+    periodSales: salesEvents.reduce((sum, e) => sum + (e.quantity || 0), 0),
+    periodAssemblies: assemblyEvents.reduce((sum, e) => sum + (e.quantity || 0), 0),
+    
+    topKitsBySales,
+    
+    // Alertes
+    unmappedKits: kits.filter(k => k.type === KIT_TYPE.BUNDLE && !k.shopifyVariantId).length,
+  };
+}
+
+// ============================================
+// EXPORTS
 // ============================================
 
 module.exports = {
+  // Constants
+  KIT_TYPE,
+  KIT_STATUS,
+  PRICING_MODE,
+  UNIT_TYPE,
+  EVENT_TYPE,
+  
   // CRUD
-  loadKits,
   createKit,
   getKit,
   getKitBySku,
+  getKitByShopifyVariant,
   updateKit,
+  archiveKit,
   deleteKit,
   listKits,
   
-  // Stock & Coût
-  calculateKitStock,
-  calculateKitCost,
-  refreshKitCosts,
+  // BOM Items
+  addKitItem,
+  updateKitItem,
+  removeKitItem,
   
-  // Déstockage
-  deductKitComponents,
+  // Calculs
+  calculateKitCostAndMargin,
+  calculateMaxProducible,
   
-  // Recherche
-  getKitsContainingProduct,
+  // Actions
+  assembleKits,
+  consumeKitForSale,
+  simulateKitSales,
+  
+  // Shopify
+  mapKitToShopify,
+  unmapKitFromShopify,
+  
+  // Events
+  logEvent,
+  getKitEvents,
   
   // Stats
   getKitStats,
+  
+  // Raw access
+  loadKits,
+  saveKits,
 };

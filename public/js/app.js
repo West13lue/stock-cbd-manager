@@ -358,7 +358,7 @@
         renderFeature(c, "hasForecast", "Previsions", "trending-up");
         break;
       case "kits":
-        renderFeature(c, "hasKits", "Kits et Bundles", "puzzle");
+        renderKits(c);
         break;
       case "analytics":
         renderAnalytics(c);
@@ -2216,6 +2216,340 @@
       '<button class="btn btn-primary" onclick="app.showAddProductModal()">+ Ajouter</button> ' +
       '<button class="btn btn-secondary" onclick="app.showImportModal()">Import Shopify</button></div>'
     );
+  }
+
+  // ============================================
+  // KITS & BUNDLES
+  // ============================================
+  
+  var kitsData = null;
+  var kitsFilters = { status: "", type: "", search: "" };
+
+  function renderKits(c) {
+    if (!hasFeature("hasKits")) {
+      c.innerHTML =
+        '<div class="page-header"><h1 class="page-title"><i data-lucide="package"></i> ' + t("kits.title", "Kits & Bundles") + '</h1></div>' +
+        '<div class="card" style="min-height:400px;display:flex;align-items:center;justify-content:center"><div class="text-center">' +
+        '<div class="lock-icon"><i data-lucide="lock"></i></div>' +
+        '<h2>' + t("msg.featureLocked", "Fonctionnalite Business") + '</h2>' +
+        '<p class="text-secondary">' + t("kits.lockedDesc", "Creez des packs, bundles et recettes.") + '</p>' +
+        '<div class="feature-preview mt-lg">' +
+        '<div class="preview-item"><i data-lucide="layers"></i> Bill of Materials</div>' +
+        '<div class="preview-item"><i data-lucide="calculator"></i> Calcul couts et marges</div>' +
+        '<div class="preview-item"><i data-lucide="git-merge"></i> Assemblage automatique</div>' +
+        '</div>' +
+        '<button class="btn btn-upgrade mt-lg" onclick="app.showUpgradeModal()">Passer a Business</button>' +
+        '</div></div>';
+      return;
+    }
+
+    c.innerHTML =
+      '<div class="page-header"><div><h1 class="page-title"><i data-lucide="package"></i> ' + t("kits.title", "Kits & Bundles") + '</h1>' +
+      '<p class="page-subtitle">Packs, bundles et recettes</p></div>' +
+      '<div class="page-actions">' +
+      '<button class="btn btn-primary" onclick="app.showCreateKitModal()"><i data-lucide="plus"></i> Nouveau kit</button>' +
+      '</div></div>' +
+      '<div id="kitsKpis"><div class="text-center py-lg"><div class="spinner"></div></div></div>' +
+      '<div id="kitsFilters"></div>' +
+      '<div id="kitsContent"><div class="text-center py-lg"><div class="spinner"></div></div></div>';
+
+    loadKitsData();
+  }
+
+  async function loadKitsData() {
+    try {
+      var params = new URLSearchParams();
+      if (kitsFilters.status) params.append("status", kitsFilters.status);
+      if (kitsFilters.type) params.append("type", kitsFilters.type);
+      if (kitsFilters.search) params.append("search", kitsFilters.search);
+
+      var res = await authFetch(apiUrl("/kits?" + params.toString()));
+      if (!res.ok) {
+        var err = await res.json().catch(function() { return {}; });
+        if (err.error === "plan_limit") { showUpgradeModal(); return; }
+        throw new Error(err.message || "Erreur");
+      }
+
+      var data = await res.json();
+      kitsData = data.kits || [];
+      renderKitsKpis(data.stats || {});
+      renderKitsFilters();
+      renderKitsContent();
+    } catch (e) {
+      document.getElementById("kitsContent").innerHTML = '<div class="card"><p class="text-danger text-center py-lg">Erreur: ' + e.message + '</p></div>';
+    }
+  }
+
+  function renderKitsKpis(stats) {
+    var container = document.getElementById("kitsKpis");
+    if (!container) return;
+    container.innerHTML =
+      '<div class="stats-grid stats-grid-4">' +
+      '<div class="stat-card"><div class="stat-icon"><i data-lucide="package"></i></div><div class="stat-value">' + (stats.totalKits || 0) + '</div><div class="stat-label">Total kits</div></div>' +
+      '<div class="stat-card stat-success"><div class="stat-icon"><i data-lucide="check-circle"></i></div><div class="stat-value">' + (stats.activeKits || 0) + '</div><div class="stat-label">Actifs</div></div>' +
+      '<div class="stat-card"><div class="stat-icon"><i data-lucide="shopping-cart"></i></div><div class="stat-value">' + (stats.periodSales || 0) + '</div><div class="stat-label">Vendus</div></div>' +
+      '<div class="stat-card"><div class="stat-icon"><i data-lucide="hammer"></i></div><div class="stat-value">' + (stats.periodAssemblies || 0) + '</div><div class="stat-label">Assembles</div></div>' +
+      '</div>';
+    if (typeof lucide !== "undefined") lucide.createIcons();
+  }
+
+  function renderKitsFilters() {
+    var container = document.getElementById("kitsFilters");
+    if (!container) return;
+    container.innerHTML =
+      '<div class="filters-bar">' +
+      '<select class="form-select filter-select" onchange="app.onKitFilterChange(\'status\', this.value)">' +
+      '<option value="">Tous statuts</option>' +
+      '<option value="active"' + (kitsFilters.status === "active" ? " selected" : "") + '>Actif</option>' +
+      '<option value="draft"' + (kitsFilters.status === "draft" ? " selected" : "") + '>Brouillon</option>' +
+      '</select>' +
+      '<select class="form-select filter-select" onchange="app.onKitFilterChange(\'type\', this.value)">' +
+      '<option value="">Tous types</option>' +
+      '<option value="kit"' + (kitsFilters.type === "kit" ? " selected" : "") + '>Kit</option>' +
+      '<option value="bundle"' + (kitsFilters.type === "bundle" ? " selected" : "") + '>Bundle</option>' +
+      '<option value="recipe"' + (kitsFilters.type === "recipe" ? " selected" : "") + '>Recette</option>' +
+      '</select>' +
+      '<input type="text" class="form-input" placeholder="Rechercher..." value="' + (kitsFilters.search || "") + '" onkeyup="app.onKitSearchChange(this.value)">' +
+      '</div>';
+  }
+
+  function renderKitsContent() {
+    var container = document.getElementById("kitsContent");
+    if (!container) return;
+
+    if (!kitsData || kitsData.length === 0) {
+      container.innerHTML =
+        '<div class="card"><div class="text-center py-xl">' +
+        '<div class="empty-icon"><i data-lucide="package"></i></div>' +
+        '<h3>Aucun kit</h3>' +
+        '<p class="text-secondary">Creez votre premier kit ou bundle.</p>' +
+        '<button class="btn btn-primary mt-md" onclick="app.showCreateKitModal()">Nouveau kit</button>' +
+        '</div></div>';
+      if (typeof lucide !== "undefined") lucide.createIcons();
+      return;
+    }
+
+    var rows = kitsData.map(function(kit) {
+      var typeBadge = getKitTypeBadge(kit.type);
+      var statusBadge = getKitStatusBadge(kit.status);
+      var marginClass = kit.calculatedMarginPercent >= 30 ? "success" : (kit.calculatedMarginPercent >= 15 ? "warning" : "danger");
+      return '<tr class="kit-row" onclick="app.openKitDetails(\'' + kit.id + '\')">' +
+        '<td><strong>' + esc(kit.name) + '</strong></td>' +
+        '<td>' + typeBadge + '</td>' +
+        '<td>' + kit.itemCount + '</td>' +
+        '<td>' + formatCurrency(kit.salePrice || 0) + '</td>' +
+        '<td>' + formatCurrency(kit.calculatedCost || 0) + '</td>' +
+        '<td class="' + marginClass + '">' + formatCurrency(kit.calculatedMargin || 0) + '</td>' +
+        '<td class="' + marginClass + '">' + (kit.calculatedMarginPercent || 0).toFixed(1) + '%</td>' +
+        '<td>' + (kit.maxProducible || 0) + '</td>' +
+        '<td>' + statusBadge + '</td>' +
+        '<td onclick="event.stopPropagation()"><button class="btn btn-ghost btn-sm" onclick="app.showAssembleKitModal(\'' + kit.id + '\')"><i data-lucide="hammer"></i></button></td>' +
+        '</tr>';
+    }).join("");
+
+    container.innerHTML =
+      '<div class="card"><div class="table-container"><table class="data-table">' +
+      '<thead><tr><th>Nom</th><th>Type</th><th>Composants</th><th>Prix</th><th>Cout</th><th>Marge</th><th>%</th><th>Prod. max</th><th>Statut</th><th></th></tr></thead>' +
+      '<tbody>' + rows + '</tbody></table></div></div>';
+    if (typeof lucide !== "undefined") lucide.createIcons();
+  }
+
+  function getKitTypeBadge(type) {
+    var badges = { kit: '<span class="status-badge status-info">Kit</span>', bundle: '<span class="status-badge status-primary">Bundle</span>', recipe: '<span class="status-badge status-secondary">Recette</span>' };
+    return badges[type] || '<span class="status-badge">' + type + '</span>';
+  }
+
+  function getKitStatusBadge(status) {
+    var badges = { active: '<span class="status-badge status-success">Actif</span>', draft: '<span class="status-badge status-warning">Brouillon</span>', archived: '<span class="status-badge status-secondary">Archive</span>' };
+    return badges[status] || '<span class="status-badge">' + status + '</span>';
+  }
+
+  function onKitFilterChange(filterName, value) { kitsFilters[filterName] = value; loadKitsData(); }
+  var kitSearchTimeout = null;
+  function onKitSearchChange(value) { clearTimeout(kitSearchTimeout); kitSearchTimeout = setTimeout(function() { kitsFilters.search = value; loadKitsData(); }, 300); }
+
+  function showCreateKitModal() {
+    showModal({
+      title: "Nouveau kit",
+      size: "lg",
+      content:
+        '<div class="form-group"><label class="form-label">Nom *</label><input type="text" class="form-input" id="kitName" placeholder="Pack Decouverte"></div>' +
+        '<div style="display:flex;gap:16px">' +
+        '<div class="form-group" style="flex:1"><label class="form-label">Type</label><select class="form-select" id="kitType"><option value="kit">Kit / Pack</option><option value="bundle">Bundle Shopify</option><option value="recipe">Recette</option></select></div>' +
+        '<div class="form-group" style="flex:1"><label class="form-label">SKU</label><input type="text" class="form-input" id="kitSku" placeholder="PACK-001"></div></div>' +
+        '<div style="display:flex;gap:16px">' +
+        '<div class="form-group" style="flex:1"><label class="form-label">Mode de prix</label><select class="form-select" id="kitPricingMode"><option value="fixed">Prix fixe</option><option value="sum">Somme composants</option><option value="discount">Somme - remise %</option></select></div>' +
+        '<div class="form-group" style="flex:1"><label class="form-label">Prix de vente (' + getCurrencySymbol() + ')</label><input type="number" class="form-input" id="kitSalePrice" step="0.01" placeholder="29.99"></div></div>' +
+        '<div class="form-group"><label class="form-label">Notes</label><textarea class="form-textarea" id="kitNotes" rows="2"></textarea></div>',
+      footer: '<button class="btn btn-secondary" onclick="app.closeModal()">Annuler</button><button class="btn btn-primary" onclick="app.saveKit()">Creer</button>'
+    });
+  }
+
+  async function saveKit() {
+    var name = document.getElementById("kitName").value.trim();
+    if (!name) { showToast("Nom requis", "error"); return; }
+    try {
+      var res = await authFetch(apiUrl("/kits"), {
+        method: "POST",
+        body: JSON.stringify({
+          name: name,
+          sku: document.getElementById("kitSku").value.trim() || null,
+          type: document.getElementById("kitType").value,
+          pricingMode: document.getElementById("kitPricingMode").value,
+          salePrice: parseFloat(document.getElementById("kitSalePrice").value) || 0,
+          notes: document.getElementById("kitNotes").value.trim(),
+          status: "draft",
+        })
+      });
+      if (!res.ok) throw new Error((await res.json().catch(function(){return{};})).message || "Erreur");
+      var data = await res.json();
+      closeModal();
+      showToast("Kit cree", "success");
+      openKitDetails(data.kit.id);
+    } catch (e) { showToast("Erreur: " + e.message, "error"); }
+  }
+
+  async function openKitDetails(kitId) {
+    try {
+      var res = await authFetch(apiUrl("/kits/" + kitId));
+      if (!res.ok) throw new Error("Kit non trouve");
+      var data = await res.json();
+      var kit = data.kit;
+      var costData = data.costData || {};
+      var marginClass = costData.marginPercent >= 30 ? "success" : (costData.marginPercent >= 15 ? "warning" : "danger");
+
+      var itemsHtml = "";
+      if (kit.items && kit.items.length > 0) {
+        var itemRows = kit.items.map(function(item) {
+          var detail = (costData.itemDetails || []).find(function(d) { return d.itemId === item.id; }) || {};
+          return '<tr><td>' + esc(item.productName || item.productId) + '</td><td>' + item.quantity + ' ' + item.unitType + '</td>' +
+            '<td>' + formatPricePerUnit(detail.costPerUnit || 0) + '</td><td>' + formatCurrency(detail.itemCost || 0) + '</td>' +
+            '<td>' + formatWeight(detail.availableStock || 0) + '</td>' +
+            '<td><button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();app.removeKitItem(\'' + kit.id + '\',\'' + item.id + '\')"><i data-lucide="trash-2"></i></button></td></tr>';
+        }).join("");
+        itemsHtml = '<table class="data-table data-table-compact"><thead><tr><th>Composant</th><th>Qte</th><th>Cout unit.</th><th>Cout total</th><th>Stock</th><th></th></tr></thead><tbody>' + itemRows + '</tbody></table>';
+      } else {
+        itemsHtml = '<p class="text-secondary text-center py-md">Aucun composant. Ajoutez-en pour calculer les couts.</p>';
+      }
+
+      showModal({
+        title: kit.name,
+        size: "xl",
+        content:
+          '<div class="kit-detail-header"><div style="display:flex;gap:8px">' + getKitTypeBadge(kit.type) + ' ' + getKitStatusBadge(kit.status) + '</div></div>' +
+          '<div class="stats-grid stats-grid-4 mt-md">' +
+          '<div class="stat-card"><div class="stat-value">' + formatCurrency(costData.salePrice || 0) + '</div><div class="stat-label">Prix vente</div></div>' +
+          '<div class="stat-card"><div class="stat-value">' + formatCurrency(costData.totalCost || 0) + '</div><div class="stat-label">Cout</div></div>' +
+          '<div class="stat-card stat-' + marginClass + '"><div class="stat-value">' + formatCurrency(costData.margin || 0) + '</div><div class="stat-label">Marge</div></div>' +
+          '<div class="stat-card stat-' + marginClass + '"><div class="stat-value">' + (costData.marginPercent || 0).toFixed(1) + '%</div><div class="stat-label">Marge %</div></div></div>' +
+          '<div class="section-header mt-lg"><h3>Composants (BOM)</h3><button class="btn btn-sm btn-secondary" onclick="app.showAddKitItemModal(\'' + kit.id + '\')"><i data-lucide="plus"></i> Ajouter</button></div>' +
+          '<div class="card-body">' + itemsHtml + '</div>' +
+          '<div class="section-header mt-lg"><h3>Simulation</h3></div>' +
+          '<div class="card-body"><div style="display:flex;gap:16px;align-items:center"><span>Si vendu</span><input type="number" class="form-input" id="simQty" value="1" style="width:80px" min="1"><span>fois</span>' +
+          '<button class="btn btn-secondary" onclick="app.runKitSimulation(\'' + kit.id + '\')">Simuler</button></div><div id="simResults" class="mt-md"></div></div>',
+        footer: '<button class="btn btn-secondary" onclick="app.closeModal()">Fermer</button>' +
+          (kit.status === "draft" ? '<button class="btn btn-success" onclick="app.activateKit(\'' + kit.id + '\')">Activer</button>' : '') +
+          '<button class="btn btn-primary" onclick="app.showAssembleKitModal(\'' + kit.id + '\')">Assembler</button>'
+      });
+      if (typeof lucide !== "undefined") lucide.createIcons();
+    } catch (e) { showToast("Erreur: " + e.message, "error"); }
+  }
+
+  function showAddKitItemModal(kitId) {
+    var productOptions = (productsData || []).map(function(p) { return '<option value="' + p.productId + '" data-name="' + esc(p.name) + '">' + esc(p.name) + '</option>'; }).join("");
+    showModal({
+      title: "Ajouter un composant",
+      content:
+        '<div class="form-group"><label class="form-label">Produit *</label><select class="form-select" id="itemProduct"><option value="">-- Selectionner --</option>' + productOptions + '</select></div>' +
+        '<div style="display:flex;gap:16px"><div class="form-group" style="flex:1"><label class="form-label">Quantite *</label><input type="number" class="form-input" id="itemQty" step="0.01" placeholder="10"></div>' +
+        '<div class="form-group" style="flex:1"><label class="form-label">Unite</label><select class="form-select" id="itemUnit"><option value="g">' + getWeightUnit() + '</option><option value="unit">Unite</option><option value="ml">ml</option></select></div></div>' +
+        '<div class="form-group"><label class="form-check"><input type="checkbox" id="itemFreebie"> Freebie (cadeau inclus)</label></div>',
+      footer: '<button class="btn btn-secondary" onclick="app.closeModal()">Annuler</button><button class="btn btn-primary" onclick="app.saveKitItem(\'' + kitId + '\')">Ajouter</button>'
+    });
+  }
+
+  async function saveKitItem(kitId) {
+    var productSelect = document.getElementById("itemProduct");
+    var productId = productSelect.value;
+    var productName = productSelect.selectedOptions[0]?.textContent || "";
+    var qty = parseFloat(document.getElementById("itemQty").value);
+    if (!productId || !qty) { showToast("Produit et quantite requis", "error"); return; }
+    try {
+      var res = await authFetch(apiUrl("/kits/" + kitId + "/items"), {
+        method: "POST",
+        body: JSON.stringify({
+          productId: productId,
+          productName: productName,
+          quantity: toGrams(qty),
+          unitType: document.getElementById("itemUnit").value,
+          isFreebie: document.getElementById("itemFreebie").checked,
+        })
+      });
+      if (!res.ok) throw new Error((await res.json().catch(function(){return{};})).message || "Erreur");
+      closeModal();
+      showToast("Composant ajoute", "success");
+      openKitDetails(kitId);
+    } catch (e) { showToast("Erreur: " + e.message, "error"); }
+  }
+
+  async function removeKitItem(kitId, itemId) {
+    if (!confirm("Supprimer ce composant ?")) return;
+    try {
+      var res = await authFetch(apiUrl("/kits/" + kitId + "/items/" + itemId), { method: "DELETE" });
+      if (!res.ok) throw new Error("Erreur");
+      showToast("Composant supprime", "success");
+      openKitDetails(kitId);
+    } catch (e) { showToast("Erreur: " + e.message, "error"); }
+  }
+
+  async function activateKit(kitId) {
+    try {
+      var res = await authFetch(apiUrl("/kits/" + kitId), { method: "PUT", body: JSON.stringify({ status: "active" }) });
+      if (!res.ok) throw new Error("Erreur");
+      showToast("Kit active", "success");
+      closeModal();
+      loadKitsData();
+    } catch (e) { showToast("Erreur: " + e.message, "error"); }
+  }
+
+  function showAssembleKitModal(kitId) {
+    showModal({
+      title: "Assembler des kits",
+      content:
+        '<div class="form-group"><label class="form-label">Quantite a assembler</label><input type="number" class="form-input" id="assembleQty" value="1" min="1"></div>' +
+        '<div class="form-group"><label class="form-label">Notes</label><input type="text" class="form-input" id="assembleNotes" placeholder="Optionnel"></div>',
+      footer: '<button class="btn btn-secondary" onclick="app.closeModal()">Annuler</button><button class="btn btn-primary" onclick="app.assembleKit(\'' + kitId + '\')">Assembler</button>'
+    });
+  }
+
+  async function assembleKit(kitId) {
+    var qty = parseInt(document.getElementById("assembleQty").value) || 1;
+    var notes = document.getElementById("assembleNotes").value;
+    try {
+      var res = await authFetch(apiUrl("/kits/" + kitId + "/assemble"), { method: "POST", body: JSON.stringify({ quantity: qty, notes: notes }) });
+      var data = await res.json();
+      if (!data.success) throw new Error(data.message || "Erreur");
+      closeModal();
+      showToast(data.message || "Kits assembles", "success");
+      loadKitsData();
+    } catch (e) { showToast("Erreur: " + e.message, "error"); }
+  }
+
+  async function runKitSimulation(kitId) {
+    var qty = parseInt(document.getElementById("simQty").value) || 1;
+    var container = document.getElementById("simResults");
+    try {
+      var res = await authFetch(apiUrl("/kits/" + kitId + "/simulate"), { method: "POST", body: JSON.stringify({ quantity: qty }) });
+      var data = await res.json();
+      container.innerHTML =
+        '<div class="stats-grid stats-grid-3">' +
+        '<div class="stat-card"><div class="stat-value">' + formatCurrency(data.totalRevenue || 0) + '</div><div class="stat-label">CA total</div></div>' +
+        '<div class="stat-card"><div class="stat-value">' + formatCurrency(data.totalCost || 0) + '</div><div class="stat-label">Cout total</div></div>' +
+        '<div class="stat-card"><div class="stat-value">' + formatCurrency(data.totalMargin || 0) + '</div><div class="stat-label">Marge totale</div></div></div>' +
+        (data.hasShortage ? '<div class="alert alert-warning mt-md">Stock insuffisant pour certains composants</div>' : '') +
+        '<p class="text-secondary mt-md">Capacite max de production: <strong>' + (data.maxProducible || 0) + '</strong> kits</p>';
+      if (typeof lucide !== "undefined") lucide.createIcons();
+    } catch (e) { container.innerHTML = '<p class="text-danger">Erreur: ' + e.message + '</p>'; }
   }
 
   // ============================================
@@ -4096,6 +4430,19 @@
     onOrderStatusChange: onOrderStatusChange,
     onOrderPeriodChange: onOrderPeriodChange,
     onOrderSourceChange: onOrderSourceChange,
+    // Kits & Bundles
+    onKitFilterChange: onKitFilterChange,
+    onKitSearchChange: onKitSearchChange,
+    showCreateKitModal: showCreateKitModal,
+    saveKit: saveKit,
+    openKitDetails: openKitDetails,
+    showAddKitItemModal: showAddKitItemModal,
+    saveKitItem: saveKitItem,
+    removeKitItem: removeKitItem,
+    activateKit: activateKit,
+    showAssembleKitModal: showAssembleKitModal,
+    assembleKit: assembleKit,
+    runKitSimulation: runKitSimulation,
     // Settings
     updateSetting: updateSetting,
     updateNestedSetting: updateNestedSetting,

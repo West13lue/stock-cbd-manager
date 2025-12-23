@@ -113,6 +113,13 @@ try {
   };
 }
 
+// --- Kit Store (Kits & Bundles)
+let kitStore = null;
+try {
+  kitStore = require("./kitStore");
+} catch (e) {
+  console.warn("KitStore non disponible:", e.message);
+}
 // aÅ“â€¦ OAuth config
 const SHOPIFY_API_KEY = String(process.env.SHOPIFY_API_KEY || "").trim();
 const SHOPIFY_API_SECRET = String(process.env.SHOPIFY_API_SECRET || "").trim();
@@ -3712,6 +3719,285 @@ router.get("/api/lots/expiring", (req, res) => {
     }));
 
     res.json({ lots: enriched, count: enriched.length });
+  });
+});
+
+// ============================================
+// KITS & BUNDLES API (Plan Business)
+// ============================================
+
+// Liste des kits
+router.get("/api/kits", (req, res) => {
+  safeJson(req, res, () => {
+    const shop = getShop(req);
+    if (!shop) return apiError(res, 400, "Shop introuvable");
+
+    // Vérifier le plan
+    if (planManager) {
+      const check = planManager.checkLimit(shop, "view_kits");
+      if (!check.allowed) {
+        return res.status(403).json({ error: "plan_limit", message: check.reason, upgrade: check.upgrade });
+      }
+    }
+
+    if (!kitStore) return apiError(res, 500, "Module kits non disponible");
+
+    const { status, type, categoryId, search, includeArchived } = req.query;
+    const kits = kitStore.listKits(shop, { 
+      status, type, categoryId, search, 
+      includeArchived: includeArchived === "true" 
+    });
+
+    // Enrichir avec calcul coût/marge
+    const snapshot = stock.getCatalogSnapshot ? stock.getCatalogSnapshot(shop) : { products: [] };
+    const productCosts = {};
+    (snapshot.products || []).forEach(p => {
+      productCosts[p.productId] = { 
+        cmp: p.averageCostPerGram || 0, 
+        stock: p.totalGrams || 0,
+        name: p.name 
+      };
+    });
+
+    const enriched = kits.map(kit => {
+      const costData = kitStore.calculateKitCostAndMargin(kit, productCosts);
+      return {
+        ...kit,
+        calculatedCost: costData.totalCost,
+        calculatedMargin: costData.margin,
+        calculatedMarginPercent: costData.marginPercent,
+        hasIssues: costData.hasIssues,
+        alerts: costData.alerts,
+        itemCount: kit.items.length,
+        maxProducible: kitStore.calculateMaxProducible(kit, productCosts),
+      };
+    });
+
+    const stats = kitStore.getKitStats(shop);
+    res.json({ kits: enriched, stats });
+  });
+});
+
+// Détail d'un kit
+router.get("/api/kits/:id", (req, res) => {
+  safeJson(req, res, () => {
+    const shop = getShop(req);
+    if (!shop) return apiError(res, 400, "Shop introuvable");
+    if (!kitStore) return apiError(res, 500, "Module kits non disponible");
+
+    const kit = kitStore.getKit(shop, req.params.id);
+    if (!kit) return apiError(res, 404, "Kit non trouvé");
+
+    // Enrichir avec calcul coût/marge
+    const snapshot = stock.getCatalogSnapshot ? stock.getCatalogSnapshot(shop) : { products: [] };
+    const productCosts = {};
+    (snapshot.products || []).forEach(p => {
+      productCosts[p.productId] = { 
+        cmp: p.averageCostPerGram || 0, 
+        stock: p.totalGrams || 0,
+        name: p.name 
+      };
+    });
+
+    const costData = kitStore.calculateKitCostAndMargin(kit, productCosts);
+    const events = kitStore.getKitEvents(shop, kit.id, { limit: 20 });
+
+    res.json({ 
+      kit, 
+      costData,
+      events,
+      maxProducible: kitStore.calculateMaxProducible(kit, productCosts),
+    });
+  });
+});
+
+// Créer un kit
+router.post("/api/kits", (req, res) => {
+  safeJson(req, res, () => {
+    const shop = getShop(req);
+    if (!shop) return apiError(res, 400, "Shop introuvable");
+
+    // Vérifier le plan
+    if (planManager) {
+      const check = planManager.checkLimit(shop, "manage_kits");
+      if (!check.allowed) {
+        return res.status(403).json({ error: "plan_limit", message: check.reason, upgrade: check.upgrade });
+      }
+    }
+
+    if (!kitStore) return apiError(res, 500, "Module kits non disponible");
+
+    try {
+      const kit = kitStore.createKit(shop, req.body);
+      res.json({ success: true, kit });
+    } catch (e) {
+      return apiError(res, 400, e.message);
+    }
+  });
+});
+
+// Modifier un kit
+router.put("/api/kits/:id", (req, res) => {
+  safeJson(req, res, () => {
+    const shop = getShop(req);
+    if (!shop) return apiError(res, 400, "Shop introuvable");
+    if (!kitStore) return apiError(res, 500, "Module kits non disponible");
+
+    try {
+      const kit = kitStore.updateKit(shop, req.params.id, req.body);
+      res.json({ success: true, kit });
+    } catch (e) {
+      return apiError(res, 400, e.message);
+    }
+  });
+});
+
+// Archiver un kit
+router.delete("/api/kits/:id", (req, res) => {
+  safeJson(req, res, () => {
+    const shop = getShop(req);
+    if (!shop) return apiError(res, 400, "Shop introuvable");
+    if (!kitStore) return apiError(res, 500, "Module kits non disponible");
+
+    try {
+      if (req.query.permanent === "true") {
+        const result = kitStore.deleteKit(shop, req.params.id);
+        res.json({ success: true, deleted: true });
+      } else {
+        const kit = kitStore.archiveKit(shop, req.params.id);
+        res.json({ success: true, kit, archived: true });
+      }
+    } catch (e) {
+      return apiError(res, 400, e.message);
+    }
+  });
+});
+
+// Ajouter un composant
+router.post("/api/kits/:id/items", (req, res) => {
+  safeJson(req, res, () => {
+    const shop = getShop(req);
+    if (!shop) return apiError(res, 400, "Shop introuvable");
+    if (!kitStore) return apiError(res, 500, "Module kits non disponible");
+
+    try {
+      const result = kitStore.addKitItem(shop, req.params.id, req.body);
+      res.json({ success: true, kit: result.kit, item: result.item });
+    } catch (e) {
+      return apiError(res, 400, e.message);
+    }
+  });
+});
+
+// Modifier un composant
+router.put("/api/kits/:id/items/:itemId", (req, res) => {
+  safeJson(req, res, () => {
+    const shop = getShop(req);
+    if (!shop) return apiError(res, 400, "Shop introuvable");
+    if (!kitStore) return apiError(res, 500, "Module kits non disponible");
+
+    try {
+      const result = kitStore.updateKitItem(shop, req.params.id, req.params.itemId, req.body);
+      res.json({ success: true, kit: result.kit, item: result.item });
+    } catch (e) {
+      return apiError(res, 400, e.message);
+    }
+  });
+});
+
+// Supprimer un composant
+router.delete("/api/kits/:id/items/:itemId", (req, res) => {
+  safeJson(req, res, () => {
+    const shop = getShop(req);
+    if (!shop) return apiError(res, 400, "Shop introuvable");
+    if (!kitStore) return apiError(res, 500, "Module kits non disponible");
+
+    try {
+      const result = kitStore.removeKitItem(shop, req.params.id, req.params.itemId);
+      res.json({ success: true, kit: result.kit, removed: result.removed });
+    } catch (e) {
+      return apiError(res, 400, e.message);
+    }
+  });
+});
+
+// Mapper un kit à Shopify
+router.post("/api/kits/:id/map-shopify", (req, res) => {
+  safeJson(req, res, () => {
+    const shop = getShop(req);
+    if (!shop) return apiError(res, 400, "Shop introuvable");
+    if (!kitStore) return apiError(res, 500, "Module kits non disponible");
+
+    try {
+      const { shopifyProductId, shopifyVariantId } = req.body;
+      const kit = kitStore.mapKitToShopify(shop, req.params.id, shopifyProductId, shopifyVariantId);
+      res.json({ success: true, kit });
+    } catch (e) {
+      return apiError(res, 400, e.message);
+    }
+  });
+});
+
+// Assembler des kits
+router.post("/api/kits/:id/assemble", (req, res) => {
+  safeJson(req, res, () => {
+    const shop = getShop(req);
+    if (!shop) return apiError(res, 400, "Shop introuvable");
+    if (!kitStore) return apiError(res, 500, "Module kits non disponible");
+
+    try {
+      const { quantity, allowNegative, notes } = req.body;
+      const result = kitStore.assembleKits(shop, req.params.id, quantity || 1, {
+        stockManager: stock,
+        batchStore,
+        allowNegative: allowNegative === true,
+        notes,
+      });
+      res.json(result);
+    } catch (e) {
+      return apiError(res, 400, e.message);
+    }
+  });
+});
+
+// Simuler des ventes
+router.post("/api/kits/:id/simulate", (req, res) => {
+  safeJson(req, res, () => {
+    const shop = getShop(req);
+    if (!shop) return apiError(res, 400, "Shop introuvable");
+    if (!kitStore) return apiError(res, 500, "Module kits non disponible");
+
+    try {
+      // Récupérer les coûts produits
+      const snapshot = stock.getCatalogSnapshot ? stock.getCatalogSnapshot(shop) : { products: [] };
+      const productCosts = {};
+      (snapshot.products || []).forEach(p => {
+        productCosts[p.productId] = { 
+          cmp: p.averageCostPerGram || 0, 
+          stock: p.totalGrams || 0,
+          name: p.name 
+        };
+      });
+
+      const { quantity } = req.body;
+      const result = kitStore.simulateKitSales(shop, req.params.id, quantity || 1, productCosts);
+      res.json(result);
+    } catch (e) {
+      return apiError(res, 400, e.message);
+    }
+  });
+});
+
+// Stats kits
+router.get("/api/kits-stats", (req, res) => {
+  safeJson(req, res, () => {
+    const shop = getShop(req);
+    if (!shop) return apiError(res, 400, "Shop introuvable");
+    if (!kitStore) return apiError(res, 500, "Module kits non disponible");
+
+    const { from, to } = req.query;
+    const stats = kitStore.getKitStats(shop, { from, to });
+    res.json(stats);
   });
 });
 
