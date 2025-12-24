@@ -4320,3 +4320,98 @@ html, body {
     justify-content: center;
   }
 }
+
+/* Forecast Sparkline */
+.sparkline-container {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 50px;
+  padding: 8px;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-md);
+}
+.sparkline-bar {
+  flex: 1;
+  background: var(--primary);
+  border-radius: 2px;
+  min-width: 4px;
+  transition: height 0.2s;
+}
+.sparkline-bar:hover {
+  background: var(--primary-hover);
+}
+
+/* Forecast Scenarios */
+.scenarios-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-top: 8px;
+}
+.scenario {
+  padding: 16px;
+  border-radius: var(--radius-md);
+  text-align: center;
+}
+.scenario.pessimistic {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+.scenario.normal {
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+.scenario.optimistic {
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+.scenario-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+.scenario-value {
+  font-size: 20px;
+  font-weight: 600;
+}
+
+/* Explanation Box */
+.explanation-box {
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-md);
+  padding: 16px;
+}
+.explanation-box h4 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  font-size: 14px;
+}
+.explanation-box ul {
+  margin: 0;
+  padding-left: 20px;
+}
+.explanation-box li {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+
+/* Progress bar mini */
+.progress-bar-mini {
+  width: 60px;
+  height: 6px;
+  background: var(--bg-tertiary);
+  border-radius: 3px;
+  overflow: hidden;
+  display: inline-block;
+  vertical-align: middle;
+  margin-right: 8px;
+}
+.progress-fill {
+  height: 100%;
+  background: var(--primary);
+  border-radius: 3px;
+}

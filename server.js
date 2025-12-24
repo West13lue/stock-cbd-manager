@@ -120,6 +120,22 @@ try {
 } catch (e) {
   console.warn("KitStore non disponible:", e.message);
 }
+// --- Inventory Count Store (Sessions d'inventaire)
+let inventoryCountStore = null;
+try {
+  inventoryCountStore = require("./inventoryCountStore");
+} catch (e) {
+  console.warn("InventoryCountStore non disponible:", e.message);
+}
+// --- Forecast Manager (Previsions)
+let forecastManager = null;
+try {
+  forecastManager = require("./forecastManager");
+} catch (e) {
+  console.warn("ForecastManager non disponible:", e.message);
+}
+
+
 // aÅ“â€¦ OAuth config
 const SHOPIFY_API_KEY = String(process.env.SHOPIFY_API_KEY || "").trim();
 const SHOPIFY_API_SECRET = String(process.env.SHOPIFY_API_SECRET || "").trim();
@@ -1476,7 +1492,11 @@ router.post("/api/import/product", (req, res) => {
     for (const v of p.variants || []) {
       const grams = parseGramsFromVariant(v);
       if (!grams) continue;
-      variants[String(grams)] = { gramsPerUnit: grams, inventoryItemId: Number(v.inventory_item_id) };
+      variants[String(grams)] = { 
+        gramsPerUnit: grams, 
+        inventoryItemId: Number(v.inventory_item_id),
+        variantId: String(v.id), // NOUVEAU: stocker le variantId Shopify
+      };
     }
 
     if (!Object.keys(variants).length) {
@@ -3997,6 +4017,419 @@ router.get("/api/kits-stats", (req, res) => {
 
     const { from, to } = req.query;
     const stats = kitStore.getKitStats(shop, { from, to });
+    res.json(stats);
+  });
+});
+
+// ============================================
+// FORECAST / PREVISIONS API (Business)
+// ============================================
+
+// Liste des prévisions
+router.get("/api/forecast", (req, res) => {
+  safeJson(req, res, () => {
+    const shop = getShop(req);
+    if (!shop) return apiError(res, 400, "Shop introuvable");
+
+    // Vérifier le plan
+    if (planManager) {
+      const check = planManager.checkLimit(shop, "view_forecast");
+      if (!check.allowed) {
+        return res.status(403).json({ error: "plan_limit", message: check.reason, upgrade: check.upgrade });
+      }
+    }
+
+    if (!forecastManager) return apiError(res, 500, "Module forecast non disponible");
+
+    const windowDays = parseInt(req.query.windowDays) || 30;
+    const categoryId = req.query.categoryId || null;
+
+    // Récupérer les produits
+    const snapshot = stock.getCatalogSnapshot ? stock.getCatalogSnapshot(shop) : { products: [] };
+    let products = snapshot.products || [];
+
+    // Filtrer par catégorie
+    if (categoryId) {
+      products = products.filter(p => p.categoryIds && p.categoryIds.includes(categoryId));
+    }
+
+    // Récupérer les données de ventes (depuis analyticsStore si disponible)
+    let salesData = [];
+    if (analyticsStore && typeof analyticsStore.listSales === "function") {
+      const fromDate = new Date();
+      fromDate.setDate(fromDate.getDate() - windowDays);
+      salesData = analyticsStore.listSales({ 
+        shop, 
+        from: fromDate.toISOString(), 
+        limit: 50000 
+      }).map(s => ({
+        date: s.orderDate,
+        productId: s.productId,
+        qty: s.totalGrams || 0,
+      }));
+    }
+
+    const forecasts = forecastManager.generateForecast(shop, products, salesData, { windowDays });
+    const stats = forecastManager.getForecastStats(forecasts);
+    const settings = forecastManager.loadForecastSettings(shop);
+
+    res.json({ forecasts, stats, settings });
+  });
+});
+
+// Détail prévision d'un produit
+router.get("/api/forecast/:productId", (req, res) => {
+  safeJson(req, res, () => {
+    const shop = getShop(req);
+    if (!shop) return apiError(res, 400, "Shop introuvable");
+    if (!forecastManager) return apiError(res, 500, "Module forecast non disponible");
+
+    const windowDays = parseInt(req.query.windowDays) || 30;
+
+    // Récupérer le produit
+    const snapshot = stock.getCatalogSnapshot ? stock.getCatalogSnapshot(shop) : { products: [] };
+    const product = (snapshot.products || []).find(p => p.productId === req.params.productId);
+    
+    if (!product) return apiError(res, 404, "Produit non trouvé");
+
+    // Récupérer les ventes
+    let salesData = [];
+    if (analyticsStore && typeof analyticsStore.listSales === "function") {
+      const fromDate = new Date();
+      fromDate.setDate(fromDate.getDate() - 90); // 90 jours d'historique
+      salesData = analyticsStore.listSales({ 
+        shop, 
+        from: fromDate.toISOString(),
+        productId: req.params.productId,
+        limit: 10000 
+      }).map(s => ({
+        date: s.orderDate,
+        productId: s.productId,
+        qty: s.totalGrams || 0,
+      }));
+    }
+
+    const forecast = forecastManager.generateProductForecast(shop, product, salesData, { windowDays });
+    res.json(forecast);
+  });
+});
+
+// Recommandations d'achat
+router.get("/api/forecast/recommendations", (req, res) => {
+  safeJson(req, res, () => {
+    const shop = getShop(req);
+    if (!shop) return apiError(res, 400, "Shop introuvable");
+    if (!forecastManager) return apiError(res, 500, "Module forecast non disponible");
+
+    const windowDays = parseInt(req.query.windowDays) || 30;
+
+    // Récupérer les produits
+    const snapshot = stock.getCatalogSnapshot ? stock.getCatalogSnapshot(shop) : { products: [] };
+    const products = snapshot.products || [];
+
+    // Récupérer les ventes
+    let salesData = [];
+    if (analyticsStore && typeof analyticsStore.listSales === "function") {
+      const fromDate = new Date();
+      fromDate.setDate(fromDate.getDate() - windowDays);
+      salesData = analyticsStore.listSales({ shop, from: fromDate.toISOString(), limit: 50000 })
+        .map(s => ({ date: s.orderDate, productId: s.productId, qty: s.totalGrams || 0 }));
+    }
+
+    // Récupérer les fournisseurs
+    let suppliersData = [];
+    if (supplierStore && typeof supplierStore.loadSuppliers === "function") {
+      suppliersData = supplierStore.loadSuppliers(shop);
+    }
+
+    const forecasts = forecastManager.generateForecast(shop, products, salesData, { windowDays });
+    const settings = forecastManager.loadForecastSettings(shop);
+    const recommendations = forecastManager.generatePurchaseRecommendations(forecasts, {
+      ...settings,
+      suppliersData,
+    });
+
+    res.json(recommendations);
+  });
+});
+
+// Settings forecast
+router.get("/api/forecast/settings", (req, res) => {
+  safeJson(req, res, () => {
+    const shop = getShop(req);
+    if (!shop) return apiError(res, 400, "Shop introuvable");
+    if (!forecastManager) return apiError(res, 500, "Module forecast non disponible");
+
+    const settings = forecastManager.loadForecastSettings(shop);
+    res.json({ settings });
+  });
+});
+
+router.post("/api/forecast/settings", (req, res) => {
+  safeJson(req, res, () => {
+    const shop = getShop(req);
+    if (!shop) return apiError(res, 400, "Shop introuvable");
+    if (!forecastManager) return apiError(res, 500, "Module forecast non disponible");
+
+    const settings = forecastManager.saveForecastSettings(shop, req.body);
+    res.json({ success: true, settings });
+  });
+});
+
+// ============================================
+// INVENTAIRE API (Sessions, Comptage, Audit)
+// ============================================
+
+// Liste des sessions d'inventaire
+router.get("/api/inventory/sessions", (req, res) => {
+  safeJson(req, res, () => {
+    const shop = getShop(req);
+    if (!shop) return apiError(res, 400, "Shop introuvable");
+
+    // Vérifier le plan
+    if (planManager) {
+      const check = planManager.checkLimit(shop, "view_inventory");
+      if (!check.allowed) {
+        return res.status(403).json({ error: "plan_limit", message: check.reason, upgrade: check.upgrade });
+      }
+    }
+
+    if (!inventoryCountStore) return apiError(res, 500, "Module inventaire non disponible");
+
+    const { status, includeArchived } = req.query;
+    const sessions = inventoryCountStore.listSessions(shop, { 
+      status, 
+      includeArchived: includeArchived === "true" 
+    });
+
+    res.json({ sessions });
+  });
+});
+
+// Créer une session
+router.post("/api/inventory/sessions", (req, res) => {
+  safeJson(req, res, () => {
+    const shop = getShop(req);
+    if (!shop) return apiError(res, 400, "Shop introuvable");
+
+    if (planManager) {
+      const check = planManager.checkLimit(shop, "manage_inventory");
+      if (!check.allowed) {
+        return res.status(403).json({ error: "plan_limit", message: check.reason, upgrade: check.upgrade });
+      }
+    }
+
+    if (!inventoryCountStore) return apiError(res, 500, "Module inventaire non disponible");
+
+    try {
+      const session = inventoryCountStore.createSession(shop, req.body);
+      res.json({ success: true, session });
+    } catch (e) {
+      return apiError(res, 400, e.message);
+    }
+  });
+});
+
+// Détail d'une session
+router.get("/api/inventory/sessions/:id", (req, res) => {
+  safeJson(req, res, () => {
+    const shop = getShop(req);
+    if (!shop) return apiError(res, 400, "Shop introuvable");
+    if (!inventoryCountStore) return apiError(res, 500, "Module inventaire non disponible");
+
+    const session = inventoryCountStore.getSession(shop, req.params.id);
+    if (!session) return apiError(res, 404, "Session non trouvée");
+
+    const items = inventoryCountStore.getSessionItems(shop, session.id);
+    res.json({ session, items });
+  });
+});
+
+// Modifier une session
+router.put("/api/inventory/sessions/:id", (req, res) => {
+  safeJson(req, res, () => {
+    const shop = getShop(req);
+    if (!shop) return apiError(res, 400, "Shop introuvable");
+    if (!inventoryCountStore) return apiError(res, 500, "Module inventaire non disponible");
+
+    try {
+      const session = inventoryCountStore.updateSession(shop, req.params.id, req.body);
+      res.json({ success: true, session });
+    } catch (e) {
+      return apiError(res, 400, e.message);
+    }
+  });
+});
+
+// Démarrer une session (créer les items)
+router.post("/api/inventory/sessions/:id/start", (req, res) => {
+  safeJson(req, res, () => {
+    const shop = getShop(req);
+    if (!shop) return apiError(res, 400, "Shop introuvable");
+    if (!inventoryCountStore) return apiError(res, 500, "Module inventaire non disponible");
+
+    try {
+      // Récupérer les produits du catalogue
+      const snapshot = stock.getCatalogSnapshot ? stock.getCatalogSnapshot(shop) : { products: [] };
+      const products = snapshot.products || [];
+
+      const result = inventoryCountStore.startSession(shop, req.params.id, products);
+      res.json({ success: true, ...result });
+    } catch (e) {
+      return apiError(res, 400, e.message);
+    }
+  });
+});
+
+// Items d'une session
+router.get("/api/inventory/sessions/:id/items", (req, res) => {
+  safeJson(req, res, () => {
+    const shop = getShop(req);
+    if (!shop) return apiError(res, 400, "Shop introuvable");
+    if (!inventoryCountStore) return apiError(res, 500, "Module inventaire non disponible");
+
+    const { status, search, onlyDiffs, onlyFlagged } = req.query;
+    const items = inventoryCountStore.getSessionItems(shop, req.params.id, {
+      status,
+      search,
+      onlyDiffs: onlyDiffs === "true",
+      onlyFlagged: onlyFlagged === "true",
+    });
+
+    res.json({ items });
+  });
+});
+
+// Mettre à jour un item
+router.put("/api/inventory/sessions/:id/items/:itemId", (req, res) => {
+  safeJson(req, res, () => {
+    const shop = getShop(req);
+    if (!shop) return apiError(res, 400, "Shop introuvable");
+    if (!inventoryCountStore) return apiError(res, 500, "Module inventaire non disponible");
+
+    try {
+      const item = inventoryCountStore.updateItem(shop, req.params.id, req.params.itemId, req.body);
+      res.json({ success: true, item });
+    } catch (e) {
+      return apiError(res, 400, e.message);
+    }
+  });
+});
+
+// Mise à jour en masse (autosave)
+router.post("/api/inventory/sessions/:id/items/bulk-upsert", (req, res) => {
+  safeJson(req, res, () => {
+    const shop = getShop(req);
+    if (!shop) return apiError(res, 400, "Shop introuvable");
+    if (!inventoryCountStore) return apiError(res, 500, "Module inventaire non disponible");
+
+    try {
+      const items = req.body.items || [];
+      const results = inventoryCountStore.bulkUpsertItems(shop, req.params.id, items);
+      res.json({ success: true, updated: results.length });
+    } catch (e) {
+      return apiError(res, 400, e.message);
+    }
+  });
+});
+
+// Valider une session (review)
+router.post("/api/inventory/sessions/:id/review", (req, res) => {
+  safeJson(req, res, () => {
+    const shop = getShop(req);
+    if (!shop) return apiError(res, 400, "Shop introuvable");
+    if (!inventoryCountStore) return apiError(res, 500, "Module inventaire non disponible");
+
+    try {
+      const session = inventoryCountStore.reviewSession(shop, req.params.id);
+      res.json({ success: true, session });
+    } catch (e) {
+      return apiError(res, 400, e.message);
+    }
+  });
+});
+
+// Appliquer les ajustements
+router.post("/api/inventory/sessions/:id/apply", (req, res) => {
+  safeJson(req, res, () => {
+    const shop = getShop(req);
+    if (!shop) return apiError(res, 400, "Shop introuvable");
+    if (!inventoryCountStore) return apiError(res, 500, "Module inventaire non disponible");
+
+    try {
+      const result = inventoryCountStore.applySession(shop, req.params.id, {
+        stockManager: stock,
+        allowNegative: req.body.allowNegative === true,
+      });
+      res.json({ success: true, ...result });
+    } catch (e) {
+      return apiError(res, 400, e.message);
+    }
+  });
+});
+
+// Archiver une session
+router.delete("/api/inventory/sessions/:id", (req, res) => {
+  safeJson(req, res, () => {
+    const shop = getShop(req);
+    if (!shop) return apiError(res, 400, "Shop introuvable");
+    if (!inventoryCountStore) return apiError(res, 500, "Module inventaire non disponible");
+
+    try {
+      const session = inventoryCountStore.archiveSession(shop, req.params.id);
+      res.json({ success: true, session });
+    } catch (e) {
+      return apiError(res, 400, e.message);
+    }
+  });
+});
+
+// Dupliquer une session
+router.post("/api/inventory/sessions/:id/duplicate", (req, res) => {
+  safeJson(req, res, () => {
+    const shop = getShop(req);
+    if (!shop) return apiError(res, 400, "Shop introuvable");
+    if (!inventoryCountStore) return apiError(res, 500, "Module inventaire non disponible");
+
+    try {
+      const session = inventoryCountStore.duplicateSession(shop, req.params.id);
+      res.json({ success: true, session });
+    } catch (e) {
+      return apiError(res, 400, e.message);
+    }
+  });
+});
+
+// Événements d'audit
+router.get("/api/inventory/events", (req, res) => {
+  safeJson(req, res, () => {
+    const shop = getShop(req);
+    if (!shop) return apiError(res, 400, "Shop introuvable");
+    if (!inventoryCountStore) return apiError(res, 500, "Module inventaire non disponible");
+
+    const { sessionId, productId, source, from, to, limit } = req.query;
+    const events = inventoryCountStore.listEvents(shop, {
+      sessionId,
+      productId,
+      source,
+      from,
+      to,
+      limit: parseInt(limit) || 100,
+    });
+
+    res.json({ events });
+  });
+});
+
+// Stats inventaire
+router.get("/api/inventory/stats", (req, res) => {
+  safeJson(req, res, () => {
+    const shop = getShop(req);
+    if (!shop) return apiError(res, 400, "Shop introuvable");
+    if (!inventoryCountStore) return apiError(res, 500, "Module inventaire non disponible");
+
+    const { from, to } = req.query;
+    const stats = inventoryCountStore.getInventoryStats(shop, { from, to });
     res.json(stats);
   });
 });

@@ -110,11 +110,14 @@ async function recordSaleFromOrder(shop, orderPayload) {
   const orderDiscounts = calculateOrderDiscounts(orderPayload);
   const orderSubtotal = lineItems.reduce((sum, li) => sum + (toNum(li.price, 0) * toNum(li.quantity, 0)), 0);
   
+  // Construire un mapping variantId -> gramsPerUnit depuis le catalogue
+  const variantGramsMap = buildVariantGramsMap(shop);
+  
   const sales = [];
 
   for (const li of lineItems) {
     const productId = String(li.product_id || "");
-    const variantId = li.variant_id || null;
+    const variantId = li.variant_id ? String(li.variant_id) : null;
     
     if (!productId) continue;
 
@@ -139,8 +142,21 @@ async function recordSaleFromOrder(shop, orderPayload) {
     // a... Revenu NET = prix brut - rductions (hors shipping/taxes)
     const netRevenue = Math.max(0, grossPrice - totalDiscount);
 
-    // Dterminer les grammes par unit depuis le variant title/sku
-    const gramsPerUnit = parseGramsFromLineItem(li);
+    // Dterminer les grammes par unit:
+    // 1. D'abord chercher dans le mapping du catalogue (le plus fiable)
+    // 2. Sinon parser depuis variant_title/sku
+    // 3. Sinon utiliser li.grams / quantity
+    let gramsPerUnit = 0;
+    
+    // Methode 1: Mapping du catalogue
+    if (variantGramsMap[variantId]) {
+      gramsPerUnit = variantGramsMap[variantId];
+    }
+    // Methode 2: Parser depuis le texte
+    if (!gramsPerUnit) {
+      gramsPerUnit = parseGramsFromLineItem(li);
+    }
+    
     const totalGrams = gramsPerUnit * quantity;
 
     // Rcuprer le CMP actuel du produit (snapshot)
@@ -254,36 +270,106 @@ function calculateLineDiscounts(lineItem) {
 }
 
 /**
+ * Construit un mapping variantId -> gramsPerUnit depuis le catalogue
+ */
+function buildVariantGramsMap(shop) {
+  const map = {};
+  
+  if (!stockManager || typeof stockManager.getStockSnapshot !== "function") {
+    return map;
+  }
+  
+  try {
+    const snapshot = stockManager.getStockSnapshot(shop);
+    if (!snapshot) return map;
+    
+    // Parcourir tous les produits et leurs variantes
+    for (const [productId, productData] of Object.entries(snapshot)) {
+      if (!productData || !productData.variants) continue;
+      
+      // Les variantes sont stockées avec le grammage comme clé
+      // Format: { "5": { gramsPerUnit: 5, inventoryItemId: xxx, variantId: "yyy" }, ... }
+      if (typeof productData.variants === 'object' && !Array.isArray(productData.variants)) {
+        for (const [label, v] of Object.entries(productData.variants)) {
+          if (v && v.variantId && v.gramsPerUnit) {
+            // Mapping principal par variantId
+            map[String(v.variantId)] = Number(v.gramsPerUnit);
+          }
+          if (v && v.inventoryItemId && v.gramsPerUnit) {
+            // Mapping secondaire par inventoryItemId (fallback)
+            map["inv_" + v.inventoryItemId] = Number(v.gramsPerUnit);
+          }
+        }
+      }
+      // Support pour format array (legacy)
+      else if (Array.isArray(productData.variants)) {
+        for (const v of productData.variants) {
+          if (v.variantId && (v.grams || v.gramsPerUnit)) {
+            map[String(v.variantId)] = Number(v.grams || v.gramsPerUnit);
+          }
+        }
+      }
+    }
+  } catch (e) {
+    console.warn("[Analytics] Erreur buildVariantGramsMap:", e.message);
+  }
+  
+  return map;
+}
+
+/**
  * Extrait le grammage depuis un line_item Shopify
+ * Stratégies multiples pour trouver les grammes par unité
  */
 function parseGramsFromLineItem(li) {
-  // Chercher dans variant_title, sku, properties
+  // Strategie 1: Chercher un pattern de grammage dans variant_title, sku, title
   const candidates = [
     li.variant_title,
     li.sku,
     li.title,
+    li.name,
     ...(li.properties || []).map(p => p.value),
   ].filter(Boolean);
 
   for (const candidate of candidates) {
-    const match = String(candidate).match(/([\d.,]+)\s*g(?:r(?:amme)?s?)?/i);
-    if (match) {
-      const g = parseFloat(match[1].replace(",", "."));
-      if (Number.isFinite(g) && g > 0) return g;
+    const str = String(candidate);
+    
+    // Pattern 1: "5g", "10 g", "5gr", "10 grammes", "5.5g"
+    const match1 = str.match(/([\d.,]+)\s*g(?:r(?:amme)?s?)?(?:\s|$|[^a-zA-Z])/i);
+    if (match1) {
+      const g = parseFloat(match1[1].replace(",", "."));
+      if (Number.isFinite(g) && g > 0 && g < 10000) return g;
+    }
+    
+    // Pattern 2: Juste un nombre seul (ex: variant_title = "5" ou "10")
+    // Commun pour les variantes de grammage
+    const match2 = str.match(/^([\d.,]+)$/);
+    if (match2) {
+      const g = parseFloat(match2[1].replace(",", "."));
+      // On considère les valeurs entre 0.5 et 1000 comme des grammes plausibles
+      if (Number.isFinite(g) && g >= 0.5 && g <= 1000) return g;
+    }
+    
+    // Pattern 3: "5 grams", "10 Grams"
+    const match3 = str.match(/([\d.,]+)\s*grams?/i);
+    if (match3) {
+      const g = parseFloat(match3[1].replace(",", "."));
+      if (Number.isFinite(g) && g > 0 && g < 10000) return g;
     }
   }
 
-  // Fallback: grams field de Shopify
+  // Strategie 2: Utiliser li.grams de Shopify (poids total de la ligne)
   // ATTENTION: li.grams = poids TOTAL de la ligne, pas par unite!
   // On doit diviser par la quantite pour obtenir gramsPerUnit
   if (li.grams && Number(li.grams) > 0) {
     const quantity = Number(li.quantity) || 1;
     const gramsPerUnit = Number(li.grams) / quantity;
-    if (gramsPerUnit > 0) return gramsPerUnit;
+    if (gramsPerUnit > 0 && gramsPerUnit < 10000) return gramsPerUnit;
   }
 
-  // Si aucune info trouvee, retourner 0 (sera gere ailleurs)
-  return 0;
+  // Si aucune info trouvee, retourner 1 par defaut (1g minimum)
+  // Ceci evite les divisions par 0 et donne une base pour le calcul
+  return 1;
 }
 
 // ============================================

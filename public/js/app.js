@@ -355,7 +355,7 @@
         renderOrders(c);
         break;
       case "forecast":
-        renderFeature(c, "hasForecast", "Previsions", "trending-up");
+        renderForecast(c);
         break;
       case "kits":
         renderKits(c);
@@ -364,7 +364,7 @@
         renderAnalytics(c);
         break;
       case "inventory":
-        renderFeature(c, "hasInventoryCount", "Inventaire", "clipboard-check");
+        renderInventory(c);
         break;
       case "settings":
         renderSettings(c);
@@ -2219,6 +2219,256 @@
   }
 
   // ============================================
+  // FORECAST / PREVISIONS
+  // ============================================
+  
+  var forecastData = null;
+  var forecastStats = null;
+  var forecastSettings = { windowDays: 30 };
+  var forecastFilters = { status: "", categoryId: "" };
+
+  function renderForecast(c) {
+    if (!hasFeature("hasForecast")) {
+      c.innerHTML =
+        '<div class="page-header"><h1 class="page-title"><i data-lucide="trending-up"></i> Previsions</h1></div>' +
+        '<div class="card" style="min-height:400px;display:flex;align-items:center;justify-content:center"><div class="text-center">' +
+        '<div class="lock-icon"><i data-lucide="lock"></i></div>' +
+        '<h2>Fonctionnalite Business</h2>' +
+        '<p class="text-secondary">Anticipez vos ruptures et optimisez vos commandes.</p>' +
+        '<div class="feature-preview mt-lg">' +
+        '<div class="preview-item"><i data-lucide="calendar"></i> Jours de couverture</div>' +
+        '<div class="preview-item"><i data-lucide="alert-triangle"></i> Alertes rupture</div>' +
+        '<div class="preview-item"><i data-lucide="shopping-cart"></i> Recommandations achat</div>' +
+        '</div>' +
+        '<button class="btn btn-upgrade mt-lg" onclick="app.showUpgradeModal()">Passer a Business</button>' +
+        '</div></div>';
+      return;
+    }
+
+    c.innerHTML =
+      '<div class="page-header"><div><h1 class="page-title"><i data-lucide="trending-up"></i> Previsions</h1>' +
+      '<p class="page-subtitle">Anticipez vos ruptures de stock</p></div>' +
+      '<div class="page-actions">' +
+      '<select class="form-select" id="forecastWindow" onchange="app.onForecastWindowChange(this.value)">' +
+      '<option value="7">7 jours</option>' +
+      '<option value="14">14 jours</option>' +
+      '<option value="30" selected>30 jours</option>' +
+      '<option value="60">60 jours</option>' +
+      '<option value="90">90 jours</option>' +
+      '</select>' +
+      '</div></div>' +
+      '<div id="forecastKpis"><div class="text-center py-lg"><div class="spinner"></div></div></div>' +
+      '<div id="forecastFilters"></div>' +
+      '<div id="forecastContent"><div class="text-center py-lg"><div class="spinner"></div></div></div>';
+
+    loadForecastData();
+  }
+
+  async function loadForecastData() {
+    try {
+      var windowDays = forecastSettings.windowDays || 30;
+      var params = new URLSearchParams();
+      params.append("windowDays", windowDays);
+      if (forecastFilters.categoryId) params.append("categoryId", forecastFilters.categoryId);
+
+      var res = await authFetch(apiUrl("/forecast?" + params.toString()));
+      if (!res.ok) {
+        var err = await res.json().catch(function() { return {}; });
+        if (err.error === "plan_limit") { showUpgradeModal(); return; }
+        throw new Error(err.message || "Erreur");
+      }
+
+      var data = await res.json();
+      forecastData = data.forecasts || [];
+      forecastStats = data.stats || {};
+      forecastSettings = data.settings || {};
+      renderForecastKpis();
+      renderForecastFilters();
+      renderForecastContent();
+    } catch (e) {
+      document.getElementById("forecastContent").innerHTML = '<div class="card"><p class="text-danger text-center py-lg">Erreur: ' + e.message + '</p></div>';
+    }
+  }
+
+  function renderForecastKpis() {
+    var container = document.getElementById("forecastKpis");
+    if (!container || !forecastStats) return;
+
+    var healthClass = forecastStats.healthScore >= 80 ? "stat-success" : (forecastStats.healthScore >= 60 ? "stat-warning" : "stat-danger");
+
+    container.innerHTML =
+      '<div class="stats-grid stats-grid-4">' +
+      '<div class="stat-card ' + healthClass + '"><div class="stat-icon"><i data-lucide="heart-pulse"></i></div>' +
+      '<div class="stat-value">' + (forecastStats.healthScore || 0) + '%</div><div class="stat-label">Sante stock</div></div>' +
+      '<div class="stat-card stat-danger"><div class="stat-icon"><i data-lucide="alert-triangle"></i></div>' +
+      '<div class="stat-value">' + (forecastStats.urgentCount || 0) + '</div><div class="stat-label">Urgents</div></div>' +
+      '<div class="stat-card"><div class="stat-icon"><i data-lucide="calendar"></i></div>' +
+      '<div class="stat-value">' + (forecastStats.avgDaysOfStock || 0) + 'j</div><div class="stat-label">Couverture moy.</div></div>' +
+      '<div class="stat-card"><div class="stat-icon"><i data-lucide="shopping-cart"></i></div>' +
+      '<div class="stat-value">' + formatCurrency(forecastStats.totalReorderValue || 0) + '</div><div class="stat-label">A commander</div></div>' +
+      '</div>';
+    if (typeof lucide !== "undefined") lucide.createIcons();
+  }
+
+  function renderForecastFilters() {
+    var container = document.getElementById("forecastFilters");
+    if (!container) return;
+
+    var categoryOptions = (categoriesData || []).map(function(cat) {
+      return '<option value="' + cat.id + '"' + (forecastFilters.categoryId === cat.id ? " selected" : "") + '>' + esc(cat.name) + '</option>';
+    }).join("");
+
+    container.innerHTML =
+      '<div class="filters-bar">' +
+      '<select class="form-select filter-select" onchange="app.onForecastStatusChange(this.value)">' +
+      '<option value="">Tous statuts</option>' +
+      '<option value="critical"' + (forecastFilters.status === "critical" ? " selected" : "") + '>Critique (&lt;7j)</option>' +
+      '<option value="urgent"' + (forecastFilters.status === "urgent" ? " selected" : "") + '>Urgent (&lt;14j)</option>' +
+      '<option value="watch"' + (forecastFilters.status === "watch" ? " selected" : "") + '>A surveiller</option>' +
+      '<option value="out"' + (forecastFilters.status === "out" ? " selected" : "") + '>Rupture</option>' +
+      '<option value="overstock"' + (forecastFilters.status === "overstock" ? " selected" : "") + '>Surstock</option>' +
+      '<option value="nodata"' + (forecastFilters.status === "nodata" ? " selected" : "") + '>Sans donnees</option>' +
+      '</select>' +
+      '<select class="form-select filter-select" onchange="app.onForecastCategoryChange(this.value)">' +
+      '<option value="">Toutes categories</option>' + categoryOptions +
+      '</select>' +
+      '</div>';
+  }
+
+  function renderForecastContent() {
+    var container = document.getElementById("forecastContent");
+    if (!container) return;
+
+    var filtered = forecastData;
+    if (forecastFilters.status) {
+      filtered = filtered.filter(function(f) { return f.status === forecastFilters.status; });
+    }
+
+    if (filtered.length === 0) {
+      container.innerHTML = '<div class="card"><p class="text-secondary text-center py-lg">Aucun produit a afficher.</p></div>';
+      return;
+    }
+
+    var rows = filtered.map(function(f) {
+      var statusBadge = getForecastStatusBadge(f.status);
+      var daysDisplay = f.daysOfStock === Infinity ? "∞" : (f.daysOfStock !== null ? f.daysOfStock.toFixed(0) + "j" : "-");
+      var stockoutDisplay = f.stockoutDate || "-";
+      var reorderDisplay = f.reorderQty > 0 ? formatWeight(f.reorderQty) : "-";
+
+      return '<tr onclick="app.openForecastDetails(\'' + f.productId + '\')">' +
+        '<td><strong>' + esc(f.productName) + '</strong></td>' +
+        '<td>' + formatWeight(f.currentStock) + '</td>' +
+        '<td>' + (f.dailyRate > 0 ? f.dailyRate.toFixed(1) + '/j' : '-') + '</td>' +
+        '<td>' + daysDisplay + '</td>' +
+        '<td>' + stockoutDisplay + '</td>' +
+        '<td>' + reorderDisplay + '</td>' +
+        '<td>' + statusBadge + '</td>' +
+        '</tr>';
+    }).join("");
+
+    container.innerHTML =
+      '<div class="card"><div class="table-container"><table class="data-table">' +
+      '<thead><tr><th>Produit</th><th>Stock</th><th>Ventes moy.</th><th>Couverture</th><th>Rupture est.</th><th>A commander</th><th>Statut</th></tr></thead>' +
+      '<tbody>' + rows + '</tbody></table></div></div>';
+    if (typeof lucide !== "undefined") lucide.createIcons();
+  }
+
+  function getForecastStatusBadge(status) {
+    var badges = {
+      ok: '<span class="status-badge status-success">OK</span>',
+      watch: '<span class="status-badge status-info">A surveiller</span>',
+      urgent: '<span class="status-badge status-warning">Urgent</span>',
+      critical: '<span class="status-badge status-danger">Critique</span>',
+      out: '<span class="status-badge status-danger">Rupture</span>',
+      nodata: '<span class="status-badge status-secondary">Sans donnees</span>',
+      overstock: '<span class="status-badge">Surstock</span>',
+    };
+    return badges[status] || '<span class="status-badge">' + status + '</span>';
+  }
+
+  function onForecastWindowChange(value) {
+    forecastSettings.windowDays = parseInt(value) || 30;
+    loadForecastData();
+  }
+
+  function onForecastStatusChange(value) {
+    forecastFilters.status = value;
+    renderForecastContent();
+  }
+
+  function onForecastCategoryChange(value) {
+    forecastFilters.categoryId = value;
+    loadForecastData();
+  }
+
+  async function openForecastDetails(productId) {
+    try {
+      var res = await authFetch(apiUrl("/forecast/" + productId + "?windowDays=" + (forecastSettings.windowDays || 30)));
+      if (!res.ok) throw new Error("Erreur");
+      var data = await res.json();
+
+      var statusBadge = getForecastStatusBadge(data.status);
+      var daysDisplay = data.daysOfStock === Infinity ? "Illimitee" : (data.daysOfStock?.toFixed(0) || 0) + " jours";
+
+      // Sparkline simple
+      var sparklineHtml = '';
+      if (data.dailyHistory && data.dailyHistory.length > 0) {
+        var maxQty = Math.max(...data.dailyHistory.map(function(d) { return d.qty; }), 1);
+        var bars = data.dailyHistory.map(function(d) {
+          var height = Math.max(2, (d.qty / maxQty) * 40);
+          return '<div class="sparkline-bar" style="height:' + height + 'px" title="' + d.date + ': ' + d.qty.toFixed(1) + '"></div>';
+        }).join("");
+        sparklineHtml = '<div class="sparkline-container">' + bars + '</div>';
+      }
+
+      // Scénarios
+      var scenariosHtml = '';
+      if (data.scenarios) {
+        scenariosHtml = '<div class="scenarios-grid">' +
+          '<div class="scenario pessimistic"><div class="scenario-label">Pessimiste</div><div class="scenario-value">' + 
+          (data.scenarios.pessimistic.daysOfStock === Infinity ? "∞" : data.scenarios.pessimistic.daysOfStock.toFixed(0) + "j") + '</div></div>' +
+          '<div class="scenario normal"><div class="scenario-label">Normal</div><div class="scenario-value">' + 
+          (data.scenarios.normal.daysOfStock === Infinity ? "∞" : data.scenarios.normal.daysOfStock.toFixed(0) + "j") + '</div></div>' +
+          '<div class="scenario optimistic"><div class="scenario-label">Optimiste</div><div class="scenario-value">' + 
+          (data.scenarios.optimistic.daysOfStock === Infinity ? "∞" : data.scenarios.optimistic.daysOfStock.toFixed(0) + "j") + '</div></div>' +
+          '</div>';
+      }
+
+      // Explication
+      var explanationHtml = '';
+      if (data.explanation && data.explanation.length > 0) {
+        explanationHtml = '<div class="explanation-box mt-md">' +
+          '<h4><i data-lucide="info"></i> Comment ce calcul est fait</h4>' +
+          '<ul>' + data.explanation.map(function(e) { return '<li>' + esc(e) + '</li>'; }).join("") + '</ul>' +
+          '</div>';
+      }
+
+      showModal({
+        title: data.productName,
+        size: "lg",
+        content:
+          '<div class="forecast-detail-header">' + statusBadge + '</div>' +
+          '<div class="stats-grid stats-grid-3 mt-md">' +
+          '<div class="stat-card"><div class="stat-value">' + formatWeight(data.currentStock) + '</div><div class="stat-label">Stock actuel</div></div>' +
+          '<div class="stat-card"><div class="stat-value">' + (data.dailyRate?.toFixed(1) || 0) + '/j</div><div class="stat-label">Ventes moy.</div></div>' +
+          '<div class="stat-card"><div class="stat-value">' + daysDisplay + '</div><div class="stat-label">Couverture</div></div>' +
+          '</div>' +
+          (data.stockoutDate ? '<div class="alert alert-warning mt-md"><i data-lucide="calendar"></i> Rupture estimee le <strong>' + data.stockoutDate + '</strong></div>' : '') +
+          (data.reorderQty > 0 ? '<div class="alert alert-info mt-md"><i data-lucide="shopping-cart"></i> Recommandation: commander <strong>' + formatWeight(data.reorderQty) + '</strong> pour couvrir ' + data.targetCoverageDays + ' jours</div>' : '') +
+          '<div class="section-header mt-lg"><h3>Historique des ventes (30j)</h3></div>' +
+          sparklineHtml +
+          '<div class="section-header mt-lg"><h3>Scenarios</h3></div>' +
+          scenariosHtml +
+          explanationHtml,
+        footer: '<button class="btn btn-secondary" onclick="app.closeModal()">Fermer</button>'
+      });
+      if (typeof lucide !== "undefined") lucide.createIcons();
+    } catch (e) {
+      showToast("Erreur: " + e.message, "error");
+    }
+  }
+
+  // ============================================
   // KITS & BUNDLES
   // ============================================
   
@@ -2550,6 +2800,435 @@
         '<p class="text-secondary mt-md">Capacite max de production: <strong>' + (data.maxProducible || 0) + '</strong> kits</p>';
       if (typeof lucide !== "undefined") lucide.createIcons();
     } catch (e) { container.innerHTML = '<p class="text-danger">Erreur: ' + e.message + '</p>'; }
+  }
+
+  // ============================================
+  // INVENTAIRE (Sessions, Comptage, Audit)
+  // ============================================
+  
+  var inventorySessions = null;
+  var currentInventorySession = null;
+  var inventoryItems = [];
+
+  function renderInventory(c) {
+    if (!hasFeature("hasInventoryCount")) {
+      c.innerHTML =
+        '<div class="page-header"><h1 class="page-title"><i data-lucide="clipboard-check"></i> Inventaire</h1></div>' +
+        '<div class="card" style="min-height:400px;display:flex;align-items:center;justify-content:center"><div class="text-center">' +
+        '<div class="lock-icon"><i data-lucide="lock"></i></div>' +
+        '<h2>Fonctionnalite Starter</h2>' +
+        '<p class="text-secondary">Sessions de comptage, ecarts et audit complet.</p>' +
+        '<div class="feature-preview mt-lg">' +
+        '<div class="preview-item"><i data-lucide="clipboard-list"></i> Sessions de comptage</div>' +
+        '<div class="preview-item"><i data-lucide="git-compare"></i> Ecarts theorique vs compte</div>' +
+        '<div class="preview-item"><i data-lucide="file-text"></i> Audit trail complet</div>' +
+        '</div>' +
+        '<button class="btn btn-upgrade mt-lg" onclick="app.showUpgradeModal()">Passer a Starter</button>' +
+        '</div></div>';
+      return;
+    }
+
+    c.innerHTML =
+      '<div class="page-header"><div><h1 class="page-title"><i data-lucide="clipboard-check"></i> Inventaire</h1>' +
+      '<p class="page-subtitle">Sessions de comptage et ajustements</p></div>' +
+      '<div class="page-actions">' +
+      '<button class="btn btn-primary" onclick="app.showCreateInventorySessionModal()"><i data-lucide="plus"></i> Nouvelle session</button>' +
+      '</div></div>' +
+      '<div id="inventoryContent"><div class="text-center py-lg"><div class="spinner"></div></div></div>';
+
+    loadInventorySessions();
+  }
+
+  async function loadInventorySessions() {
+    try {
+      var res = await authFetch(apiUrl("/inventory/sessions"));
+      if (!res.ok) {
+        var err = await res.json().catch(function() { return {}; });
+        if (err.error === "plan_limit") { showUpgradeModal(); return; }
+        throw new Error(err.message || "Erreur");
+      }
+      var data = await res.json();
+      inventorySessions = data.sessions || [];
+      renderInventorySessions();
+    } catch (e) {
+      document.getElementById("inventoryContent").innerHTML = '<div class="card"><p class="text-danger text-center py-lg">Erreur: ' + e.message + '</p></div>';
+    }
+  }
+
+  function renderInventorySessions() {
+    var container = document.getElementById("inventoryContent");
+    if (!container) return;
+
+    if (!inventorySessions || inventorySessions.length === 0) {
+      container.innerHTML =
+        '<div class="card"><div class="text-center py-xl">' +
+        '<div class="empty-icon"><i data-lucide="clipboard-list"></i></div>' +
+        '<h3>Aucune session</h3>' +
+        '<p class="text-secondary">Creez votre premiere session d\'inventaire.</p>' +
+        '<button class="btn btn-primary mt-md" onclick="app.showCreateInventorySessionModal()">Nouvelle session</button>' +
+        '</div></div>';
+      if (typeof lucide !== "undefined") lucide.createIcons();
+      return;
+    }
+
+    var rows = inventorySessions.map(function(s) {
+      var statusBadge = getInventoryStatusBadge(s.status);
+      var progress = s.totals.itemsTotal > 0 ? Math.round((s.totals.itemsCounted / s.totals.itemsTotal) * 100) : 0;
+      var scopeLabel = s.scopeType === "all" ? "Tous" : (s.scopeType === "category" ? "Categorie" : "Selection");
+      
+      return '<tr onclick="app.openInventorySession(\'' + s.id + '\')">' +
+        '<td><strong>' + esc(s.name) + '</strong><br><span class="text-secondary text-sm">' + formatDate(s.createdAt) + '</span></td>' +
+        '<td>' + statusBadge + '</td>' +
+        '<td>' + scopeLabel + '</td>' +
+        '<td><div class="progress-bar-mini"><div class="progress-fill" style="width:' + progress + '%"></div></div>' +
+        '<span class="text-sm">' + s.totals.itemsCounted + '/' + s.totals.itemsTotal + '</span></td>' +
+        '<td>' + (s.totals.itemsWithDiff || 0) + '</td>' +
+        '<td class="' + (s.totals.totalDeltaValue < 0 ? "text-danger" : "") + '">' + formatCurrency(s.totals.totalDeltaValue || 0) + '</td>' +
+        '<td onclick="event.stopPropagation()">' +
+        '<button class="btn btn-ghost btn-sm" onclick="app.duplicateInventorySession(\'' + s.id + '\')" title="Dupliquer"><i data-lucide="copy"></i></button>' +
+        '<button class="btn btn-ghost btn-sm" onclick="app.archiveInventorySession(\'' + s.id + '\')" title="Archiver"><i data-lucide="archive"></i></button>' +
+        '</td>' +
+        '</tr>';
+    }).join("");
+
+    container.innerHTML =
+      '<div class="card"><div class="table-container"><table class="data-table">' +
+      '<thead><tr><th>Session</th><th>Statut</th><th>Perimetre</th><th>Progression</th><th>Ecarts</th><th>Valeur</th><th></th></tr></thead>' +
+      '<tbody>' + rows + '</tbody></table></div></div>';
+    if (typeof lucide !== "undefined") lucide.createIcons();
+  }
+
+  function getInventoryStatusBadge(status) {
+    var badges = {
+      draft: '<span class="status-badge status-secondary">Brouillon</span>',
+      in_progress: '<span class="status-badge status-warning">En cours</span>',
+      reviewed: '<span class="status-badge status-info">Valide</span>',
+      applied: '<span class="status-badge status-success">Applique</span>',
+      archived: '<span class="status-badge">Archive</span>',
+    };
+    return badges[status] || '<span class="status-badge">' + status + '</span>';
+  }
+
+  function showCreateInventorySessionModal() {
+    var categoryOptions = (categoriesData || []).map(function(cat) {
+      return '<option value="' + cat.id + '">' + esc(cat.name) + '</option>';
+    }).join("");
+
+    showModal({
+      title: "Nouvelle session d'inventaire",
+      size: "lg",
+      content:
+        '<div class="form-group"><label class="form-label">Nom de la session *</label>' +
+        '<input type="text" class="form-input" id="invSessionName" placeholder="Inventaire Janvier 2025"></div>' +
+        '<div class="form-group"><label class="form-label">Perimetre</label>' +
+        '<select class="form-select" id="invScopeType" onchange="app.onInvScopeTypeChange()">' +
+        '<option value="all">Tous les produits</option>' +
+        '<option value="category">Par categorie</option>' +
+        '</select></div>' +
+        '<div class="form-group" id="invCategoryGroup" style="display:none"><label class="form-label">Categorie</label>' +
+        '<select class="form-select" id="invCategoryId"><option value="">-- Selectionner --</option>' + categoryOptions + '</select></div>' +
+        '<div class="form-group"><label class="form-label">Mode de comptage</label>' +
+        '<select class="form-select" id="invCountingMode">' +
+        '<option value="totalOnly">Stock total uniquement</option>' +
+        '<option value="variants">Par variantes</option>' +
+        '</select></div>' +
+        '<div class="form-group"><label class="form-label">Notes</label>' +
+        '<textarea class="form-textarea" id="invNotes" rows="2"></textarea></div>',
+      footer: '<button class="btn btn-secondary" onclick="app.closeModal()">Annuler</button>' +
+        '<button class="btn btn-primary" onclick="app.createInventorySession()">Creer</button>'
+    });
+  }
+
+  function onInvScopeTypeChange() {
+    var scopeType = document.getElementById("invScopeType").value;
+    document.getElementById("invCategoryGroup").style.display = scopeType === "category" ? "block" : "none";
+  }
+
+  async function createInventorySession() {
+    var name = document.getElementById("invSessionName").value.trim();
+    if (!name) { showToast("Nom requis", "error"); return; }
+
+    var scopeType = document.getElementById("invScopeType").value;
+    var scopeIds = [];
+    if (scopeType === "category") {
+      var catId = document.getElementById("invCategoryId").value;
+      if (catId) scopeIds = [catId];
+    }
+
+    try {
+      var res = await authFetch(apiUrl("/inventory/sessions"), {
+        method: "POST",
+        body: JSON.stringify({
+          name: name,
+          scopeType: scopeType,
+          scopeIds: scopeIds,
+          countingMode: document.getElementById("invCountingMode").value,
+          notes: document.getElementById("invNotes").value.trim(),
+        })
+      });
+      if (!res.ok) throw new Error((await res.json().catch(function(){return{};})).message || "Erreur");
+      var data = await res.json();
+      closeModal();
+      showToast("Session creee", "success");
+      openInventorySession(data.session.id);
+    } catch (e) { showToast("Erreur: " + e.message, "error"); }
+  }
+
+  async function openInventorySession(sessionId) {
+    try {
+      var res = await authFetch(apiUrl("/inventory/sessions/" + sessionId));
+      if (!res.ok) throw new Error("Session non trouvee");
+      var data = await res.json();
+      currentInventorySession = data.session;
+      inventoryItems = data.items || [];
+      renderInventorySessionDetail();
+    } catch (e) { showToast("Erreur: " + e.message, "error"); }
+  }
+
+  function renderInventorySessionDetail() {
+    var s = currentInventorySession;
+    if (!s) return;
+
+    var container = document.getElementById("inventoryContent");
+    var statusBadge = getInventoryStatusBadge(s.status);
+    var progress = s.totals.itemsTotal > 0 ? Math.round((s.totals.itemsCounted / s.totals.itemsTotal) * 100) : 0;
+
+    var tabsHtml = '<div class="tabs-nav">' +
+      '<button class="tab-btn active" onclick="app.switchInventoryTab(\'counting\')">Comptage</button>' +
+      '<button class="tab-btn" onclick="app.switchInventoryTab(\'review\')">Validation</button>' +
+      '<button class="tab-btn" onclick="app.switchInventoryTab(\'history\')">Historique</button>' +
+      '</div>';
+
+    container.innerHTML =
+      '<div class="page-header"><div>' +
+      '<button class="btn btn-ghost btn-sm" onclick="app.loadInventorySessions()"><i data-lucide="arrow-left"></i></button>' +
+      '<h1 class="page-title" style="display:inline;margin-left:8px">' + esc(s.name) + '</h1> ' + statusBadge +
+      '</div><div class="page-actions">' +
+      (s.status === "draft" ? '<button class="btn btn-primary" onclick="app.startInventorySession()"><i data-lucide="play"></i> Demarrer</button>' : '') +
+      (s.status === "in_progress" ? '<button class="btn btn-success" onclick="app.reviewInventorySession()"><i data-lucide="check"></i> Valider</button>' : '') +
+      (s.status === "reviewed" ? '<button class="btn btn-warning" onclick="app.applyInventorySession()"><i data-lucide="check-circle"></i> Appliquer</button>' : '') +
+      '</div></div>' +
+      '<div class="stats-grid stats-grid-4 mb-md">' +
+      '<div class="stat-card"><div class="stat-value">' + s.totals.itemsTotal + '</div><div class="stat-label">Produits</div></div>' +
+      '<div class="stat-card"><div class="stat-value">' + progress + '%</div><div class="stat-label">Comptes</div></div>' +
+      '<div class="stat-card"><div class="stat-value">' + s.totals.itemsWithDiff + '</div><div class="stat-label">Ecarts</div></div>' +
+      '<div class="stat-card ' + (s.totals.totalDeltaValue < 0 ? "stat-danger" : "") + '"><div class="stat-value">' + formatCurrency(s.totals.totalDeltaValue || 0) + '</div><div class="stat-label">Valeur ecart</div></div>' +
+      '</div>' +
+      tabsHtml +
+      '<div id="inventoryTabContent"></div>';
+
+    if (typeof lucide !== "undefined") lucide.createIcons();
+    switchInventoryTab("counting");
+  }
+
+  function switchInventoryTab(tabName) {
+    document.querySelectorAll(".tabs-nav .tab-btn").forEach(function(btn, i) {
+      btn.classList.toggle("active", ["counting", "review", "history"][i] === tabName);
+    });
+
+    var container = document.getElementById("inventoryTabContent");
+    if (tabName === "counting") renderInventoryCountingTab(container);
+    else if (tabName === "review") renderInventoryReviewTab(container);
+    else if (tabName === "history") renderInventoryHistoryTab(container);
+  }
+
+  function renderInventoryCountingTab(container) {
+    var s = currentInventorySession;
+    if (s.status === "draft") {
+      container.innerHTML = '<div class="card"><div class="text-center py-xl">' +
+        '<p class="text-secondary">Cliquez sur "Demarrer" pour lancer le comptage.</p></div></div>';
+      return;
+    }
+    if (s.status === "applied" || s.status === "archived") {
+      container.innerHTML = '<div class="card"><div class="text-center py-xl">' +
+        '<p class="text-secondary">Cette session est terminee.</p></div></div>';
+      return;
+    }
+
+    var rows = inventoryItems.map(function(item) {
+      var statusIcon = item.status === "counted" ? '<i data-lucide="check" class="text-success"></i>' :
+        (item.status === "flagged" ? '<i data-lucide="flag" class="text-warning"></i>' : '<i data-lucide="minus" class="text-secondary"></i>');
+      var deltaClass = item.delta > 0 ? "text-success" : (item.delta < 0 ? "text-danger" : "");
+      var deltaDisplay = item.delta !== null ? (item.delta > 0 ? "+" : "") + formatWeight(item.delta) : "-";
+
+      return '<tr>' +
+        '<td>' + statusIcon + '</td>' +
+        '<td><strong>' + esc(item.productName) + '</strong>' + (item.variantLabel ? '<br><span class="text-secondary text-sm">' + esc(item.variantLabel) + '</span>' : '') + '</td>' +
+        '<td>' + formatWeight(item.expectedQty) + '</td>' +
+        '<td><input type="number" class="form-input form-input-sm" style="width:100px" value="' + (item.countedQty !== null ? item.countedQty : "") + '" ' +
+        'onchange="app.updateInventoryItem(\'' + item.id + '\', this.value)" placeholder="Compter"></td>' +
+        '<td class="' + deltaClass + '">' + deltaDisplay + '</td>' +
+        '<td><button class="btn btn-ghost btn-sm" onclick="app.toggleInventoryItemFlag(\'' + item.id + '\')" title="Signaler"><i data-lucide="flag"></i></button></td>' +
+        '</tr>';
+    }).join("");
+
+    container.innerHTML =
+      '<div class="filters-bar mb-md">' +
+      '<input type="text" class="form-input" placeholder="Rechercher..." onkeyup="app.filterInventoryItems(this.value)">' +
+      '<select class="form-select filter-select" onchange="app.filterInventoryByStatus(this.value)">' +
+      '<option value="">Tous</option><option value="notCounted">Non comptes</option><option value="counted">Comptes</option><option value="flagged">Signales</option></select>' +
+      '</div>' +
+      '<div class="card"><div class="table-container"><table class="data-table">' +
+      '<thead><tr><th></th><th>Produit</th><th>Attendu</th><th>Compte</th><th>Ecart</th><th></th></tr></thead>' +
+      '<tbody>' + rows + '</tbody></table></div></div>';
+    if (typeof lucide !== "undefined") lucide.createIcons();
+  }
+
+  function renderInventoryReviewTab(container) {
+    var s = currentInventorySession;
+    var itemsWithDiff = inventoryItems.filter(function(i) { return i.delta !== null && i.delta !== 0; });
+
+    if (itemsWithDiff.length === 0) {
+      container.innerHTML = '<div class="card"><div class="text-center py-xl">' +
+        '<p class="text-secondary">Aucun ecart a valider.</p></div></div>';
+      return;
+    }
+
+    var rows = itemsWithDiff.sort(function(a, b) { return Math.abs(b.delta) - Math.abs(a.delta); }).map(function(item) {
+      var deltaClass = item.delta > 0 ? "text-success" : "text-danger";
+      return '<tr>' +
+        '<td><strong>' + esc(item.productName) + '</strong></td>' +
+        '<td>' + formatWeight(item.expectedQty) + '</td>' +
+        '<td>' + formatWeight(item.countedQty) + '</td>' +
+        '<td class="' + deltaClass + '">' + (item.delta > 0 ? "+" : "") + formatWeight(item.delta) + '</td>' +
+        '<td class="' + deltaClass + '">' + formatCurrency(item.deltaValue || 0) + '</td>' +
+        '<td><select class="form-select form-select-sm" onchange="app.setInventoryItemReason(\'' + item.id + '\', this.value)">' +
+        '<option value="">-- Raison --</option>' +
+        '<option value="breakage"' + (item.reason === "breakage" ? " selected" : "") + '>Casse</option>' +
+        '<option value="theft"' + (item.reason === "theft" ? " selected" : "") + '>Vol</option>' +
+        '<option value="error"' + (item.reason === "error" ? " selected" : "") + '>Erreur saisie</option>' +
+        '<option value="sampling"' + (item.reason === "sampling" ? " selected" : "") + '>Echantillon</option>' +
+        '<option value="expired"' + (item.reason === "expired" ? " selected" : "") + '>Perime</option>' +
+        '<option value="other"' + (item.reason === "other" ? " selected" : "") + '>Autre</option>' +
+        '</select></td>' +
+        '</tr>';
+    }).join("");
+
+    container.innerHTML =
+      '<div class="card"><div class="table-container"><table class="data-table">' +
+      '<thead><tr><th>Produit</th><th>Attendu</th><th>Compte</th><th>Ecart</th><th>Valeur</th><th>Raison</th></tr></thead>' +
+      '<tbody>' + rows + '</tbody></table></div></div>';
+  }
+
+  function renderInventoryHistoryTab(container) {
+    container.innerHTML = '<div class="card"><div class="text-center py-lg"><div class="spinner"></div></div></div>';
+    loadInventoryEvents(currentInventorySession.id, container);
+  }
+
+  async function loadInventoryEvents(sessionId, container) {
+    try {
+      var res = await authFetch(apiUrl("/inventory/events?sessionId=" + sessionId));
+      var data = await res.json();
+      var events = data.events || [];
+
+      if (events.length === 0) {
+        container.innerHTML = '<div class="card"><p class="text-secondary text-center py-lg">Aucun evenement.</p></div>';
+        return;
+      }
+
+      var rows = events.map(function(e) {
+        return '<tr><td>' + formatDate(e.createdAt) + '</td><td>' + esc(e.productName) + '</td>' +
+          '<td class="' + (e.deltaQty < 0 ? "text-danger" : "text-success") + '">' + (e.deltaQty > 0 ? "+" : "") + formatWeight(e.deltaQty) + '</td>' +
+          '<td>' + formatCurrency(e.deltaValue || 0) + '</td><td>' + (e.reason || "-") + '</td></tr>';
+      }).join("");
+
+      container.innerHTML = '<div class="card"><div class="table-container"><table class="data-table">' +
+        '<thead><tr><th>Date</th><th>Produit</th><th>Delta</th><th>Valeur</th><th>Raison</th></tr></thead>' +
+        '<tbody>' + rows + '</tbody></table></div></div>';
+    } catch (e) {
+      container.innerHTML = '<div class="card"><p class="text-danger text-center py-lg">Erreur: ' + e.message + '</p></div>';
+    }
+  }
+
+  async function startInventorySession() {
+    try {
+      var res = await authFetch(apiUrl("/inventory/sessions/" + currentInventorySession.id + "/start"), { method: "POST" });
+      if (!res.ok) throw new Error((await res.json()).message || "Erreur");
+      showToast("Session demarree", "success");
+      openInventorySession(currentInventorySession.id);
+    } catch (e) { showToast("Erreur: " + e.message, "error"); }
+  }
+
+  async function reviewInventorySession() {
+    try {
+      var res = await authFetch(apiUrl("/inventory/sessions/" + currentInventorySession.id + "/review"), { method: "POST" });
+      if (!res.ok) throw new Error((await res.json()).message || "Erreur");
+      showToast("Session validee", "success");
+      openInventorySession(currentInventorySession.id);
+    } catch (e) { showToast("Erreur: " + e.message, "error"); }
+  }
+
+  async function applyInventorySession() {
+    if (!confirm("Appliquer les ajustements ? Cette action est irreversible.")) return;
+    try {
+      var res = await authFetch(apiUrl("/inventory/sessions/" + currentInventorySession.id + "/apply"), { method: "POST", body: JSON.stringify({}) });
+      var data = await res.json();
+      if (!data.success) throw new Error(data.message || "Erreur");
+      showToast(data.applied + " ajustement(s) applique(s)", "success");
+      openInventorySession(currentInventorySession.id);
+    } catch (e) { showToast("Erreur: " + e.message, "error"); }
+  }
+
+  async function updateInventoryItem(itemId, value) {
+    var countedQty = value === "" ? null : parseFloat(value);
+    try {
+      await authFetch(apiUrl("/inventory/sessions/" + currentInventorySession.id + "/items/" + itemId), {
+        method: "PUT", body: JSON.stringify({ countedQty: countedQty })
+      });
+      openInventorySession(currentInventorySession.id);
+    } catch (e) { showToast("Erreur", "error"); }
+  }
+
+  async function toggleInventoryItemFlag(itemId) {
+    var item = inventoryItems.find(function(i) { return i.id === itemId; });
+    if (!item) return;
+    try {
+      await authFetch(apiUrl("/inventory/sessions/" + currentInventorySession.id + "/items/" + itemId), {
+        method: "PUT", body: JSON.stringify({ flagged: !item.flagged })
+      });
+      openInventorySession(currentInventorySession.id);
+    } catch (e) { showToast("Erreur", "error"); }
+  }
+
+  async function setInventoryItemReason(itemId, reason) {
+    try {
+      await authFetch(apiUrl("/inventory/sessions/" + currentInventorySession.id + "/items/" + itemId), {
+        method: "PUT", body: JSON.stringify({ reason: reason || null })
+      });
+    } catch (e) { showToast("Erreur", "error"); }
+  }
+
+  function filterInventoryItems(search) {
+    // Simplified - just reload with filter
+    var items = inventoryItems;
+    if (search) {
+      var q = search.toLowerCase();
+      items = items.filter(function(i) { return i.productName.toLowerCase().includes(q); });
+    }
+    // Re-render (simplified)
+  }
+
+  function filterInventoryByStatus(status) {
+    // Simplified - would need to re-fetch with filter
+  }
+
+  async function duplicateInventorySession(sessionId) {
+    try {
+      var res = await authFetch(apiUrl("/inventory/sessions/" + sessionId + "/duplicate"), { method: "POST" });
+      if (!res.ok) throw new Error("Erreur");
+      showToast("Session dupliquee", "success");
+      loadInventorySessions();
+    } catch (e) { showToast("Erreur", "error"); }
+  }
+
+  async function archiveInventorySession(sessionId) {
+    if (!confirm("Archiver cette session ?")) return;
+    try {
+      var res = await authFetch(apiUrl("/inventory/sessions/" + sessionId), { method: "DELETE" });
+      if (!res.ok) throw new Error("Erreur");
+      showToast("Session archivee", "success");
+      loadInventorySessions();
+    } catch (e) { showToast("Erreur", "error"); }
   }
 
   // ============================================
@@ -4443,6 +5122,28 @@
     showAssembleKitModal: showAssembleKitModal,
     assembleKit: assembleKit,
     runKitSimulation: runKitSimulation,
+    // Forecast
+    onForecastWindowChange: onForecastWindowChange,
+    onForecastStatusChange: onForecastStatusChange,
+    onForecastCategoryChange: onForecastCategoryChange,
+    openForecastDetails: openForecastDetails,
+    // Inventory
+    showCreateInventorySessionModal: showCreateInventorySessionModal,
+    onInvScopeTypeChange: onInvScopeTypeChange,
+    createInventorySession: createInventorySession,
+    openInventorySession: openInventorySession,
+    switchInventoryTab: switchInventoryTab,
+    startInventorySession: startInventorySession,
+    reviewInventorySession: reviewInventorySession,
+    applyInventorySession: applyInventorySession,
+    updateInventoryItem: updateInventoryItem,
+    toggleInventoryItemFlag: toggleInventoryItemFlag,
+    setInventoryItemReason: setInventoryItemReason,
+    filterInventoryItems: filterInventoryItems,
+    filterInventoryByStatus: filterInventoryByStatus,
+    duplicateInventorySession: duplicateInventorySession,
+    archiveInventorySession: archiveInventorySession,
+    loadInventorySessions: loadInventorySessions,
     // Settings
     updateSetting: updateSetting,
     updateNestedSetting: updateNestedSetting,

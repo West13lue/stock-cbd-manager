@@ -1,8 +1,8 @@
-// stockManager.js - ENRICHI avec Coût Moyen Pondéré (CMP)
-// ✅ NON-DESTRUCTIF : compatibilité totale avec l'existant
-// ✅ NOUVEAUTÉS :
+// stockManager.js - ENRICHI avec Cot Moyen Pondr (CMP)
+// a... NON-DESTRUCTIF : compatibilit totale avec l'existant
+// a... NOUVEAUTS :
 //    - averageCostPerGram par produit (CMP)
-//    - recalcul automatique à chaque restock
+//    - recalcul automatique  chaque restock
 //    - API pour valeur totale du stock
 
 const stockStateMod = require("./stockState");
@@ -20,9 +20,9 @@ const stockQueue = queueMod?.add ? queueMod : queueMod?.stockQueue;
 const ENABLE_BASE_PRODUCTS = process.env.ENABLE_BASE_PRODUCTS === "true";
 const BASE_PRODUCT_CONFIG = ENABLE_BASE_PRODUCTS ? {
   "10349843513687": {
-    name: "3x Filtré",
+    name: "3x Filtr",
     totalGrams: 50,
-    averageCostPerGram: 0,  // ✅ NOUVEAU champ (initialisé à 0)
+    averageCostPerGram: 0,  // a... NOUVEAU champ (initialis  0)
     categoryIds: [],
     variants: {
       "1.5": { gramsPerUnit: 1.5, inventoryItemId: 54088575582551 },
@@ -55,7 +55,11 @@ function normalizeVariants(variants) {
     const gramsPerUnit = toNum(v?.gramsPerUnit, 0);
     const inventoryItemId = toNum(v?.inventoryItemId, 0);
     if (!inventoryItemId || !gramsPerUnit || gramsPerUnit <= 0) continue;
-    safe[String(label)] = { gramsPerUnit, inventoryItemId };
+    safe[String(label)] = { 
+      gramsPerUnit, 
+      inventoryItemId,
+      variantId: v?.variantId ? String(v.variantId) : null, // NOUVEAU: préserver variantId
+    };
   }
   return safe;
 }
@@ -68,7 +72,7 @@ function normalizeDeletedIds(arr) {
   return Array.isArray(arr) ? arr.map(String) : [];
 }
 
-// ✅ NOUVEAU : Calcul du Coût Moyen Pondéré
+// a... NOUVEAU : Calcul du Cot Moyen Pondr
 function calculateWeightedAverageCost(currentStock, currentAvgCost, addedStock, purchasePrice) {
   const stock = clampMin0(currentStock);
   const avgCost = clampMin0(currentAvgCost);
@@ -81,7 +85,7 @@ function calculateWeightedAverageCost(currentStock, currentAvgCost, addedStock, 
   // Si pas d'ajout, on garde l'ancien prix
   if (added === 0) return avgCost;
 
-  // Formule CMP : (stock_ancien × prix_ancien + stock_ajouté × prix_achat) / (stock_ancien + stock_ajouté)
+  // Formule CMP : (stock_ancien -- prix_ancien + stock_ajout -- prix_achat) / (stock_ancien + stock_ajout)
   const totalValue = (stock * avgCost) + (added * purchase);
   const totalStock = stock + added;
 
@@ -97,6 +101,7 @@ function buildProductView(config) {
     out[label] = {
       gramsPerUnit: gramsPer,
       inventoryItemId: v.inventoryItemId,
+      variantId: v.variantId || null, // NOUVEAU: inclure variantId
       canSell,
     };
   }
@@ -112,7 +117,7 @@ function snapshotProduct(shop, productId) {
     productId: String(productId),
     name: String(cfg.name || productId),
     totalGrams: clampMin0(cfg.totalGrams),
-    averageCostPerGram: clampMin0(cfg.averageCostPerGram || 0),  // ✅ NOUVEAU
+    averageCostPerGram: clampMin0(cfg.averageCostPerGram || 0),  // a... NOUVEAU
     categoryIds: normalizeCategoryIds(cfg.categoryIds),
     variants: buildProductView(cfg),
   };
@@ -140,7 +145,7 @@ function getStore(shop = "default") {
       base[pid] = {
         name: p.name,
         totalGrams: p.totalGrams,
-        averageCostPerGram: toNum(p.averageCostPerGram, 0),  // ✅ NOUVEAU
+        averageCostPerGram: toNum(p.averageCostPerGram, 0),  // a... NOUVEAU
         categoryIds: normalizeCategoryIds(p.categoryIds),
         variants: normalizeVariants(p.variants),
       };
@@ -162,7 +167,7 @@ function persistState(shop, extra = {}) {
     products[pid] = {
       name: String(p.name || pid),
       totalGrams: clampMin0(p.totalGrams),
-      averageCostPerGram: clampMin0(p.averageCostPerGram || 0),  // ✅ NOUVEAU
+      averageCostPerGram: clampMin0(p.averageCostPerGram || 0),  // a... NOUVEAU
       categoryIds: normalizeCategoryIds(p.categoryIds),
       variants: normalizeVariants(p.variants),
     };
@@ -187,7 +192,7 @@ function restoreStateForShop(shop) {
       store[pid] = {
         name: String(p?.name || pid),
         totalGrams: clampMin0(p?.totalGrams),
-        averageCostPerGram: clampMin0(p?.averageCostPerGram || 0),  // ✅ NOUVEAU
+        averageCostPerGram: clampMin0(p?.averageCostPerGram || 0),  // a... NOUVEAU
         categoryIds: normalizeCategoryIds(p?.categoryIds),
         variants: normalizeVariants(p?.variants),
       };
@@ -240,14 +245,14 @@ async function applyOrderToProduct(shopOrProductId, maybeProductId, gramsToSubtr
 
     const g = clampMin0(grams);
     cfg.totalGrams = clampMin0(clampMin0(cfg.totalGrams) - g);
-    // ⚠️ Lors d'une vente, le CMP ne change PAS
+    // ai Lors d'une vente, le CMP ne change PAS
 
     persistState(sh);
     return snapshotProduct(sh, pid);
   });
 }
 
-// ✅ ENRICHI : restockProduct avec calcul CMP
+// a... ENRICHI : restockProduct avec calcul CMP
 // Signature compatible : restockProduct(shop, productId, gramsDelta, purchasePricePerGram?)
 async function restockProduct(shopOrProductId, maybeProductId, gramsDelta, purchasePricePerGram) {
   const { shop: sh, productId: pid, rest } = parseShopFirstArgs(shopOrProductId, maybeProductId, [gramsDelta, purchasePricePerGram]);
@@ -262,7 +267,7 @@ async function restockProduct(shopOrProductId, maybeProductId, gramsDelta, purch
     const delta = toNum(deltaRaw, 0);
     const purchasePrice = toNum(priceRaw, 0);
 
-    // ✅ Recalcul du CMP si un prix d'achat est fourni
+    // a... Recalcul du CMP si un prix d'achat est fourni
     if (delta > 0 && purchasePrice > 0) {
       const currentStock = clampMin0(cfg.totalGrams);
       const currentAvgCost = clampMin0(cfg.averageCostPerGram || 0);
@@ -303,7 +308,7 @@ function getStockSnapshot(shop = "default") {
 }
 
 // ============================================
-// ✅ NOUVEAU : Calcul valeur totale du stock
+// a... NOUVEAU : Calcul valeur totale du stock
 // ============================================
 function calculateTotalStockValue(shop = "default") {
   const sh = String(shop || "default");
@@ -330,14 +335,14 @@ function calculateTotalStockValue(shop = "default") {
   }
 
   return {
-    totalValue: Math.round(totalValue * 100) / 100, // arrondi à 2 décimales
+    totalValue: Math.round(totalValue * 100) / 100, // arrondi  2 dcimales
     currency: "EUR",
     products: details.sort((a, b) => b.totalValue - a.totalValue),
   };
 }
 
 // ============================================
-// ✅ NOUVEAU : Stats par catégorie
+// a... NOUVEAU : Stats par catgorie
 // ============================================
 function getCategoryStats(shop = "default") {
   const sh = String(shop || "default");
@@ -347,7 +352,7 @@ function getCategoryStats(shop = "default") {
   let totalGrams = 0;
   const statsByCategory = new Map();
 
-  // Init catégories
+  // Init catgories
   for (const cat of categories) {
     statsByCategory.set(cat.id, {
       categoryId: cat.id,
@@ -358,10 +363,10 @@ function getCategoryStats(shop = "default") {
     });
   }
 
-  // Catégorie "Sans catégorie"
+  // Catgorie "Sans catgorie"
   statsByCategory.set("_uncategorized", {
     categoryId: "_uncategorized",
-    categoryName: "Sans catégorie",
+    categoryName: "Sans catgorie",
     totalGrams: 0,
     totalValue: 0,
     productCount: 0,
@@ -379,7 +384,7 @@ function getCategoryStats(shop = "default") {
       ? cfg.categoryIds 
       : ["_uncategorized"];
 
-    // Un produit peut avoir plusieurs catégories, on compte dans toutes
+    // Un produit peut avoir plusieurs catgories, on compte dans toutes
     for (const catId of catIds) {
       const stat = statsByCategory.get(catId);
       if (stat) {
@@ -406,7 +411,7 @@ function getCategoryStats(shop = "default") {
 }
 
 // ============================================
-// Autres fonctions (INCHANGÉES)
+// Autres fonctions (INCHANGES)
 // ============================================
 function setProductCategories(shopOrProductId, maybeProductId, categoryIdsMaybe) {
   const { shop: sh, productId: pid, rest } = parseShopFirstArgs(shopOrProductId, maybeProductId, [categoryIdsMaybe]);
@@ -461,7 +466,7 @@ function upsertImportedProductConfig(arg1, arg2, arg3, arg4, arg5, arg6) {
     store[pid] = {
       name: String(payload?.name || pid),
       totalGrams: clampMin0(payload?.totalGrams),
-      averageCostPerGram: 0,  // ✅ Init à 0 pour les imports
+      averageCostPerGram: 0,  // a... Init  0 pour les imports
       categoryIds: normalizeCategoryIds(payload?.categoryIds),
       variants: safeVariants,
     };
@@ -518,12 +523,12 @@ function removeProduct(shopOrProductId, maybeProductId) {
 }
 
 // ============================================
-// ✅ NOUVEAU pour Analytics
+// a... NOUVEAU pour Analytics
 // ============================================
 
 /**
- * Récupère le CMP actuel d'un produit (pour snapshot analytics)
- * Utilisé par analyticsManager pour capturer le coût au moment de la vente
+ * Rcupre le CMP actuel d'un produit (pour snapshot analytics)
+ * Utilis par analyticsManager pour capturer le cot au moment de la vente
  */
 function getProductCMPSnapshot(shop, productId) {
   const sh = String(shop || "default");
@@ -538,7 +543,7 @@ function getProductCMPSnapshot(shop, productId) {
 }
 
 /**
- * Récupère les infos complètes d'un produit pour analytics
+ * Rcupre les infos compltes d'un produit pour analytics
  */
 function getProductSnapshot(shop, productId) {
   const sh = String(shop || "default");
@@ -573,7 +578,7 @@ module.exports = {
   getCategoryStats,
   calculateWeightedAverageCost,
   
-  // ✅ NOUVEAU pour Analytics
+  // a... NOUVEAU pour Analytics
   getProductCMPSnapshot,
   getProductSnapshot,
 };
