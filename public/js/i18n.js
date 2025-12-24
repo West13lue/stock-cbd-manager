@@ -1126,6 +1126,11 @@ var I18N = {
     return false;
   },
   
+  // Alias for compatibility
+  setLang: function(lang) {
+    return this.setLanguage(lang);
+  },
+  
   t: function(key, fallback) {
     var translation = this.translations[this.currentLang]?.[key];
     if (translation) return translation;
