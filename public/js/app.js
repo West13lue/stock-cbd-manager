@@ -3292,23 +3292,25 @@
     if (!settingsData) return;
     var s = settingsData;
     var o = settingsOptions || {};
+    var weightUnit = getWeightUnit();
+    var currSymbol = getCurrencySymbol();
 
     // Section Plan
     var max = state.limits.maxProducts;
-    max = max === Infinity || max > 9999 ? "Illimite" : max;
+    max = max === Infinity || max > 9999 ? t("plan.unlimited", "Illimite") : max;
     var trialInfo = "";
     if (state.trial && state.trial.active) {
-      trialInfo = '<div class="setting-trial-info"><span class="badge badge-warning">ESSAI</span> ' + state.trial.daysLeft + ' jours restants</div>';
+      trialInfo = '<div class="setting-trial-info"><span class="badge badge-warning">' + t("plan.trial", "ESSAI") + '</span> ' + state.trial.daysLeft + ' ' + t("plan.daysLeft", "jours restants") + '</div>';
     }
 
     var planSection = 
       '<div class="settings-section">' +
-      '<div class="settings-section-header"><h3>Mon abonnement</h3></div>' +
+      '<div class="settings-section-header"><h3>' + t("settings.subscription", "Mon abonnement") + '</h3></div>' +
       '<div class="settings-section-body">' +
       '<div class="setting-plan-card">' +
       '<div class="plan-current"><div class="plan-name-big">' + state.planName + '</div>' + trialInfo +
-      '<div class="plan-usage">' + state.products.length + ' / ' + max + ' produits</div></div>' +
-      (state.planId !== "enterprise" ? '<button class="btn btn-upgrade" onclick="app.showUpgradeModal()">Changer de plan</button>' : '<span class="badge badge-success">ENTERPRISE</span>') +
+      '<div class="plan-usage">' + state.products.length + ' / ' + max + ' ' + t("plan.products", "produits") + '</div></div>' +
+      (state.planId !== "enterprise" ? '<button class="btn btn-upgrade" onclick="app.showUpgradeModal()">' + t("plan.changePlan", "Changer de plan") + '</button>' : '<span class="badge badge-success">ENTERPRISE</span>') +
       '</div></div></div>';
 
     // Section Langue & Region
@@ -3317,9 +3319,9 @@
       return '<option value="' + l.value + '"' + sel + '>' + l.label + '</option>';
     }).join('');
 
-    var tzOptions = (o.timezones || []).map(function(t) {
-      var sel = (s.general && s.general.timezone === t.value) ? ' selected' : '';
-      return '<option value="' + t.value + '"' + sel + '>' + t.label + '</option>';
+    var tzOptions = (o.timezones || []).map(function(tz) {
+      var sel = (s.general && s.general.timezone === tz.value) ? ' selected' : '';
+      return '<option value="' + tz.value + '"' + sel + '>' + tz.label + '</option>';
     }).join('');
 
     var dateOptions = (o.dateFormats || []).map(function(d) {
@@ -3329,15 +3331,15 @@
 
     var langSection = 
       '<div class="settings-section">' +
-      '<div class="settings-section-header"><h3>Langue & Region</h3><p class="text-secondary">Personnalisez l\'affichage selon votre pays</p></div>' +
+      '<div class="settings-section-header"><h3>' + t("settings.language", "Langue & Region") + '</h3><p class="text-secondary">' + t("settings.languageDesc", "Personnalisez l'affichage selon votre pays") + '</p></div>' +
       '<div class="settings-section-body">' +
-      '<div class="setting-row"><label class="setting-label">Langue de l\'application</label>' +
+      '<div class="setting-row"><label class="setting-label">' + t("settings.appLanguage", "Langue de l'application") + '</label>' +
       '<select class="form-select setting-input" onchange="app.updateSetting(\'general\',\'language\',this.value)">' + langOptions + '</select></div>' +
-      '<div class="setting-row"><label class="setting-label">Fuseau horaire</label>' +
+      '<div class="setting-row"><label class="setting-label">' + t("settings.timezone", "Fuseau horaire") + '</label>' +
       '<select class="form-select setting-input" onchange="app.updateSetting(\'general\',\'timezone\',this.value)">' + tzOptions + '</select></div>' +
-      '<div class="setting-row"><label class="setting-label">Format de date</label>' +
+      '<div class="setting-row"><label class="setting-label">' + t("settings.dateFormat", "Format de date") + '</label>' +
       '<select class="form-select setting-input" onchange="app.updateSetting(\'general\',\'dateFormat\',this.value)">' + dateOptions + '</select></div>' +
-      '<div class="setting-row"><label class="setting-label">Format horaire</label>' +
+      '<div class="setting-row"><label class="setting-label">' + t("settings.timeFormat", "Format horaire") + '</label>' +
       '<div class="setting-toggle-group">' +
       '<button class="btn btn-sm ' + (s.general && s.general.timeFormat === '24h' ? 'btn-primary' : 'btn-ghost') + '" onclick="app.updateSetting(\'general\',\'timeFormat\',\'24h\')">24h</button>' +
       '<button class="btn btn-sm ' + (s.general && s.general.timeFormat === '12h' ? 'btn-primary' : 'btn-ghost') + '" onclick="app.updateSetting(\'general\',\'timeFormat\',\'12h\')">12h</button>' +
@@ -3356,16 +3358,16 @@
 
     var currencySection = 
       '<div class="settings-section">' +
-      '<div class="settings-section-header"><h3>Devise & Unites</h3><p class="text-secondary">Configurez vos preferences monetaires</p></div>' +
+      '<div class="settings-section-header"><h3>' + t("settings.currency", "Devise & Unites") + '</h3><p class="text-secondary">' + t("settings.currencyDesc", "Configurez vos preferences monetaires") + '</p></div>' +
       '<div class="settings-section-body">' +
-      '<div class="setting-row"><label class="setting-label">Devise principale</label>' +
+      '<div class="setting-row"><label class="setting-label">' + t("settings.mainCurrency", "Devise principale") + '</label>' +
       '<select class="form-select setting-input" onchange="app.updateSetting(\'currency\',\'code\',this.value)">' + currOptions + '</select></div>' +
-      '<div class="setting-row"><label class="setting-label">Position du symbole</label>' +
+      '<div class="setting-row"><label class="setting-label">' + t("settings.symbolPosition", "Position du symbole") + '</label>' +
       '<div class="setting-toggle-group">' +
       '<button class="btn btn-sm ' + (s.currency && s.currency.position === 'before' ? 'btn-primary' : 'btn-ghost') + '" onclick="app.updateSetting(\'currency\',\'position\',\'before\')">$100</button>' +
       '<button class="btn btn-sm ' + (s.currency && s.currency.position === 'after' ? 'btn-primary' : 'btn-ghost') + '" onclick="app.updateSetting(\'currency\',\'position\',\'after\')">100$</button>' +
       '</div></div>' +
-      '<div class="setting-row"><label class="setting-label">Unite de poids</label>' +
+      '<div class="setting-row"><label class="setting-label">' + t("settings.weightUnit", "Unite de poids") + '</label>' +
       '<select class="form-select setting-input" onchange="app.updateSetting(\'units\',\'weightUnit\',this.value)">' + weightOptions + '</select></div>' +
       '</div></div>';
 
@@ -3375,33 +3377,33 @@
     
     var stockSection = 
       '<div class="settings-section">' +
-      '<div class="settings-section-header"><h3>Gestion du stock</h3><p class="text-secondary">Regles de calcul et seuils d\'alerte</p></div>' +
+      '<div class="settings-section-header"><h3>' + t("settings.stock", "Gestion du stock") + '</h3><p class="text-secondary">' + t("settings.stockDesc", "Regles de calcul et seuils d'alerte") + '</p></div>' +
       '<div class="settings-section-body">' +
       
-      '<div class="setting-group-title">Seuils de statut</div>' +
-      '<div class="setting-row"><label class="setting-label"><span class="status-dot critical"></span> Seuil critique (" + getWeightUnit() + ")</label>' +
+      '<div class="setting-group-title">' + t("settings.thresholds", "Seuils de statut") + '</div>' +
+      '<div class="setting-row"><label class="setting-label"><span class="status-dot critical"></span> ' + t("settings.criticalThreshold", "Seuil critique") + ' (' + weightUnit + ')</label>' +
       '<div class="setting-input-help"><input type="number" class="form-input setting-input-sm" value="' + criticalThreshold + '" onchange="app.updateSetting(\'stock\',\'criticalThreshold\',parseInt(this.value))">' +
-      '<span class="help-text">Stock &lt; ce seuil = Rouge</span></div></div>' +
+      '<span class="help-text">Stock &lt; ' + t("settings.thisThreshold", "ce seuil") + ' = ' + t("status.critical", "Rouge") + '</span></div></div>' +
       
-      '<div class="setting-row"><label class="setting-label"><span class="status-dot low"></span> Seuil bas (" + getWeightUnit() + ")</label>' +
+      '<div class="setting-row"><label class="setting-label"><span class="status-dot low"></span> ' + t("settings.lowThreshold", "Seuil bas") + ' (' + weightUnit + ')</label>' +
       '<div class="setting-input-help"><input type="number" class="form-input setting-input-sm" value="' + lowThreshold + '" onchange="app.updateSetting(\'stock\',\'lowStockThreshold\',parseInt(this.value))">' +
-      '<span class="help-text">Stock &lt; ce seuil = Jaune</span></div></div>' +
+      '<span class="help-text">Stock &lt; ' + t("settings.thisThreshold", "ce seuil") + ' = ' + t("status.low", "Jaune") + '</span></div></div>' +
       
-      '<div class="setting-info"><span class="status-dot good"></span> Au-dessus du seuil bas = Vert (OK)</div>' +
+      '<div class="setting-info"><span class="status-dot good"></span> ' + t("settings.aboveThreshold", "Au-dessus du seuil bas = Vert (OK)") + '</div>' +
       
-      '<div class="setting-group-title" style="margin-top:var(--space-lg)">Alertes</div>' +
-      '<div class="setting-row"><label class="setting-label">Alertes stock bas</label>' +
+      '<div class="setting-group-title" style="margin-top:var(--space-lg)">' + t("settings.alerts", "Alertes") + '</div>' +
+      '<div class="setting-row"><label class="setting-label">' + t("settings.lowStockAlerts", "Alertes stock bas") + '</label>' +
       '<label class="toggle"><input type="checkbox" ' + (s.stock && s.stock.lowStockEnabled !== false ? 'checked' : '') + ' onchange="app.updateSetting(\'stock\',\'lowStockEnabled\',this.checked)"><span class="toggle-slider"></span></label></div>' +
       
-      '<div class="setting-group-title" style="margin-top:var(--space-lg)">Valorisation</div>' +
-      '<div class="setting-row"><label class="setting-label">Methode de valorisation</label>' +
+      '<div class="setting-group-title" style="margin-top:var(--space-lg)">' + t("settings.valuation", "Valorisation") + '</div>' +
+      '<div class="setting-row"><label class="setting-label">' + t("settings.valuationMethod", "Methode de valorisation") + '</label>' +
       '<select class="form-select setting-input" onchange="app.updateSetting(\'stock\',\'costMethod\',this.value)">' +
-      '<option value="cmp"' + (s.stock && s.stock.costMethod === 'cmp' ? ' selected' : '') + '>CMP (Cout Moyen Pondere)</option>' +
-      '<option value="fifo"' + (s.stock && s.stock.costMethod === 'fifo' ? ' selected' : '') + '>FIFO (Premier Entre, Premier Sorti)</option>' +
+      '<option value="cmp"' + (s.stock && s.stock.costMethod === 'cmp' ? ' selected' : '') + '>CMP (' + t("settings.cmpFull", "Cout Moyen Pondere") + ')</option>' +
+      '<option value="fifo"' + (s.stock && s.stock.costMethod === 'fifo' ? ' selected' : '') + '>FIFO (' + t("settings.fifoFull", "Premier Entre, Premier Sorti") + ')</option>' +
       '</select></div>' +
-      '<div class="setting-row"><label class="setting-label">Figer le CMP</label>' +
+      '<div class="setting-row"><label class="setting-label">' + t("settings.freezeCMP", "Figer le CMP") + '</label>' +
       '<label class="toggle"><input type="checkbox" ' + (s.stock && s.stock.freezeCMP ? 'checked' : '') + ' onchange="app.updateSetting(\'stock\',\'freezeCMP\',this.checked)"><span class="toggle-slider"></span></label></div>' +
-      '<div class="setting-row"><label class="setting-label">Autoriser stock negatif</label>' +
+      '<div class="setting-row"><label class="setting-label">' + t("settings.allowNegative", "Autoriser stock negatif") + '</label>' +
       '<label class="toggle"><input type="checkbox" ' + (s.units && !s.units.neverNegative ? 'checked' : '') + ' onchange="app.updateSetting(\'units\',\'neverNegative\',!this.checked)"><span class="toggle-slider"></span></label></div>' +
       '</div></div>';
 
@@ -3410,20 +3412,20 @@
     if (hasFeature('hasNotifications')) {
       notifSection = 
         '<div class="settings-section">' +
-        '<div class="settings-section-header"><h3>Notifications</h3><span class="badge badge-pro">PRO</span><p class="text-secondary">Configurez vos alertes</p></div>' +
+        '<div class="settings-section-header"><h3>' + t("settings.notifications", "Notifications") + '</h3><span class="badge badge-pro">PRO</span><p class="text-secondary">' + t("settings.notificationsDesc", "Configurez vos alertes") + '</p></div>' +
         '<div class="settings-section-body">' +
-        '<div class="setting-row"><label class="setting-label">Notifications activees</label>' +
+        '<div class="setting-row"><label class="setting-label">' + t("settings.notificationsEnabled", "Notifications activees") + '</label>' +
         '<label class="toggle"><input type="checkbox" ' + (s.notifications && s.notifications.enabled ? 'checked' : '') + ' onchange="app.updateSetting(\'notifications\',\'enabled\',this.checked)"><span class="toggle-slider"></span></label></div>' +
-        '<div class="setting-row"><label class="setting-label">Alerte stock bas</label>' +
+        '<div class="setting-row"><label class="setting-label">' + t("settings.lowStockAlert", "Alerte stock bas") + '</label>' +
         '<label class="toggle"><input type="checkbox" ' + (s.notifications && s.notifications.triggers && s.notifications.triggers.lowStock ? 'checked' : '') + ' onchange="app.updateNestedSetting(\'notifications\',\'triggers\',\'lowStock\',this.checked)"><span class="toggle-slider"></span></label></div>' +
         '</div></div>';
     } else {
       notifSection = 
         '<div class="settings-section settings-locked">' +
-        '<div class="settings-section-header"><h3>Notifications</h3><span class="badge badge-pro">PRO</span></div>' +
+        '<div class="settings-section-header"><h3>' + t("settings.notifications", "Notifications") + '</h3><span class="badge badge-pro">PRO</span></div>' +
         '<div class="settings-section-body">' +
-        '<div class="locked-overlay"><p>Passez au plan Pro pour configurer les notifications.</p>' +
-        '<button class="btn btn-upgrade btn-sm" onclick="app.showUpgradeModal()">Passer a Pro</button></div>' +
+        '<div class="locked-overlay"><p>' + t("settings.notificationsLocked", "Passez au plan Pro pour configurer les notifications.") + '</p>' +
+        '<button class="btn btn-upgrade btn-sm" onclick="app.showUpgradeModal()">' + t("action.upgrade", "Passer a Pro") + '</button></div>' +
         '</div></div>';
     }
 
@@ -3432,11 +3434,11 @@
     if (hasFeature('hasAutomations')) {
       advSection = 
         '<div class="settings-section">' +
-        '<div class="settings-section-header"><h3>Parametres avances</h3><span class="badge badge-business">BIZ</span></div>' +
+        '<div class="settings-section-header"><h3>' + t("settings.advanced", "Parametres avances") + '</h3><span class="badge badge-business">BIZ</span></div>' +
         '<div class="settings-section-body">' +
-        '<div class="setting-row"><label class="setting-label">Freebies par commande (" + getWeightUnit() + ")</label>' +
+        '<div class="setting-row"><label class="setting-label">' + t("settings.freebiesPerOrder", "Freebies par commande") + ' (' + weightUnit + ')</label>' +
         '<input type="number" class="form-input setting-input" value="' + ((s.freebies && s.freebies.deductionPerOrder) || 0) + '" onchange="app.updateSetting(\'freebies\',\'deductionPerOrder\',parseFloat(this.value))"></div>' +
-        '<div class="setting-row"><label class="setting-label">Freebies actives</label>' +
+        '<div class="setting-row"><label class="setting-label">' + t("settings.freebiesEnabled", "Freebies actives") + '</label>' +
         '<label class="toggle"><input type="checkbox" ' + (s.freebies && s.freebies.enabled ? 'checked' : '') + ' onchange="app.updateSetting(\'freebies\',\'enabled\',this.checked)"><span class="toggle-slider"></span></label></div>' +
         '</div></div>';
     }
@@ -3444,14 +3446,14 @@
     // Section Donnees
     var dataSection = 
       '<div class="settings-section">' +
-      '<div class="settings-section-header"><h3>Donnees & Securite</h3></div>' +
+      '<div class="settings-section-header"><h3>' + t("settings.dataAndSecurity", "Donnees & Securite") + '</h3></div>' +
       '<div class="settings-section-body">' +
-      '<div class="setting-row"><label class="setting-label">Mode lecture seule</label>' +
+      '<div class="setting-row"><label class="setting-label">' + t("settings.readOnlyMode", "Mode lecture seule") + '</label>' +
       '<label class="toggle"><input type="checkbox" ' + (s.security && s.security.readOnlyMode ? 'checked' : '') + ' onchange="app.updateSetting(\'security\',\'readOnlyMode\',this.checked)"><span class="toggle-slider"></span></label></div>' +
-      '<div class="setting-row"><label class="setting-label">Exporter les donnees</label>' +
-      '<button class="btn btn-secondary btn-sm" onclick="app.exportSettings()">Telecharger backup</button></div>' +
-      '<div class="setting-row"><label class="setting-label">Reinitialiser les parametres</label>' +
-      '<button class="btn btn-ghost btn-sm text-danger" onclick="app.resetAllSettings()">Reinitialiser</button></div>' +
+      '<div class="setting-row"><label class="setting-label">' + t("settings.exportData", "Exporter les donnees") + '</label>' +
+      '<button class="btn btn-secondary btn-sm" onclick="app.exportSettings()">' + t("settings.downloadBackup", "Telecharger backup") + '</button></div>' +
+      '<div class="setting-row"><label class="setting-label">' + t("settings.resetSettings", "Reinitialiser les parametres") + '</label>' +
+      '<button class="btn btn-ghost btn-sm text-danger" onclick="app.resetAllSettings()">' + t("action.reset", "Reinitialiser") + '</button></div>' +
       '</div></div>';
 
     document.getElementById("settingsContent").innerHTML = 
