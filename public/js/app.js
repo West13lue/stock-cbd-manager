@@ -256,11 +256,6 @@
     renderTab("dashboard");
     updateUI();
     console.log("[Init] Ready - Plan:", state.planId, "Features:", state.limits);
-    
-    // Charger profils en arrière-plan (non-bloquant, après 2 secondes)
-    setTimeout(function() { 
-      try { loadUserProfiles(); } catch(e) { console.warn("[Profiles] Error:", e); }
-    }, 2000);
   }
 
   // Charger les settings silencieusement (pour getStatus)
@@ -4161,141 +4156,10 @@
     return d.innerHTML;
   }
   function toggleNotifications() {
-    if (!hasFeature("hasNotifications")) {
-      showModal({
-        title: "🔔 Notifications",
-        content: '<div style="text-align:center;padding:40px"><div style="font-size:48px;margin-bottom:16px">🔒</div><h3>Fonctionnalité PRO</h3><p style="color:var(--text-secondary)">Les alertes sont disponibles avec le plan Pro.</p><button class="btn btn-primary" style="margin-top:20px" onclick="app.showUpgradeModal()">Passer à Pro</button></div>',
-        footer: '<button class="btn btn-secondary" onclick="app.closeModal()">Fermer</button>'
-      });
-      return;
-    }
-    // Charger et afficher les notifications
-    authFetch(apiUrl("/notifications?limit=30")).then(function(res) {
-      if (res.ok) return res.json();
-      return { alerts: [] };
-    }).then(function(data) {
-      var alerts = data.alerts || [];
-      var html;
-      if (!alerts.length) {
-        html = '<div style="text-align:center;padding:40px"><div style="font-size:48px;margin-bottom:16px">✅</div><p>Aucune alerte</p><p style="color:var(--text-secondary)">Tout va bien !</p></div>';
-      } else {
-        html = '<div style="max-height:400px;overflow-y:auto">' + alerts.map(function(a) {
-          var icon = a.priority === "critical" ? "🔴" : a.priority === "high" ? "🟡" : "🟢";
-          return '<div style="display:flex;gap:12px;padding:12px;background:var(--bg-secondary);border-radius:8px;margin-bottom:8px;cursor:pointer" onclick="app.closeModal();app.openProductDetails(\'' + (a.productId || '') + '\')"><span>' + icon + '</span><div style="flex:1"><div style="font-weight:600">' + esc(a.title || '') + '</div><div style="font-size:13px;color:var(--text-secondary)">' + esc(a.message || '') + '</div></div></div>';
-        }).join('') + '</div>';
-      }
-      showModal({ title: "🔔 Notifications", size: "md", content: html, footer: '<button class="btn btn-secondary" onclick="app.closeModal()">Fermer</button>' });
-    }).catch(function() {
-      showToast("Erreur chargement", "error");
-    });
+    showToast("Bientot", "info");
   }
-
-  // === PROFILS UTILISATEURS ===
-  var userProfiles = {
-    profiles: [{ id: "admin", name: "Admin", role: "admin", color: "#6366f1" }],
-    activeProfileId: "admin",
-    activeProfile: { id: "admin", name: "Admin", role: "admin", color: "#6366f1" }
-  };
-
-  function getProfileInitials(name) {
-    if (!name) return "?";
-    var p = name.trim().split(/\s+/);
-    return p.length === 1 ? p[0].substring(0,2).toUpperCase() : (p[0][0] + p[p.length-1][0]).toUpperCase();
-  }
-
   function toggleUserMenu() {
-    var pf = userProfiles.activeProfile;
-    var init = getProfileInitials(pf.name);
-    var list = userProfiles.profiles.map(function(p) {
-      var i = getProfileInitials(p.name);
-      var active = p.id === userProfiles.activeProfileId;
-      return '<div style="display:flex;align-items:center;gap:12px;padding:12px;border-radius:8px;cursor:pointer;background:' + (active ? 'rgba(99,102,241,0.15)' : 'var(--bg-secondary)') + '" onclick="app.selectProfile(\'' + p.id + '\')"><span style="background:' + (p.color || '#6366f1') + ';width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff">' + i + '</span><div style="flex:1"><div style="font-weight:600">' + esc(p.name) + '</div><div style="font-size:12px;color:var(--text-secondary)">' + esc(p.role || 'user') + '</div></div>' + (active ? '<span style="color:#6366f1">✓</span>' : '') + '</div>';
-    }).join('');
-    showModal({
-      title: "👤 Mon profil",
-      size: "sm",
-      content: '<div style="display:flex;align-items:center;gap:16px;padding:20px;background:var(--bg-secondary);border-radius:12px;margin-bottom:20px"><span style="background:' + (pf.color || '#6366f1') + ';width:56px;height:56px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;color:#fff">' + init + '</span><div><div style="font-size:18px;font-weight:700">' + esc(pf.name) + '</div><div style="color:var(--text-secondary)">' + esc(pf.role) + '</div></div></div><div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:12px">CHANGER DE PROFIL</div><div style="display:flex;flex-direction:column;gap:8px">' + list + '</div><div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border)"><button class="btn btn-ghost" style="width:100%" onclick="app.showCreateProfileModal()">+ Nouveau profil</button></div>',
-      footer: '<button class="btn btn-secondary" onclick="app.closeModal()">Fermer</button>'
-    });
-  }
-
-  function selectProfile(id) {
-    authFetch(apiUrl("/profiles/" + id + "/activate"), { method: "POST" }).then(function(res) {
-      if (res.ok) return res.json();
-    }).then(function(data) {
-      if (data && data.profile) {
-        userProfiles.activeProfileId = id;
-        userProfiles.activeProfile = data.profile;
-        closeModal();
-        showToast("Bienvenue, " + data.profile.name + " !", "success");
-      }
-    }).catch(function() { showToast("Erreur", "error"); });
-  }
-
-  function showCreateProfileModal() {
-    var colors = ["#6366f1","#8b5cf6","#ec4899","#ef4444","#f97316","#22c55e","#06b6d4","#3b82f6"];
-    var colorsHtml = colors.map(function(c, i) {
-      return '<div onclick="document.getElementById(\'newProfColor\').value=\'' + c + '\';this.parentNode.querySelectorAll(\'div\').forEach(function(e){e.style.outline=\'none\'});this.style.outline=\'3px solid white\'" style="background:' + c + ';width:32px;height:32px;border-radius:50%;cursor:pointer' + (i === 0 ? ';outline:3px solid white' : '') + '"></div>';
-    }).join('');
-    showModal({
-      title: "Créer un profil",
-      size: "sm",
-      content: '<div class="form-group"><label>Nom</label><input type="text" id="newProfName" class="form-input" placeholder="Ex: Marie..."></div><div class="form-group"><label>Rôle</label><select id="newProfRole" class="form-select"><option value="user">Utilisateur</option><option value="manager">Manager</option><option value="admin">Admin</option></select></div><div class="form-group"><label>Couleur</label><div style="display:flex;gap:8px;flex-wrap:wrap">' + colorsHtml + '</div><input type="hidden" id="newProfColor" value="#6366f1"></div>',
-      footer: '<button class="btn btn-secondary" onclick="app.toggleUserMenu()">Annuler</button><button class="btn btn-primary" onclick="app.createProfile()">Créer</button>'
-    });
-  }
-
-  function createProfile() {
-    var name = (document.getElementById('newProfName') || {}).value || '';
-    var role = (document.getElementById('newProfRole') || {}).value || 'user';
-    var color = (document.getElementById('newProfColor') || {}).value || '#6366f1';
-    if (!name.trim()) { showToast("Nom requis", "error"); return; }
-    authFetch(apiUrl("/profiles"), { method: "POST", body: JSON.stringify({ name: name.trim(), role: role, color: color }) }).then(function(res) {
-      if (res.ok) return res.json();
-    }).then(function(data) {
-      if (data && data.profile) {
-        userProfiles.profiles.push(data.profile);
-        showToast("Profil créé", "success");
-        selectProfile(data.profile.id);
-      }
-    }).catch(function() { showToast("Erreur", "error"); });
-  }
-
-  function loadUserProfiles() {
-    // Vérifier que l'auth est prête avant d'appeler l'API
-    if (!sessionToken) {
-      console.warn("[Profiles] Session not ready, skipping");
-      return;
-    }
-    authFetch(apiUrl("/profiles")).then(function(res) {
-      if (res.ok) return res.json();
-      return null;
-    }).then(function(data) {
-      if (data && data.profiles && data.profiles.length) {
-        userProfiles.profiles = data.profiles;
-        userProfiles.activeProfileId = data.activeProfileId || data.profiles[0].id;
-        userProfiles.activeProfile = data.profiles.find(function(p) { return p.id === userProfiles.activeProfileId; }) || data.profiles[0];
-        if (data.profiles.length > 1) {
-          showProfileSelectionPopup();
-        } else {
-          showToast("Bienvenue, " + userProfiles.activeProfile.name + " !", "success");
-        }
-      }
-    }).catch(function(e) { console.warn("[Profiles]", e); });
-  }
-
-  function showProfileSelectionPopup() {
-    var list = userProfiles.profiles.map(function(p) {
-      var i = getProfileInitials(p.name);
-      var active = p.id === userProfiles.activeProfileId;
-      return '<div style="display:flex;align-items:center;gap:12px;padding:14px;border-radius:10px;cursor:pointer;border:2px solid ' + (active ? '#6366f1' : 'transparent') + ';background:' + (active ? 'rgba(99,102,241,0.1)' : 'var(--bg-secondary)') + '" onclick="app.selectProfile(\'' + p.id + '\')"><span style="background:' + (p.color || '#6366f1') + ';width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:#fff">' + i + '</span><div style="flex:1"><div style="font-weight:600;font-size:15px">' + esc(p.name) + '</div><div style="font-size:12px;color:var(--text-secondary)">' + esc(p.role || 'user') + '</div></div>' + (active ? '<span style="color:#6366f1;font-size:18px">✓</span>' : '') + '</div>';
-    }).join('');
-    showModal({
-      title: "👥 Qui se connecte ?",
-      size: "sm",
-      content: '<div style="display:flex;flex-direction:column;gap:10px">' + list + '</div><div style="text-align:center;margin-top:20px;padding-top:16px;border-top:1px solid var(--border)"><button class="btn btn-ghost" onclick="app.showCreateProfileModal()">+ Nouveau profil</button></div>',
-      footer: ''
-    });
+    showToast("Bientot", "info");
   }
 
   // ============================================
@@ -5318,11 +5182,6 @@
     updateNestedSetting: updateNestedSetting,
     exportSettings: exportSettings,
     resetAllSettings: resetAllSettings,
-    // Profils
-    selectProfile: selectProfile,
-    showCreateProfileModal: showCreateProfileModal,
-    createProfile: createProfile,
-    showProfileSelectionPopup: showProfileSelectionPopup,
     get state() {
       return state;
     },
