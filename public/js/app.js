@@ -257,14 +257,10 @@
     updateUI();
     console.log("[Init] Ready - Plan:", state.planId, "Features:", state.limits);
     
-    // Charger profils et notifications en arrière-plan (non-bloquant)
-    setTimeout(function() {
-      loadProfiles();
-      if (hasFeature("hasNotifications")) {
-        loadNotificationCount();
-        setInterval(loadNotificationCount, 5 * 60 * 1000); // Refresh toutes les 5 min
-      }
-    }, 500);
+    // Charger profils en arrière-plan (non-bloquant, après 2 secondes)
+    setTimeout(function() { 
+      try { loadUserProfiles(); } catch(e) { console.warn("[Profiles] Error:", e); }
+    }, 2000);
   }
 
   // Charger les settings silencieusement (pour getStatus)
@@ -4164,415 +4160,142 @@
     d.textContent = s;
     return d.innerHTML;
   }
+  function toggleNotifications() {
+    if (!hasFeature("hasNotifications")) {
+      showModal({
+        title: "🔔 Notifications",
+        content: '<div style="text-align:center;padding:40px"><div style="font-size:48px;margin-bottom:16px">🔒</div><h3>Fonctionnalité PRO</h3><p style="color:var(--text-secondary)">Les alertes sont disponibles avec le plan Pro.</p><button class="btn btn-primary" style="margin-top:20px" onclick="app.showUpgradeModal()">Passer à Pro</button></div>',
+        footer: '<button class="btn btn-secondary" onclick="app.closeModal()">Fermer</button>'
+      });
+      return;
+    }
+    // Charger et afficher les notifications
+    authFetch(apiUrl("/notifications?limit=30")).then(function(res) {
+      if (res.ok) return res.json();
+      return { alerts: [] };
+    }).then(function(data) {
+      var alerts = data.alerts || [];
+      var html;
+      if (!alerts.length) {
+        html = '<div style="text-align:center;padding:40px"><div style="font-size:48px;margin-bottom:16px">✅</div><p>Aucune alerte</p><p style="color:var(--text-secondary)">Tout va bien !</p></div>';
+      } else {
+        html = '<div style="max-height:400px;overflow-y:auto">' + alerts.map(function(a) {
+          var icon = a.priority === "critical" ? "🔴" : a.priority === "high" ? "🟡" : "🟢";
+          return '<div style="display:flex;gap:12px;padding:12px;background:var(--bg-secondary);border-radius:8px;margin-bottom:8px;cursor:pointer" onclick="app.closeModal();app.openProductDetails(\'' + (a.productId || '') + '\')"><span>' + icon + '</span><div style="flex:1"><div style="font-weight:600">' + esc(a.title || '') + '</div><div style="font-size:13px;color:var(--text-secondary)">' + esc(a.message || '') + '</div></div></div>';
+        }).join('') + '</div>';
+      }
+      showModal({ title: "🔔 Notifications", size: "md", content: html, footer: '<button class="btn btn-secondary" onclick="app.closeModal()">Fermer</button>' });
+    }).catch(function() {
+      showToast("Erreur chargement", "error");
+    });
+  }
 
-  // ============================================
-  // 👤 SYSTÈME DE PROFILS UTILISATEURS
-  // ============================================
-  
+  // === PROFILS UTILISATEURS ===
   var userProfiles = {
     profiles: [{ id: "admin", name: "Admin", role: "admin", color: "#6366f1" }],
     activeProfileId: "admin",
     activeProfile: { id: "admin", name: "Admin", role: "admin", color: "#6366f1" }
   };
 
-  function getInitials(name) {
+  function getProfileInitials(name) {
     if (!name) return "?";
     var p = name.trim().split(/\s+/);
     return p.length === 1 ? p[0].substring(0,2).toUpperCase() : (p[0][0] + p[p.length-1][0]).toUpperCase();
   }
 
-  function loadProfiles() {
-    authFetch(apiUrl("/profiles")).then(function(res){ 
-      if(res.ok) return res.json(); 
-      return null;
-    }).then(function(data){
-      if (data && data.profiles && data.profiles.length) {
-        userProfiles.profiles = data.profiles;
-        userProfiles.activeProfileId = data.activeProfileId || data.profiles[0].id;
-        userProfiles.activeProfile = data.profiles.find(function(p){return p.id===userProfiles.activeProfileId;}) || data.profiles[0];
-        updateProfileButton();
-        // Afficher popup si plusieurs profils
-        if (data.profiles.length > 1) {
-          setTimeout(showProfilePopup, 300);
-        } else {
-          showToast(t("profiles.welcome", "Bienvenue") + ", " + userProfiles.activeProfile.name + " !", "success");
-        }
-      }
-    }).catch(function(e){ console.warn("[Profiles]", e); });
-  }
-
-  function showProfilePopup() {
-    var list = userProfiles.profiles.map(function(p) {
-      var i = getInitials(p.name);
-      var active = p.id === userProfiles.activeProfileId;
-      return '<div class="profile-select-item' + (active ? ' active' : '') + '" onclick="app.selectProfile(\'' + p.id + '\')">' +
-        '<div class="profile-avatar" style="background-color:' + (p.color || '#6366f1') + '">' + i + '</div>' +
-        '<div class="profile-info"><div class="profile-name">' + esc(p.name) + '</div>' +
-        '<div class="profile-role">' + esc(p.role || 'user') + '</div></div>' +
-        (active ? '<span class="profile-check">✓</span>' : '') + '</div>';
-    }).join('');
-    
-    showModal({
-      title: '<i data-lucide="users"></i> ' + t("profiles.whoIsConnecting", "Qui se connecte ?"),
-      size: "sm",
-      content: '<div class="profile-selection-list">' + list + '</div>' +
-        '<div class="profile-selection-footer"><button class="btn btn-ghost" onclick="app.showCreateProfileModal()">' +
-        '<i data-lucide="user-plus"></i> ' + t("profiles.createNew", "Nouveau profil") + '</button></div>',
-      footer: ''
-    });
-    if (typeof lucide !== 'undefined') lucide.createIcons();
-  }
-
   function toggleUserMenu() {
     var pf = userProfiles.activeProfile;
-    var init = getInitials(pf.name);
-    
+    var init = getProfileInitials(pf.name);
     var list = userProfiles.profiles.map(function(p) {
-      var i = getInitials(p.name);
+      var i = getProfileInitials(p.name);
       var active = p.id === userProfiles.activeProfileId;
-      return '<div class="profile-menu-item' + (active ? ' active' : '') + '" onclick="app.selectProfile(\'' + p.id + '\')">' +
-        '<div class="profile-avatar-sm" style="background-color:' + (p.color || '#6366f1') + '">' + i + '</div>' +
-        '<span class="profile-menu-name">' + esc(p.name) + '</span>' +
-        (active ? '<span class="profile-check">✓</span>' : '') + '</div>';
+      return '<div style="display:flex;align-items:center;gap:12px;padding:12px;border-radius:8px;cursor:pointer;background:' + (active ? 'rgba(99,102,241,0.15)' : 'var(--bg-secondary)') + '" onclick="app.selectProfile(\'' + p.id + '\')"><span style="background:' + (p.color || '#6366f1') + ';width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff">' + i + '</span><div style="flex:1"><div style="font-weight:600">' + esc(p.name) + '</div><div style="font-size:12px;color:var(--text-secondary)">' + esc(p.role || 'user') + '</div></div>' + (active ? '<span style="color:#6366f1">✓</span>' : '') + '</div>';
     }).join('');
-    
     showModal({
-      title: '<i data-lucide="user"></i> ' + t("profiles.myProfile", "Mon profil"),
+      title: "👤 Mon profil",
       size: "sm",
-      content: '<div class="profile-card">' +
-        '<div class="profile-avatar-lg" style="background-color:' + (pf.color || '#6366f1') + '">' + init + '</div>' +
-        '<div class="profile-card-info"><div class="profile-card-name">' + esc(pf.name) + '</div>' +
-        '<div class="profile-card-role">' + esc(pf.role || 'user') + '</div></div></div>' +
-        '<div class="profile-menu-section"><div class="profile-menu-title">' + t("profiles.switchProfile", "Changer de profil") + '</div>' +
-        list + '</div>' +
-        '<div class="profile-menu-actions"><button class="btn btn-ghost btn-block" onclick="app.showCreateProfileModal()">' +
-        '<i data-lucide="user-plus"></i> ' + t("profiles.createNew", "Nouveau profil") + '</button>' +
-        '<button class="btn btn-ghost btn-block" onclick="app.showManageProfilesModal()">' +
-        '<i data-lucide="settings"></i> ' + t("profiles.manage", "Gérer les profils") + '</button></div>',
-      footer: '<button class="btn btn-secondary" onclick="app.closeModal()">' + t("action.close", "Fermer") + '</button>'
+      content: '<div style="display:flex;align-items:center;gap:16px;padding:20px;background:var(--bg-secondary);border-radius:12px;margin-bottom:20px"><span style="background:' + (pf.color || '#6366f1') + ';width:56px;height:56px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;color:#fff">' + init + '</span><div><div style="font-size:18px;font-weight:700">' + esc(pf.name) + '</div><div style="color:var(--text-secondary)">' + esc(pf.role) + '</div></div></div><div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:12px">CHANGER DE PROFIL</div><div style="display:flex;flex-direction:column;gap:8px">' + list + '</div><div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border)"><button class="btn btn-ghost" style="width:100%" onclick="app.showCreateProfileModal()">+ Nouveau profil</button></div>',
+      footer: '<button class="btn btn-secondary" onclick="app.closeModal()">Fermer</button>'
     });
-    if (typeof lucide !== 'undefined') lucide.createIcons();
   }
 
   function selectProfile(id) {
     authFetch(apiUrl("/profiles/" + id + "/activate"), { method: "POST" }).then(function(res) {
       if (res.ok) return res.json();
-      return null;
     }).then(function(data) {
       if (data && data.profile) {
         userProfiles.activeProfileId = id;
         userProfiles.activeProfile = data.profile;
-        updateProfileButton();
         closeModal();
-        showToast(t("profiles.welcome", "Bienvenue") + ", " + data.profile.name + " !", "success");
+        showToast("Bienvenue, " + data.profile.name + " !", "success");
       }
-    }).catch(function(e) { showToast(t("msg.error", "Erreur"), "error"); });
+    }).catch(function() { showToast("Erreur", "error"); });
   }
 
   function showCreateProfileModal() {
-    var colors = ["#6366f1", "#8b5cf6", "#ec4899", "#ef4444", "#f97316", "#22c55e", "#14b8a6", "#06b6d4", "#3b82f6"];
+    var colors = ["#6366f1","#8b5cf6","#ec4899","#ef4444","#f97316","#22c55e","#06b6d4","#3b82f6"];
     var colorsHtml = colors.map(function(c, i) {
-      return '<div class="color-option' + (i === 0 ? ' selected' : '') + '" style="background-color:' + c + '" data-color="' + c + '" onclick="app.selectProfileColor(this)"></div>';
+      return '<div onclick="document.getElementById(\'newProfColor\').value=\'' + c + '\';this.parentNode.querySelectorAll(\'div\').forEach(function(e){e.style.outline=\'none\'});this.style.outline=\'3px solid white\'" style="background:' + c + ';width:32px;height:32px;border-radius:50%;cursor:pointer' + (i === 0 ? ';outline:3px solid white' : '') + '"></div>';
     }).join('');
-    
     showModal({
-      title: '<i data-lucide="user-plus"></i> ' + t("profiles.createProfile", "Créer un profil"),
+      title: "Créer un profil",
       size: "sm",
-      content: '<div class="form-group"><label>' + t("profiles.name", "Nom") + '</label>' +
-        '<input type="text" id="newProfileName" class="form-input" placeholder="' + t("profiles.namePlaceholder", "Ex: Marie, Pierre...") + '"></div>' +
-        '<div class="form-group"><label>' + t("profiles.role", "Rôle") + '</label>' +
-        '<select id="newProfileRole" class="form-select">' +
-        '<option value="user">' + t("profiles.roleUser", "Utilisateur") + '</option>' +
-        '<option value="manager">' + t("profiles.roleManager", "Manager") + '</option>' +
-        '<option value="admin">' + t("profiles.roleAdmin", "Administrateur") + '</option></select></div>' +
-        '<div class="form-group"><label>' + t("profiles.color", "Couleur") + '</label>' +
-        '<div class="color-picker">' + colorsHtml + '</div>' +
-        '<input type="hidden" id="newProfileColor" value="#6366f1"></div>',
-      footer: '<button class="btn btn-secondary" onclick="app.toggleUserMenu()">' + t("action.cancel", "Annuler") + '</button>' +
-        '<button class="btn btn-primary" onclick="app.createProfile()">' + t("action.create", "Créer") + '</button>'
+      content: '<div class="form-group"><label>Nom</label><input type="text" id="newProfName" class="form-input" placeholder="Ex: Marie..."></div><div class="form-group"><label>Rôle</label><select id="newProfRole" class="form-select"><option value="user">Utilisateur</option><option value="manager">Manager</option><option value="admin">Admin</option></select></div><div class="form-group"><label>Couleur</label><div style="display:flex;gap:8px;flex-wrap:wrap">' + colorsHtml + '</div><input type="hidden" id="newProfColor" value="#6366f1"></div>',
+      footer: '<button class="btn btn-secondary" onclick="app.toggleUserMenu()">Annuler</button><button class="btn btn-primary" onclick="app.createProfile()">Créer</button>'
     });
-    if (typeof lucide !== 'undefined') lucide.createIcons();
-  }
-
-  function selectProfileColor(el) {
-    document.querySelectorAll('.color-option').forEach(function(e) { e.classList.remove('selected'); });
-    el.classList.add('selected');
-    document.getElementById('newProfileColor').value = el.dataset.color;
   }
 
   function createProfile() {
-    var name = (document.getElementById('newProfileName') || {}).value || '';
-    var role = (document.getElementById('newProfileRole') || {}).value || 'user';
-    var color = (document.getElementById('newProfileColor') || {}).value || '#6366f1';
-    
-    if (!name.trim()) {
-      showToast(t("profiles.nameRequired", "Le nom est requis"), "error");
-      return;
-    }
-    
-    authFetch(apiUrl("/profiles"), {
-      method: "POST",
-      body: JSON.stringify({ name: name.trim(), role: role, color: color })
-    }).then(function(res) {
+    var name = (document.getElementById('newProfName') || {}).value || '';
+    var role = (document.getElementById('newProfRole') || {}).value || 'user';
+    var color = (document.getElementById('newProfColor') || {}).value || '#6366f1';
+    if (!name.trim()) { showToast("Nom requis", "error"); return; }
+    authFetch(apiUrl("/profiles"), { method: "POST", body: JSON.stringify({ name: name.trim(), role: role, color: color }) }).then(function(res) {
       if (res.ok) return res.json();
-      return null;
     }).then(function(data) {
       if (data && data.profile) {
         userProfiles.profiles.push(data.profile);
-        showToast(t("profiles.created", "Profil créé"), "success");
+        showToast("Profil créé", "success");
         selectProfile(data.profile.id);
       }
-    }).catch(function(e) { showToast(t("msg.error", "Erreur") + ": " + e.message, "error"); });
+    }).catch(function() { showToast("Erreur", "error"); });
   }
 
-  function showManageProfilesModal() {
+  function loadUserProfiles() {
+    // Vérifier que l'auth est prête avant d'appeler l'API
+    if (!sessionToken) {
+      console.warn("[Profiles] Session not ready, skipping");
+      return;
+    }
+    authFetch(apiUrl("/profiles")).then(function(res) {
+      if (res.ok) return res.json();
+      return null;
+    }).then(function(data) {
+      if (data && data.profiles && data.profiles.length) {
+        userProfiles.profiles = data.profiles;
+        userProfiles.activeProfileId = data.activeProfileId || data.profiles[0].id;
+        userProfiles.activeProfile = data.profiles.find(function(p) { return p.id === userProfiles.activeProfileId; }) || data.profiles[0];
+        if (data.profiles.length > 1) {
+          showProfileSelectionPopup();
+        } else {
+          showToast("Bienvenue, " + userProfiles.activeProfile.name + " !", "success");
+        }
+      }
+    }).catch(function(e) { console.warn("[Profiles]", e); });
+  }
+
+  function showProfileSelectionPopup() {
     var list = userProfiles.profiles.map(function(p) {
-      var i = getInitials(p.name);
-      var canDelete = !p.isDefault && p.id !== 'admin';
-      return '<div class="manage-profile-item">' +
-        '<div class="profile-avatar-sm" style="background-color:' + (p.color || '#6366f1') + '">' + i + '</div>' +
-        '<div class="manage-profile-info"><div class="profile-name">' + esc(p.name) + 
-        (p.isDefault ? ' <span class="badge badge-sm">Admin</span>' : '') + '</div>' +
-        '<div class="profile-role">' + esc(p.role || 'user') + '</div></div>' +
-        '<div class="manage-profile-actions">' +
-        '<button class="btn btn-ghost btn-xs" onclick="app.showEditProfileModal(\'' + p.id + '\')" title="' + t("action.edit", "Modifier") + '">' +
-        '<i data-lucide="edit-2"></i></button>' +
-        (canDelete ? '<button class="btn btn-ghost btn-xs text-danger" onclick="app.deleteProfile(\'' + p.id + '\')" title="' + t("action.delete", "Supprimer") + '">' +
-        '<i data-lucide="trash-2"></i></button>' : '') + '</div></div>';
+      var i = getProfileInitials(p.name);
+      var active = p.id === userProfiles.activeProfileId;
+      return '<div style="display:flex;align-items:center;gap:12px;padding:14px;border-radius:10px;cursor:pointer;border:2px solid ' + (active ? '#6366f1' : 'transparent') + ';background:' + (active ? 'rgba(99,102,241,0.1)' : 'var(--bg-secondary)') + '" onclick="app.selectProfile(\'' + p.id + '\')"><span style="background:' + (p.color || '#6366f1') + ';width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:#fff">' + i + '</span><div style="flex:1"><div style="font-weight:600;font-size:15px">' + esc(p.name) + '</div><div style="font-size:12px;color:var(--text-secondary)">' + esc(p.role || 'user') + '</div></div>' + (active ? '<span style="color:#6366f1;font-size:18px">✓</span>' : '') + '</div>';
     }).join('');
-    
     showModal({
-      title: '<i data-lucide="users"></i> ' + t("profiles.manageProfiles", "Gérer les profils"),
-      size: "md",
-      content: '<div class="manage-profiles-list">' + list + '</div>',
-      footer: '<button class="btn btn-secondary" onclick="app.toggleUserMenu()">' + t("action.back", "Retour") + '</button>' +
-        '<button class="btn btn-primary" onclick="app.showCreateProfileModal()">' + t("profiles.createNew", "Nouveau") + '</button>'
-    });
-    if (typeof lucide !== 'undefined') lucide.createIcons();
-  }
-
-  function showEditProfileModal(profileId) {
-    var p = userProfiles.profiles.find(function(x) { return x.id === profileId; });
-    if (!p) return;
-    
-    var colors = ["#6366f1", "#8b5cf6", "#ec4899", "#ef4444", "#f97316", "#22c55e", "#14b8a6", "#06b6d4", "#3b82f6"];
-    var colorsHtml = colors.map(function(c) {
-      return '<div class="color-option' + (c === p.color ? ' selected' : '') + '" style="background-color:' + c + '" data-color="' + c + '" onclick="app.selectProfileColor(this)"></div>';
-    }).join('');
-    
-    showModal({
-      title: '<i data-lucide="edit-2"></i> ' + t("profiles.editProfile", "Modifier le profil"),
+      title: "👥 Qui se connecte ?",
       size: "sm",
-      content: '<div class="form-group"><label>' + t("profiles.name", "Nom") + '</label>' +
-        '<input type="text" id="editProfileName" class="form-input" value="' + esc(p.name) + '"></div>' +
-        '<div class="form-group"><label>' + t("profiles.role", "Rôle") + '</label>' +
-        '<select id="editProfileRole" class="form-select">' +
-        '<option value="user"' + (p.role === 'user' ? ' selected' : '') + '>' + t("profiles.roleUser", "Utilisateur") + '</option>' +
-        '<option value="manager"' + (p.role === 'manager' ? ' selected' : '') + '>' + t("profiles.roleManager", "Manager") + '</option>' +
-        '<option value="admin"' + (p.role === 'admin' ? ' selected' : '') + '>' + t("profiles.roleAdmin", "Administrateur") + '</option></select></div>' +
-        '<div class="form-group"><label>' + t("profiles.color", "Couleur") + '</label>' +
-        '<div class="color-picker">' + colorsHtml + '</div>' +
-        '<input type="hidden" id="editProfileColor" value="' + (p.color || '#6366f1') + '"></div>' +
-        '<input type="hidden" id="editProfileId" value="' + p.id + '">',
-      footer: '<button class="btn btn-secondary" onclick="app.showManageProfilesModal()">' + t("action.cancel", "Annuler") + '</button>' +
-        '<button class="btn btn-primary" onclick="app.updateProfile()">' + t("action.save", "Enregistrer") + '</button>'
+      content: '<div style="display:flex;flex-direction:column;gap:10px">' + list + '</div><div style="text-align:center;margin-top:20px;padding-top:16px;border-top:1px solid var(--border)"><button class="btn btn-ghost" onclick="app.showCreateProfileModal()">+ Nouveau profil</button></div>',
+      footer: ''
     });
-    if (typeof lucide !== 'undefined') lucide.createIcons();
-  }
-
-  function updateProfile() {
-    var id = (document.getElementById('editProfileId') || {}).value;
-    var name = (document.getElementById('editProfileName') || {}).value || '';
-    var role = (document.getElementById('editProfileRole') || {}).value || 'user';
-    var color = (document.getElementById('editProfileColor') || {}).value || '#6366f1';
-    
-    if (!name.trim()) {
-      showToast(t("profiles.nameRequired", "Le nom est requis"), "error");
-      return;
-    }
-    
-    authFetch(apiUrl("/profiles/" + id), {
-      method: "PUT",
-      body: JSON.stringify({ name: name.trim(), role: role, color: color })
-    }).then(function(res) {
-      if (res.ok) return res.json();
-      return null;
-    }).then(function(data) {
-      if (data && data.profile) {
-        var idx = userProfiles.profiles.findIndex(function(p) { return p.id === id; });
-        if (idx >= 0) userProfiles.profiles[idx] = data.profile;
-        if (userProfiles.activeProfileId === id) userProfiles.activeProfile = data.profile;
-        updateProfileButton();
-        showToast(t("profiles.updated", "Profil mis à jour"), "success");
-        showManageProfilesModal();
-      }
-    }).catch(function(e) { showToast(t("msg.error", "Erreur"), "error"); });
-  }
-
-  function deleteProfile(profileId) {
-    if (!confirm(t("profiles.confirmDelete", "Supprimer ce profil ?"))) return;
-    
-    authFetch(apiUrl("/profiles/" + profileId), { method: "DELETE" }).then(function(res) {
-      if (res.ok) return res.json();
-      return null;
-    }).then(function(data) {
-      if (data && data.success) {
-        userProfiles.profiles = userProfiles.profiles.filter(function(p) { return p.id !== profileId; });
-        showToast(t("profiles.deleted", "Profil supprimé"), "success");
-        showManageProfilesModal();
-      }
-    }).catch(function(e) { showToast(t("msg.error", "Erreur"), "error"); });
-  }
-
-  function updateProfileButton() {
-    var btn = document.querySelector('.user-avatar');
-    if (btn && userProfiles.activeProfile) {
-      var i = getInitials(userProfiles.activeProfile.name);
-      btn.innerHTML = '<span style="background-color:' + (userProfiles.activeProfile.color || '#6366f1') + ';width:100%;height:100%;display:flex;align-items:center;justify-content:center;border-radius:50%">' + i + '</span>';
-    }
-  }
-
-  function getActiveUserId() { return userProfiles.activeProfileId || "admin"; }
-  function getActiveUserName() { return userProfiles.activeProfile ? userProfiles.activeProfile.name : "Admin"; }
-
-  // ============================================
-  // 🔔 SYSTÈME DE NOTIFICATIONS
-  // ============================================
-  
-  var notificationsData = { alerts: [], unreadCount: 0, counts: {} };
-
-  function loadNotificationCount() {
-    authFetch(apiUrl("/notifications/count")).then(function(res) {
-      if (res.ok) return res.json();
-      return null;
-    }).then(function(data) {
-      if (data) {
-        notificationsData.unreadCount = data.unreadCount || 0;
-        notificationsData.counts = data;
-        updateNotificationBadge();
-      }
-    }).catch(function() {});
-  }
-
-  function updateNotificationBadge() {
-    var badge = document.getElementById("notifBadge");
-    if (badge) {
-      if (notificationsData.unreadCount > 0) {
-        badge.textContent = notificationsData.unreadCount > 99 ? "99+" : notificationsData.unreadCount;
-        badge.style.display = "flex";
-      } else {
-        badge.style.display = "none";
-      }
-    }
-  }
-
-  function toggleNotifications() {
-    if (!hasFeature("hasNotifications")) {
-      showModal({
-        title: '<i data-lucide="bell"></i> ' + t("notifications.title", "Notifications"),
-        content: '<div class="locked-feature-message">' +
-          '<div class="locked-icon"><i data-lucide="lock"></i></div>' +
-          '<h3>' + t("msg.featureLocked", "Fonctionnalité PRO") + '</h3>' +
-          '<p>' + t("notifications.lockedDesc", "Les alertes et notifications sont disponibles avec le plan Pro.") + '</p>' +
-          '<button class="btn btn-primary" onclick="app.showUpgradeModal()">' + t("action.upgrade", "Passer à Pro") + '</button></div>',
-        footer: '<button class="btn btn-secondary" onclick="app.closeModal()">' + t("action.close", "Fermer") + '</button>'
-      });
-      if (typeof lucide !== 'undefined') lucide.createIcons();
-      return;
-    }
-    showNotificationsPanel();
-  }
-
-  function showNotificationsPanel() {
-    authFetch(apiUrl("/notifications?limit=30")).then(function(res) {
-      if (res.ok) return res.json();
-      return { alerts: [] };
-    }).then(function(data) {
-      notificationsData.alerts = data.alerts || [];
-      notificationsData.unreadCount = data.unreadCount || 0;
-      updateNotificationBadge();
-      
-      var counts = data.counts || {};
-      var statsHtml = '<div class="notif-stats">' +
-        (counts.critical > 0 ? '<span class="notif-stat critical"><i data-lucide="alert-circle"></i> ' + counts.critical + '</span>' : '') +
-        (counts.high > 0 ? '<span class="notif-stat high"><i data-lucide="alert-triangle"></i> ' + counts.high + '</span>' : '') +
-        (counts.normal > 0 ? '<span class="notif-stat normal"><i data-lucide="info"></i> ' + counts.normal + '</span>' : '') +
-        '</div>';
-      
-      var alertsHtml;
-      if (!notificationsData.alerts.length) {
-        alertsHtml = '<div class="empty-state"><div class="empty-icon"><i data-lucide="bell-off"></i></div>' +
-          '<p>' + t("notifications.noAlerts", "Aucune alerte") + '</p>' +
-          '<p class="text-sm text-muted">' + t("notifications.allGood", "Tout va bien !") + '</p></div>';
-      } else {
-        alertsHtml = '<div class="notifications-list">' + notificationsData.alerts.map(function(a) {
-          var priorityClass = a.priority === 'critical' ? 'critical' : a.priority === 'high' ? 'high' : 'normal';
-          var icon = a.priority === 'critical' ? 'alert-circle' : a.priority === 'high' ? 'alert-triangle' : 'info';
-          return '<div class="notification-item ' + priorityClass + (a.read ? ' read' : '') + '" onclick="app.handleNotificationClick(\'' + a.id + '\',\'' + (a.productId || '') + '\')">' +
-            '<div class="notif-icon"><i data-lucide="' + icon + '"></i></div>' +
-            '<div class="notif-content"><div class="notif-title">' + esc(a.title || '') + '</div>' +
-            '<div class="notif-message">' + esc(a.message || '') + '</div></div>' +
-            '<button class="btn btn-ghost btn-xs notif-dismiss" onclick="event.stopPropagation();app.dismissNotification(\'' + a.id + '\')">' +
-            '<i data-lucide="x"></i></button></div>';
-        }).join('') + '</div>';
-      }
-      
-      showModal({
-        title: '<i data-lucide="bell"></i> ' + t("notifications.title", "Notifications"),
-        size: "md",
-        content: statsHtml + alertsHtml,
-        footer: '<div class="notif-footer-left"><button class="btn btn-ghost btn-sm" onclick="app.checkNotificationsNow()">' +
-          '<i data-lucide="refresh-cw"></i> ' + t("notifications.refresh", "Actualiser") + '</button></div>' +
-          '<div class="notif-footer-right">' +
-          (notificationsData.alerts.length > 0 ? '<button class="btn btn-ghost btn-sm" onclick="app.markAllNotificationsRead()">' + t("notifications.markAllRead", "Tout marquer lu") + '</button>' : '') +
-          '<button class="btn btn-secondary btn-sm" onclick="app.closeModal()">' + t("action.close", "Fermer") + '</button></div>'
-      });
-      if (typeof lucide !== 'undefined') lucide.createIcons();
-    }).catch(function() {
-      showToast(t("msg.error", "Erreur"), "error");
-    });
-  }
-
-  function handleNotificationClick(alertId, productId) {
-    authFetch(apiUrl("/notifications/" + alertId + "/read"), { method: "POST" }).catch(function() {});
-    closeModal();
-    if (productId) {
-      navigateTo("products");
-      setTimeout(function() { openProductDetails(productId); }, 300);
-    }
-    loadNotificationCount();
-  }
-
-  function dismissNotification(alertId) {
-    authFetch(apiUrl("/notifications/" + alertId + "/dismiss"), { method: "POST" }).then(function() {
-      notificationsData.alerts = notificationsData.alerts.filter(function(a) { return a.id !== alertId; });
-      notificationsData.unreadCount = Math.max(0, notificationsData.unreadCount - 1);
-      updateNotificationBadge();
-      showNotificationsPanel();
-    }).catch(function() {});
-  }
-
-  function markAllNotificationsRead() {
-    authFetch(apiUrl("/notifications/read-all"), { method: "POST" }).then(function() {
-      notificationsData.alerts.forEach(function(a) { a.read = true; });
-      notificationsData.unreadCount = 0;
-      updateNotificationBadge();
-      showToast(t("notifications.allMarkedRead", "Tout marqué comme lu"), "success");
-      showNotificationsPanel();
-    }).catch(function() {});
-  }
-
-  function checkNotificationsNow() {
-    showToast(t("notifications.checking", "Vérification..."), "info");
-    authFetch(apiUrl("/notifications/check"), { method: "POST" }).then(function(res) {
-      if (res.ok) return res.json();
-      return null;
-    }).then(function(data) {
-      if (data) {
-        showToast(t("notifications.checked", "Vérification terminée") + " - " + (data.newAlerts || 0) + " " + t("notifications.newAlerts", "nouvelle(s)"), "success");
-        showNotificationsPanel();
-      }
-    }).catch(function() {});
   }
 
   // ============================================
@@ -5598,18 +5321,8 @@
     // Profils
     selectProfile: selectProfile,
     showCreateProfileModal: showCreateProfileModal,
-    selectProfileColor: selectProfileColor,
     createProfile: createProfile,
-    showManageProfilesModal: showManageProfilesModal,
-    showEditProfileModal: showEditProfileModal,
-    updateProfile: updateProfile,
-    deleteProfile: deleteProfile,
-    // Notifications
-    showNotificationsPanel: showNotificationsPanel,
-    handleNotificationClick: handleNotificationClick,
-    dismissNotification: dismissNotification,
-    markAllNotificationsRead: markAllNotificationsRead,
-    checkNotificationsNow: checkNotificationsNow,
+    showProfileSelectionPopup: showProfileSelectionPopup,
     get state() {
       return state;
     },
