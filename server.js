@@ -11,6 +11,8 @@ const express = require("express");
 const path = require("path");
 const crypto = require("crypto");
 const fs = require("fs");
+const helmet = require("helmet");
+const rateLimit = require("express-rate-limit");
 
 // aÃ…â€œÃ¢â‚¬Â¦ OAuth token store (Render disk)
 const tokenStore = require("./utils/tokenStore");
@@ -152,6 +154,26 @@ const _oauthStateByShop = new Map();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// ✅ Security: Helmet (headers de sécurité)
+app.use(helmet({
+  contentSecurityPolicy: false, // On gère CSP manuellement pour Shopify embedded
+  crossOriginEmbedderPolicy: false,
+  crossOriginOpenerPolicy: false
+}));
+
+// ✅ Security: Rate limiting
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 200, // 200 requêtes par fenêtre
+  message: { error: "Trop de requêtes, réessayez dans quelques minutes" },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => {
+    // Ne pas limiter les webhooks Shopify
+    return req.path.startsWith("/webhooks/");
+  }
+});
 
 const ROOT_DIR = __dirname;
 const PUBLIC_DIR = path.join(ROOT_DIR, "public");
@@ -613,7 +635,10 @@ router.get("/api/public/config", (req, res) => {
   });
 });
 
-// aÃ…â€œÃ¢â‚¬Â¦ SECURE toutes les routes /api/*
+// ✅ Rate limiting sur toutes les routes /api/*
+router.use("/api", apiLimiter);
+
+// ✅ SECURE toutes les routes /api/*
 router.use("/api", requireApiAuth);
 
 // aÃ…â€œÃ¢â‚¬Â¦ DURCISSEMENT #1 (suite) : anti-spoof APRES auth
