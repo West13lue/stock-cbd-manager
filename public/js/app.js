@@ -265,6 +265,7 @@
         if (data && data.profiles) {
           window._userProfiles = data.profiles;
           window._activeProfile = data.profiles.find(function(p) { return p.id === data.activeProfileId; }) || data.profiles[0];
+          updateHeaderAvatar();
           if (data.profiles.length > 1) {
             var list = data.profiles.map(function(p) {
               var i = p.name ? (p.name.split(' ').length > 1 ? p.name.split(' ')[0][0] + p.name.split(' ')[1][0] : p.name.substring(0,2)).toUpperCase() : "?";
@@ -4226,10 +4227,20 @@
         window._activeProfile = data.profile;
         var idx = (window._userProfiles || []).findIndex(function(p) { return p.id === id; });
         if (idx >= 0) window._userProfiles[idx] = data.profile;
+        updateHeaderAvatar();
         closeModal();
         showToast(t("profiles.welcome", "Bienvenue") + ", " + data.profile.name + " !", "success");
       }
     }).catch(function() { showToast(t("msg.error", "Erreur"), "error"); });
+  }
+  
+  function updateHeaderAvatar() {
+    var pf = window._activeProfile || { name: "Admin", color: "#6366f1" };
+    var initials = pf.name ? (pf.name.split(' ').length > 1 ? pf.name.split(' ')[0][0] + pf.name.split(' ')[1][0] : pf.name.substring(0,2)).toUpperCase() : "AD";
+    var avatarBtn = document.querySelector('.user-avatar');
+    if (avatarBtn) {
+      avatarBtn.innerHTML = '<span style="background:' + (pf.color || '#6366f1') + ';width:100%;height:100%;display:flex;align-items:center;justify-content:center;border-radius:50%;font-weight:600;font-size:13px;color:#fff">' + initials + '</span>';
+    }
   }
   
   function showCreateProfileModal() {
