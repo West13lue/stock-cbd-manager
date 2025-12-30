@@ -2,9 +2,62 @@
 (function () {
   "use strict";
 
-  // Créer window.app immédiatement pour éviter les erreurs "app before initialization"
-  // Les fonctions seront définies plus tard
-  window.app = window.app || {};
+  // Queue pour stocker les appels avant que les fonctions soient prêtes
+  var pendingCalls = [];
+  var appReady = false;
+  
+  // Créer un proxy qui queue les appels si l'app n'est pas prête
+  function createProxy(fnName) {
+    return function() {
+      var args = Array.prototype.slice.call(arguments);
+      if (appReady && window.app._real && window.app._real[fnName]) {
+        return window.app._real[fnName].apply(null, args);
+      } else {
+        pendingCalls.push({ fn: fnName, args: args });
+      }
+    };
+  }
+  
+  // Liste des fonctions qui seront exposées
+  var fnNames = [
+    'init', 'navigateTo', 'toggleSidebar', 'toggleNotifications', 'toggleUserMenu',
+    'showModal', 'closeModal', 'showAddProductModal', 'showImportModal', 'doImport',
+    'showRestockModal', 'showAdjustModal', 'showUpgradeModal', 'showLockedModal',
+    'saveProduct', 'saveRestock', 'saveAdjust', 'syncShopify', 'upgradeTo',
+    'showToast', 'hasFeature', 'openProductDetails', 'showEditCMPModal', 'saveCMP',
+    'onSearchChange', 'onCategoryChange', 'onSortChange', 'showCategoriesModal',
+    'createCategory', 'deleteCategory', 'addSupplier', 'editSupplier', 'deleteSupplier',
+    'saveSupplier', 'selectMainTab', 'loadSupplierProducts', 'linkProductToSupplier',
+    'unlinkProduct', 'addOrder', 'showOrderDetails', 'updateOrderStatus', 'receiveOrder',
+    'deleteOrder', 'savePurchaseOrder', 'startTrial', 'showSuppliersModal', 'confirmDeleteSupplier',
+    'showForecast', 'showKitModal', 'assembleKit', 'disassembleKit', 'saveKit', 'deleteKit',
+    'showCreateBatchModal', 'createBatch', 'updateBatchStatus', 'showBatchDetails', 'adjustBatchQuantity',
+    'applyBatchFilters', 'deleteBatch', 'resetBatchFilters',
+    'loadInventorySessions', 'showCreateInventoryModal', 'createInventorySession',
+    'openInventorySession', 'backToInventoryList', 'updateInventoryCount',
+    'validateInventorySession', 'applyInventorySession', 'archiveInventorySession',
+    'updateSetting', 'updateNestedSetting', 'exportSettings', 'resetAllSettings',
+    'showLowStockModal', 'showOutOfStockModal', 'showQuickRestockModal', 'doQuickRestock',
+    'showQuickAdjustModal', 'doQuickAdjust', 'showScannerModal', 'stopScanner', 'searchBarcode',
+    'showKeyboardShortcutsHelp', 'closeTutorial', 'showAllTutorials', 'showSpecificTutorial', 'resetAllTutorials'
+  ];
+  
+  // Créer window.app avec des proxies pour toutes les fonctions
+  window.app = {};
+  fnNames.forEach(function(name) {
+    window.app[name] = createProxy(name);
+  });
+  
+  // Fonction pour marquer l'app comme prête et exécuter les appels en attente
+  function markAppReady() {
+    appReady = true;
+    pendingCalls.forEach(function(call) {
+      if (window.app._real && window.app._real[call.fn]) {
+        window.app._real[call.fn].apply(null, call.args);
+      }
+    });
+    pendingCalls = [];
+  }
 
   // Fonction de traduction locale (utilise I18N si disponible)
   function t(key, fallback) {
@@ -5694,8 +5747,8 @@
     }
   }
 
-  // Ajouter toutes les fonctions à window.app (déjà créé au début)
-  Object.assign(window.app, {
+  // Définir toutes les vraies fonctions
+  var realFunctions = {
     init: init,
     navigateTo: navigateTo,
     toggleSidebar: toggleSidebar,
@@ -5834,14 +5887,25 @@
     showAllTutorials: showAllTutorials,
     showSpecificTutorial: showSpecificTutorial,
     resetAllTutorials: resetAllTutorials,
+  };
+  
+  // Stocker les vraies fonctions
+  window.app._real = realFunctions;
+  
+  // Remplacer les proxies par les vraies fonctions
+  Object.keys(realFunctions).forEach(function(key) {
+    window.app[key] = realFunctions[key];
   });
   
   // Ajouter le getter state
   Object.defineProperty(window.app, 'state', {
     get: function() { return state; }
   });
+  
+  // Marquer l'app comme prête
+  markAppReady();
 
-  // Init - window.app est déjà défini au début du fichier
+  // Init
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", init);
   } else {
