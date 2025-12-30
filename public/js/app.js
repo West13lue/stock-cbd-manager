@@ -471,8 +471,8 @@
     // Refresh Lucide icons after rendering
     if (typeof lucide !== "undefined") lucide.createIcons();
     
-    // Afficher tutoriel si première visite de cet onglet
-    setTimeout(function() { showTabTutorialIfNeeded(tab); }, 300);
+    // Tutoriels désactivés temporairement - à réactiver une fois le bug corrigé
+    // setTimeout(function() { showTabTutorialIfNeeded(tab); }, 300);
   }
 
   // ============================================
