@@ -39,7 +39,10 @@
     'updateSetting', 'updateNestedSetting', 'exportSettings', 'resetAllSettings',
     'showLowStockModal', 'showOutOfStockModal', 'showQuickRestockModal', 'doQuickRestock',
     'showQuickAdjustModal', 'doQuickAdjust', 'showScannerModal', 'stopScanner', 'searchBarcode',
-    'showKeyboardShortcutsHelp', 'closeTutorial', 'showAllTutorials', 'showSpecificTutorial', 'resetAllTutorials'
+    'showKeyboardShortcutsHelp', 'closeTutorial', 'showAllTutorials', 'showSpecificTutorial', 'resetAllTutorials',
+    'loadNotifications', 'showNotificationsModal', 'markNotificationRead', 'dismissNotification', 'checkAlerts',
+    'loadProfiles', 'showProfilesModal', 'showCreateProfileModal', 'selectProfileColor', 'createProfile', 'switchProfile', 'deleteProfile',
+    'openSODetails', 'showReceivePOModal', 'receivePO', 'showLinkProductModal', 'linkProduct'
   ];
   
   // Créer window.app avec des proxies pour toutes les fonctions
@@ -524,8 +527,8 @@
     // Refresh Lucide icons after rendering
     if (typeof lucide !== "undefined") lucide.createIcons();
     
-    // Tutoriels désactivés temporairement - à réactiver une fois le bug corrigé
-    // setTimeout(function() { showTabTutorialIfNeeded(tab); }, 300);
+    // Afficher tutoriel si première visite de cet onglet
+    setTimeout(function() { showTabTutorialIfNeeded(tab); }, 500);
   }
 
   // ============================================
@@ -2832,6 +2835,164 @@
     }
   }
 
+  // Détails d'une commande de vente
+  async function openSODetails(orderId) {
+    try {
+      var res = await authFetch(apiUrl("/sales-orders/" + orderId));
+      if (!res.ok) throw new Error("Commande non trouvee");
+      var data = await res.json();
+      var so = data.order || data;
+      
+      var marginClass = (so.marginPercent || 0) >= 30 ? "success" : (so.marginPercent || 0) >= 15 ? "warning" : "danger";
+      
+      var linesHtml = (so.lines || []).map(function(line) {
+        var lineMarginClass = (line.marginPercent || 0) >= 30 ? "success" : (line.marginPercent || 0) >= 15 ? "" : "danger";
+        return '<tr>' +
+          '<td>' + esc(line.productName || line.productId) + '</td>' +
+          '<td>' + (line.quantity || 0) + '</td>' +
+          '<td>' + formatCurrency(line.unitPrice || 0) + '</td>' +
+          '<td>' + formatCurrency(line.lineTotal || 0) + '</td>' +
+          '<td>' + formatCurrency(line.unitCost || 0) + '</td>' +
+          '<td class="' + lineMarginClass + '">' + formatCurrency(line.margin || 0) + '</td>' +
+          '<td class="' + lineMarginClass + '">' + (line.marginPercent || 0) + '%</td>' +
+          '</tr>';
+      }).join('');
+      
+      showModal({
+        title: t("orders.soDetails", "Commande") + " " + (so.number || so.id),
+        size: "lg",
+        content:
+          '<div class="so-detail-header">' +
+          '<div><strong>' + t("orders.customer", "Client") + ':</strong> ' + esc(so.customerName || so.customerEmail || '-') + '</div>' +
+          '<div><span class="badge badge-' + (so.source === "shopify" ? "info" : "secondary") + '">' + (so.source || 'Manual') + '</span></div>' +
+          '</div>' +
+          '<div class="stats-grid stats-grid-4 mt-md">' +
+          '<div class="stat-card"><div class="stat-value">' + formatCurrency(so.total || 0) + '</div><div class="stat-label">' + t("orders.revenue", "CA") + '</div></div>' +
+          '<div class="stat-card"><div class="stat-value">' + formatCurrency(so.totalCost || 0) + '</div><div class="stat-label">' + t("orders.cost", "Cout") + '</div></div>' +
+          '<div class="stat-card stat-' + marginClass + '"><div class="stat-value">' + formatCurrency(so.grossMargin || 0) + '</div><div class="stat-label">' + t("orders.margin", "Marge") + '</div></div>' +
+          '<div class="stat-card stat-' + marginClass + '"><div class="stat-value">' + (so.marginPercent || 0) + '%</div><div class="stat-label">' + t("orders.marginPct", "Marge %") + '</div></div>' +
+          '</div>' +
+          '<table class="data-table data-table-compact mt-md"><thead><tr>' +
+          '<th>' + t("orders.product", "Produit") + '</th>' +
+          '<th>' + t("orders.qty", "Qte") + '</th>' +
+          '<th>' + t("orders.unitPrice", "Prix unit.") + '</th>' +
+          '<th>' + t("orders.lineTotal", "Total") + '</th>' +
+          '<th>' + t("orders.unitCost", "Cout unit.") + '</th>' +
+          '<th>' + t("orders.margin", "Marge") + '</th>' +
+          '<th>%</th>' +
+          '</tr></thead><tbody>' + linesHtml + '</tbody></table>' +
+          '<div class="text-secondary text-sm mt-md">' + t("orders.date", "Date") + ': ' + (so.createdAt || '').slice(0, 10) + '</div>',
+        footer: '<button class="btn btn-secondary" onclick="app.closeModal()">' + t("action.close", "Fermer") + '</button>'
+      });
+      
+      if (typeof lucide !== "undefined") lucide.createIcons();
+    } catch (e) {
+      showToast(t("msg.error", "Erreur") + ": " + e.message, "error");
+    }
+  }
+
+  // Modal pour recevoir une commande d'achat
+  function showReceivePOModal(poId) {
+    showModal({
+      title: t("orders.receivePO", "Recevoir la commande"),
+      size: "md",
+      content:
+        '<div class="form-group">' +
+        '<label>' + t("orders.receivedQtyNote", "Confirmez la reception des produits") + '</label>' +
+        '<p class="text-secondary text-sm">' + t("orders.receiveNote", "Le stock sera automatiquement mis a jour.") + '</p>' +
+        '</div>' +
+        '<div class="form-group">' +
+        '<label>' + t("orders.notes", "Notes (optionnel)") + '</label>' +
+        '<textarea id="receiveNotes" class="form-input" rows="2" placeholder="' + t("orders.notesPlaceholder", "Ex: Livraison partielle, produit manquant...") + '"></textarea>' +
+        '</div>',
+      footer:
+        '<button class="btn btn-secondary" onclick="app.closeModal()">' + t("action.cancel", "Annuler") + '</button>' +
+        '<button class="btn btn-primary" onclick="app.receivePO(\'' + poId + '\')">' + t("orders.confirmReceive", "Confirmer reception") + '</button>'
+    });
+  }
+
+  async function receivePO(poId) {
+    var notes = (document.getElementById("receiveNotes") || {}).value || "";
+    
+    try {
+      var res = await authFetch(apiUrl("/purchase-orders/" + poId + "/receive"), {
+        method: "POST",
+        body: JSON.stringify({ notes: notes })
+      });
+      
+      if (!res.ok) {
+        var err = await res.json().catch(function() { return {}; });
+        throw new Error(err.error || "Erreur reception");
+      }
+      
+      showToast(t("orders.received", "Commande recue"), "success");
+      closeModal();
+      loadPurchaseOrders();
+    } catch (e) {
+      showToast(t("msg.error", "Erreur") + ": " + e.message, "error");
+    }
+  }
+
+  // Modal pour lier un produit à un fournisseur
+  function showLinkProductModal(supplierId) {
+    var productOptions = (state.products || []).map(function(p) {
+      return '<option value="' + p.productId + '">' + esc(p.name) + '</option>';
+    }).join('');
+    
+    showModal({
+      title: t("suppliers.linkProduct", "Lier un produit"),
+      size: "sm",
+      content:
+        '<div class="form-group">' +
+        '<label>' + t("products.product", "Produit") + ' *</label>' +
+        '<select id="linkProductId" class="form-select"><option value="">-- ' + t("action.selectProduct", "Selectionner") + ' --</option>' + productOptions + '</select>' +
+        '</div>' +
+        '<div class="form-group">' +
+        '<label>' + t("suppliers.supplierPrice", "Prix fournisseur") + '</label>' +
+        '<input type="number" id="linkProductPrice" class="form-input" step="0.01" placeholder="0.00">' +
+        '</div>' +
+        '<div class="form-group">' +
+        '<label>' + t("suppliers.supplierSku", "Reference fournisseur") + '</label>' +
+        '<input type="text" id="linkProductSku" class="form-input" placeholder="SKU fournisseur">' +
+        '</div>',
+      footer:
+        '<button class="btn btn-secondary" onclick="app.closeModal()">' + t("action.cancel", "Annuler") + '</button>' +
+        '<button class="btn btn-primary" onclick="app.linkProduct(\'' + supplierId + '\')">' + t("action.save", "Enregistrer") + '</button>'
+    });
+  }
+
+  async function linkProduct(supplierId) {
+    var productId = document.getElementById("linkProductId").value;
+    var price = parseFloat(document.getElementById("linkProductPrice").value) || 0;
+    var sku = document.getElementById("linkProductSku").value || "";
+    
+    if (!productId) {
+      showToast(t("msg.selectProduct", "Selectionnez un produit"), "error");
+      return;
+    }
+    
+    try {
+      var res = await authFetch(apiUrl("/suppliers/" + supplierId + "/products"), {
+        method: "POST",
+        body: JSON.stringify({ productId: productId, price: price, supplierSku: sku })
+      });
+      
+      if (!res.ok) {
+        var err = await res.json().catch(function() { return {}; });
+        throw new Error(err.error || "Erreur");
+      }
+      
+      showToast(t("suppliers.productLinked", "Produit lie"), "success");
+      closeModal();
+      // Recharger les détails du fournisseur
+      if (typeof loadSupplierDetails === "function") {
+        loadSupplierDetails(supplierId);
+      }
+    } catch (e) {
+      showToast(t("msg.error", "Erreur") + ": " + e.message, "error");
+    }
+  }
+
   function onOrderStatusChange(status) {
     ordersFilters.status = status;
     loadPurchaseOrders();
@@ -3274,8 +3435,10 @@
         '<td class="' + marginClass + '">' + (kit.calculatedMarginPercent || 0).toFixed(1) + '%</td>' +
         '<td>' + (kit.maxProducible || 0) + '</td>' +
         '<td>' + statusBadge + '</td>' +
-        '<td onclick="event.stopPropagation()"><button class="btn btn-ghost btn-sm" onclick="app.showAssembleKitModal(\'' + kit.id + '\')"><i data-lucide="hammer"></i></button></td>' +
-        '</tr>';
+        '<td onclick="event.stopPropagation()" style="white-space:nowrap">' +
+        '<button class="btn btn-ghost btn-sm" onclick="app.showAssembleKitModal(\'' + kit.id + '\')" title="Assembler"><i data-lucide="hammer"></i></button>' +
+        '<button class="btn btn-ghost btn-sm text-danger" onclick="app.deleteKit(\'' + kit.id + '\')" title="Supprimer"><i data-lucide="trash-2"></i></button>' +
+        '</td></tr>';
     }).join("");
 
     container.innerHTML =
@@ -3378,7 +3541,8 @@
           '<div class="section-header mt-lg"><h3>Simulation</h3></div>' +
           '<div class="card-body"><div style="display:flex;gap:16px;align-items:center"><span>Si vendu</span><input type="number" class="form-input" id="simQty" value="1" style="width:80px" min="1"><span>fois</span>' +
           '<button class="btn btn-secondary" onclick="app.runKitSimulation(\'' + kit.id + '\')">Simuler</button></div><div id="simResults" class="mt-md"></div></div>',
-        footer: '<button class="btn btn-secondary" onclick="app.closeModal()">Fermer</button>' +
+        footer: '<button class="btn btn-ghost text-danger" onclick="app.deleteKit(\'' + kit.id + '\')"><i data-lucide="trash-2"></i> Supprimer</button>' +
+          '<button class="btn btn-secondary" onclick="app.closeModal()">Fermer</button>' +
           (kit.status === "draft" ? '<button class="btn btn-success" onclick="app.activateKit(\'' + kit.id + '\')">Activer</button>' : '') +
           '<button class="btn btn-primary" onclick="app.showAssembleKitModal(\'' + kit.id + '\')">Assembler</button>'
       });
@@ -4841,11 +5005,393 @@
     d.textContent = s;
     return d.innerHTML;
   }
+  
+  // ============================================
+  // NOTIFICATIONS
+  // ============================================
+  var notificationsData = [];
+  var notificationsCount = 0;
+  
   function toggleNotifications() {
-    showToast("Bientot", "info");
+    var dropdown = document.getElementById("notificationsDropdown");
+    if (dropdown) {
+      dropdown.classList.toggle("show");
+      if (dropdown.classList.contains("show")) {
+        loadNotifications();
+      }
+    } else {
+      showNotificationsModal();
+    }
   }
+  
+  async function loadNotifications() {
+    if (!hasFeature("hasNotifications")) {
+      showNotificationsLocked();
+      return;
+    }
+    
+    try {
+      var res = await authFetch(apiUrl("/notifications?limit=20"));
+      if (res.ok) {
+        var data = await res.json();
+        notificationsData = data.notifications || [];
+        notificationsCount = data.unreadCount || 0;
+        renderNotificationsDropdown();
+        updateNotificationBadge();
+      }
+    } catch (e) {
+      console.warn("[Notifications] Load error:", e);
+    }
+  }
+  
+  function renderNotificationsDropdown() {
+    var container = document.getElementById("notificationsContent");
+    if (!container) return;
+    
+    if (notificationsData.length === 0) {
+      container.innerHTML = '<div class="notifications-empty"><i data-lucide="bell-off"></i><p>' + t("notifications.noAlerts", "Aucune alerte") + '</p><span class="text-secondary">' + t("notifications.allGood", "Tout va bien !") + '</span></div>';
+      if (typeof lucide !== "undefined") lucide.createIcons();
+      return;
+    }
+    
+    var html = '<div class="notifications-list">';
+    notificationsData.forEach(function(n) {
+      var iconClass = n.priority === "high" ? "danger" : n.priority === "medium" ? "warning" : "info";
+      var icon = n.type === "low_stock" ? "package-x" : n.type === "expiry" ? "calendar-x" : "alert-circle";
+      html += '<div class="notification-item ' + (n.read ? '' : 'unread') + '" onclick="app.markNotificationRead(\'' + n.id + '\')">' +
+        '<div class="notification-icon ' + iconClass + '"><i data-lucide="' + icon + '"></i></div>' +
+        '<div class="notification-content">' +
+        '<div class="notification-title">' + esc(n.title || n.message) + '</div>' +
+        '<div class="notification-meta">' + formatRelativeDate(n.createdAt) + '</div>' +
+        '</div></div>';
+    });
+    html += '</div>';
+    
+    container.innerHTML = html;
+    if (typeof lucide !== "undefined") lucide.createIcons();
+  }
+  
+  function showNotificationsModal() {
+    if (!hasFeature("hasNotifications")) {
+      showNotificationsLocked();
+      return;
+    }
+    
+    showModal({
+      title: '<i data-lucide="bell"></i> ' + t("notifications.title", "Notifications"),
+      size: "md",
+      content: '<div id="notificationsModalContent"><div class="text-center py-lg"><div class="spinner"></div></div></div>',
+      footer: '<button class="btn btn-ghost" onclick="app.checkAlerts()">' + t("notifications.refresh", "Actualiser") + '</button><button class="btn btn-secondary" onclick="app.closeModal()">' + t("action.close", "Fermer") + '</button>'
+    });
+    if (typeof lucide !== "undefined") lucide.createIcons();
+    
+    loadNotificationsForModal();
+  }
+  
+  async function loadNotificationsForModal() {
+    try {
+      var res = await authFetch(apiUrl("/notifications?limit=50"));
+      var container = document.getElementById("notificationsModalContent");
+      if (!container) return;
+      
+      if (res.ok) {
+        var data = await res.json();
+        notificationsData = data.notifications || [];
+        
+        if (notificationsData.length === 0) {
+          container.innerHTML = '<div class="empty-state-small"><div class="empty-icon"><i data-lucide="bell-off"></i></div><p>' + t("notifications.noAlerts", "Aucune alerte") + '</p><span class="text-secondary">' + t("notifications.allGood", "Tout va bien !") + '</span></div>';
+        } else {
+          var html = '<div class="notifications-list notifications-list-modal">';
+          notificationsData.forEach(function(n) {
+            var iconClass = n.priority === "high" ? "danger" : n.priority === "medium" ? "warning" : "info";
+            var icon = n.type === "low_stock" ? "package-x" : n.type === "expiry" ? "calendar-x" : "alert-circle";
+            html += '<div class="notification-item ' + (n.read ? '' : 'unread') + '">' +
+              '<div class="notification-icon ' + iconClass + '"><i data-lucide="' + icon + '"></i></div>' +
+              '<div class="notification-content">' +
+              '<div class="notification-title">' + esc(n.title || n.message) + '</div>' +
+              '<div class="notification-message">' + esc(n.message || '') + '</div>' +
+              '<div class="notification-meta">' + formatRelativeDate(n.createdAt) + '</div>' +
+              '</div>' +
+              '<button class="btn btn-ghost btn-sm" onclick="app.dismissNotification(\'' + n.id + '\')"><i data-lucide="x"></i></button>' +
+              '</div>';
+          });
+          html += '</div>';
+          container.innerHTML = html;
+        }
+        if (typeof lucide !== "undefined") lucide.createIcons();
+      }
+    } catch (e) {
+      console.warn("[Notifications] Modal load error:", e);
+    }
+  }
+  
+  function showNotificationsLocked() {
+    showModal({
+      title: '<i data-lucide="bell"></i> ' + t("notifications.title", "Notifications"),
+      size: "sm",
+      content: '<div class="text-center py-lg"><div class="lock-icon"><i data-lucide="lock"></i></div><h3>' + t("msg.featureLocked", "Fonctionnalite PRO") + '</h3><p class="text-secondary">' + t("notifications.lockedDesc", "Les alertes sont disponibles avec le plan Pro.") + '</p></div>',
+      footer: '<button class="btn btn-secondary" onclick="app.closeModal()">' + t("action.close", "Fermer") + '</button><button class="btn btn-primary" onclick="app.showUpgradeModal()">' + t("plan.upgrade", "Passer a PRO") + '</button>'
+    });
+    if (typeof lucide !== "undefined") lucide.createIcons();
+  }
+  
+  function updateNotificationBadge() {
+    var badge = document.querySelector(".notification-badge");
+    if (badge) {
+      if (notificationsCount > 0) {
+        badge.textContent = notificationsCount > 99 ? "99+" : notificationsCount;
+        badge.style.display = "flex";
+      } else {
+        badge.style.display = "none";
+      }
+    }
+  }
+  
+  async function markNotificationRead(id) {
+    try {
+      await authFetch(apiUrl("/notifications/" + id + "/read"), { method: "POST" });
+      loadNotifications();
+    } catch (e) {}
+  }
+  
+  async function dismissNotification(id) {
+    try {
+      await authFetch(apiUrl("/notifications/" + id + "/dismiss"), { method: "POST" });
+      loadNotificationsForModal();
+      loadNotifications();
+    } catch (e) {}
+  }
+  
+  async function checkAlerts() {
+    try {
+      showToast(t("notifications.checking", "Verification des alertes..."), "info");
+      var res = await authFetch(apiUrl("/notifications/check"), { method: "POST" });
+      if (res.ok) {
+        var data = await res.json();
+        showToast(t("notifications.checked", "Alertes verifiees") + " - " + (data.newAlerts || 0) + " " + t("notifications.newAlerts", "nouvelles"), "success");
+        loadNotifications();
+        loadNotificationsForModal();
+      }
+    } catch (e) {
+      showToast(t("msg.error", "Erreur"), "error");
+    }
+  }
+  
+  // ============================================
+  // PROFILS UTILISATEURS
+  // ============================================
+  var profilesData = [];
+  var activeProfile = null;
+  
   function toggleUserMenu() {
-    showToast("Bientot", "info");
+    var dropdown = document.getElementById("userMenuDropdown");
+    if (dropdown) {
+      dropdown.classList.toggle("show");
+      if (dropdown.classList.contains("show")) {
+        loadProfiles();
+      }
+    } else {
+      showProfilesModal();
+    }
+  }
+  
+  async function loadProfiles() {
+    try {
+      var res = await authFetch(apiUrl("/profiles"));
+      if (res.ok) {
+        var data = await res.json();
+        profilesData = data.profiles || [];
+        activeProfile = profilesData.find(function(p) { return p.id === data.activeProfileId; }) || profilesData[0] || null;
+        renderUserMenuDropdown();
+        updateHeaderAvatar();
+      }
+    } catch (e) {
+      console.warn("[Profiles] Load error:", e);
+    }
+  }
+  
+  function renderUserMenuDropdown() {
+    var container = document.getElementById("userMenuContent");
+    if (!container) return;
+    
+    var html = '';
+    if (activeProfile) {
+      html += '<div class="user-menu-header"><div class="user-menu-avatar" style="background:' + (activeProfile.color || '#6366f1') + '">' + getInitials(activeProfile.name) + '</div>' +
+        '<div class="user-menu-info"><div class="user-menu-name">' + esc(activeProfile.name) + '</div><div class="user-menu-role">' + esc(activeProfile.role || 'user') + '</div></div></div>';
+    }
+    
+    html += '<div class="user-menu-divider"></div>';
+    html += '<div class="user-menu-section-title">' + t("profiles.switchProfile", "Changer de profil") + '</div>';
+    
+    profilesData.forEach(function(p) {
+      var isActive = activeProfile && p.id === activeProfile.id;
+      html += '<div class="user-menu-item ' + (isActive ? 'active' : '') + '" onclick="app.switchProfile(\'' + p.id + '\')">' +
+        '<div class="user-menu-item-avatar" style="background:' + (p.color || '#6366f1') + '">' + getInitials(p.name) + '</div>' +
+        '<span>' + esc(p.name) + '</span>' +
+        (isActive ? '<i data-lucide="check"></i>' : '') +
+        '</div>';
+    });
+    
+    html += '<div class="user-menu-divider"></div>';
+    html += '<div class="user-menu-item" onclick="app.showCreateProfileModal()"><i data-lucide="user-plus"></i> ' + t("profiles.createNew", "Nouveau profil") + '</div>';
+    
+    container.innerHTML = html;
+    if (typeof lucide !== "undefined") lucide.createIcons();
+  }
+  
+  function showProfilesModal() {
+    showModal({
+      title: '<i data-lucide="users"></i> ' + t("profiles.title", "Profils"),
+      size: "md",
+      content: '<div id="profilesModalContent"><div class="text-center py-lg"><div class="spinner"></div></div></div>',
+      footer: '<button class="btn btn-secondary" onclick="app.closeModal()">' + t("action.close", "Fermer") + '</button><button class="btn btn-primary" onclick="app.showCreateProfileModal()">' + t("profiles.createNew", "Nouveau profil") + '</button>'
+    });
+    if (typeof lucide !== "undefined") lucide.createIcons();
+    loadProfilesForModal();
+  }
+  
+  async function loadProfilesForModal() {
+    try {
+      var res = await authFetch(apiUrl("/profiles"));
+      var container = document.getElementById("profilesModalContent");
+      if (!container) return;
+      
+      if (res.ok) {
+        var data = await res.json();
+        profilesData = data.profiles || [];
+        activeProfile = profilesData.find(function(p) { return p.id === data.activeProfileId; }) || null;
+        
+        if (profilesData.length === 0) {
+          container.innerHTML = '<div class="empty-state-small"><p>' + t("profiles.noProfiles", "Aucun profil") + '</p></div>';
+        } else {
+          var html = '<div class="profiles-list">';
+          profilesData.forEach(function(p) {
+            var isActive = activeProfile && p.id === activeProfile.id;
+            html += '<div class="profile-item ' + (isActive ? 'active' : '') + '" onclick="app.switchProfile(\'' + p.id + '\')">' +
+              '<div class="profile-avatar" style="background:' + (p.color || '#6366f1') + '">' + getInitials(p.name) + '</div>' +
+              '<div class="profile-info"><div class="profile-name">' + esc(p.name) + '</div><div class="profile-role">' + esc(p.role || 'user') + '</div></div>' +
+              (isActive ? '<span class="badge badge-success">' + t("profiles.active", "Actif") + '</span>' : '') +
+              '<button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();app.deleteProfile(\'' + p.id + '\')"><i data-lucide="trash-2"></i></button>' +
+              '</div>';
+          });
+          html += '</div>';
+          container.innerHTML = html;
+        }
+        if (typeof lucide !== "undefined") lucide.createIcons();
+      }
+    } catch (e) {
+      console.warn("[Profiles] Modal load error:", e);
+    }
+  }
+  
+  function showCreateProfileModal() {
+    closeModal();
+    setTimeout(function() {
+      var colors = ['#6366f1', '#8b5cf6', '#ec4899', '#f43f5e', '#f97316', '#eab308', '#22c55e', '#14b8a6', '#0ea5e9', '#6b7280'];
+      var colorOptions = colors.map(function(c) {
+        return '<div class="color-option" style="background:' + c + '" onclick="app.selectProfileColor(\'' + c + '\')" data-color="' + c + '"></div>';
+      }).join('');
+      
+      showModal({
+        title: '<i data-lucide="user-plus"></i> ' + t("profiles.createProfile", "Creer un profil"),
+        size: "sm",
+        content: '<div class="form-group"><label>' + t("profiles.name", "Nom") + ' *</label><input type="text" id="profileName" class="form-input" placeholder="' + t("profiles.namePlaceholder", "Ex: Marie, Pierre...") + '"></div>' +
+          '<div class="form-group"><label>' + t("profiles.role", "Role") + '</label><select id="profileRole" class="form-select"><option value="user">' + t("profiles.roleUser", "Utilisateur") + '</option><option value="manager">' + t("profiles.roleManager", "Manager") + '</option><option value="admin">' + t("profiles.roleAdmin", "Administrateur") + '</option></select></div>' +
+          '<div class="form-group"><label>' + t("profiles.color", "Couleur") + '</label><div class="color-picker" id="colorPicker">' + colorOptions + '</div><input type="hidden" id="profileColor" value="#6366f1"></div>',
+        footer: '<button class="btn btn-secondary" onclick="app.closeModal()">' + t("action.cancel", "Annuler") + '</button><button class="btn btn-primary" onclick="app.createProfile()">' + t("action.create", "Creer") + '</button>'
+      });
+      if (typeof lucide !== "undefined") lucide.createIcons();
+      
+      // Select first color
+      var firstColor = document.querySelector('.color-option');
+      if (firstColor) firstColor.classList.add('selected');
+    }, 150);
+  }
+  
+  function selectProfileColor(color) {
+    document.querySelectorAll('.color-option').forEach(function(el) { el.classList.remove('selected'); });
+    document.querySelector('.color-option[data-color="' + color + '"]').classList.add('selected');
+    document.getElementById('profileColor').value = color;
+  }
+  
+  async function createProfile() {
+    var name = (document.getElementById('profileName').value || '').trim();
+    var role = document.getElementById('profileRole').value;
+    var color = document.getElementById('profileColor').value;
+    
+    if (!name) {
+      showToast(t("profiles.nameRequired", "Le nom est requis"), "error");
+      return;
+    }
+    
+    try {
+      var res = await authFetch(apiUrl("/profiles"), {
+        method: "POST",
+        body: JSON.stringify({ name: name, role: role, color: color })
+      });
+      
+      if (res.ok) {
+        showToast(t("profiles.created", "Profil cree"), "success");
+        closeModal();
+        loadProfiles();
+      } else {
+        var err = await res.json();
+        showToast(err.error || t("msg.error", "Erreur"), "error");
+      }
+    } catch (e) {
+      showToast(t("msg.error", "Erreur") + ": " + e.message, "error");
+    }
+  }
+  
+  async function switchProfile(profileId) {
+    try {
+      var res = await authFetch(apiUrl("/profiles/" + profileId + "/activate"), { method: "POST" });
+      if (res.ok) {
+        await loadProfiles();
+        showToast(t("profiles.switched", "Profil active"), "success");
+        
+        // Fermer les dropdowns
+        var dropdown = document.getElementById("userMenuDropdown");
+        if (dropdown) dropdown.classList.remove("show");
+      }
+    } catch (e) {
+      showToast(t("msg.error", "Erreur"), "error");
+    }
+  }
+  
+  async function deleteProfile(profileId) {
+    if (!confirm(t("profiles.confirmDelete", "Supprimer ce profil ?"))) return;
+    
+    try {
+      var res = await authFetch(apiUrl("/profiles/" + profileId), { method: "DELETE" });
+      if (res.ok) {
+        showToast(t("profiles.deleted", "Profil supprime"), "success");
+        loadProfiles();
+        loadProfilesForModal();
+      } else {
+        var err = await res.json();
+        showToast(err.error || t("msg.error", "Erreur"), "error");
+      }
+    } catch (e) {
+      showToast(t("msg.error", "Erreur"), "error");
+    }
+  }
+  
+  function getInitials(name) {
+    if (!name) return "?";
+    var parts = name.trim().split(/\s+/);
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
+    return name.substring(0, 2).toUpperCase();
+  }
+  
+  function updateHeaderAvatar() {
+    var avatarBtn = document.querySelector(".user-avatar");
+    if (avatarBtn && activeProfile) {
+      avatarBtn.style.background = activeProfile.color || '#6366f1';
+      avatarBtn.textContent = getInitials(activeProfile.name);
+    }
   }
 
   // ============================================
@@ -5176,19 +5722,19 @@
 
     // Afficher loading puis charger les donnees
     c.innerHTML =
-      '<div class="page-header"><div><h1 class="page-title"><i data-lucide="bar-chart-3"></i> Analytics PRO</h1><p class="page-subtitle">Ventes, marges et performance</p></div>' +
+      '<div class="page-header"><div><h1 class="page-title"><i data-lucide="bar-chart-3"></i> ' + t("analytics.title", "Analytics PRO") + '</h1><p class="page-subtitle">' + t("analytics.subtitle", "Ventes, marges et performance") + '</p></div>' +
       '<div class="page-actions">' +
       '<select class="form-select" id="analyticsPeriod" onchange="app.changeAnalyticsPeriod(this.value)">' +
-      '<option value="7"' + (analyticsPeriod === "7" ? " selected" : "") + '>7 derniers jours</option>' +
-      '<option value="30"' + (analyticsPeriod === "30" ? " selected" : "") + '>30 derniers jours</option>' +
-      '<option value="90"' + (analyticsPeriod === "90" ? " selected" : "") + '>90 derniers jours</option>' +
+      '<option value="7"' + (analyticsPeriod === "7" ? " selected" : "") + '>' + t("analytics.last7days", "7 derniers jours") + '</option>' +
+      '<option value="30"' + (analyticsPeriod === "30" ? " selected" : "") + '>' + t("analytics.last30days", "30 derniers jours") + '</option>' +
+      '<option value="90"' + (analyticsPeriod === "90" ? " selected" : "") + '>' + t("analytics.last90days", "90 derniers jours") + '</option>' +
       '</select>' +
       '<div class="analytics-tabs">' +
-      '<button class="tab-btn active" data-tab="sales" onclick="app.switchAnalyticsTab(\'sales\')">Ventes</button>' +
-      '<button class="tab-btn" data-tab="stock" onclick="app.switchAnalyticsTab(\'stock\')">Stock</button>' +
+      '<button class="tab-btn active" data-tab="sales" onclick="app.switchAnalyticsTab(\'sales\')">' + t("analytics.sales", "Ventes") + '</button>' +
+      '<button class="tab-btn" data-tab="stock" onclick="app.switchAnalyticsTab(\'stock\')">' + t("analytics.stock", "Stock") + '</button>' +
       '</div>' +
       '</div></div>' +
-      '<div id="analyticsContent"><div class="text-center" style="padding:60px"><div class="spinner"></div><p class="text-secondary mt-md">Chargement des analytics...</p></div></div>';
+      '<div id="analyticsContent"><div class="text-center" style="padding:60px"><div class="spinner"></div><p class="text-secondary mt-md">' + t("analytics.loading", "Chargement des analytics...") + '</p></div></div>';
 
     analyticsTab = "sales";
     loadAnalyticsSales();
@@ -5252,61 +5798,61 @@
     
     var kpiCards = 
       '<div class="analytics-kpis analytics-kpis-sales">' +
-      '<div class="kpi-card kpi-large"><div class="kpi-icon"><i data-lucide="trending-up"></i></div><div class="kpi-value">' + formatCurrency(k.totalRevenue || 0) + '</div><div class="kpi-label">Chiffre d\'affaires</div><div class="kpi-sub">' + (k.totalOrders || 0) + ' commandes</div></div>' +
-      '<div class="kpi-card kpi-large"><div class="kpi-icon"><i data-lucide="piggy-bank"></i></div><div class="kpi-value">' + formatCurrency(k.totalMargin || 0) + '</div><div class="kpi-label">Marge brute</div><div class="kpi-sub ' + marginClass + '">' + (k.marginPercent || 0) + '% de marge</div></div>' +
-      '<div class="kpi-card"><div class="kpi-value">' + formatCurrency(k.totalCost || 0) + '</div><div class="kpi-label">Cout des ventes</div></div>' +
-      '<div class="kpi-card"><div class="kpi-value">' + formatWeight(k.totalGramsSold || 0) + '</div><div class="kpi-label">Quantite vendue</div></div>' +
-      '<div class="kpi-card"><div class="kpi-value">' + formatCurrency(k.avgOrderValue || 0) + '</div><div class="kpi-label">Panier moyen</div></div>' +
-      '<div class="kpi-card"><div class="kpi-value">' + formatPricePerUnit(k.avgSellingPrice || 0) + '</div><div class="kpi-label">Prix vente moy.</div></div>' +
-      '<div class="kpi-card"><div class="kpi-value">' + formatPricePerUnit(k.avgCMP || 0) + '</div><div class="kpi-label">CMP moyen</div></div>' +
+      '<div class="kpi-card kpi-large"><div class="kpi-icon"><i data-lucide="trending-up"></i></div><div class="kpi-value">' + formatCurrency(k.totalRevenue || 0) + '</div><div class="kpi-label">' + t("analytics.revenue", "Chiffre d\'affaires") + '</div><div class="kpi-sub">' + (k.totalOrders || 0) + ' ' + t("analytics.orders", "commandes") + '</div></div>' +
+      '<div class="kpi-card kpi-large"><div class="kpi-icon"><i data-lucide="piggy-bank"></i></div><div class="kpi-value">' + formatCurrency(k.totalMargin || 0) + '</div><div class="kpi-label">' + t("analytics.grossMargin", "Marge brute") + '</div><div class="kpi-sub ' + marginClass + '">' + (k.marginPercent || 0) + '% ' + t("analytics.margin", "de marge") + '</div></div>' +
+      '<div class="kpi-card"><div class="kpi-value">' + formatCurrency(k.totalCost || 0) + '</div><div class="kpi-label">' + t("analytics.costOfSales", "Cout des ventes") + '</div></div>' +
+      '<div class="kpi-card"><div class="kpi-value">' + formatWeight(k.totalGramsSold || 0) + '</div><div class="kpi-label">' + t("analytics.quantitySold", "Quantite vendue") + '</div></div>' +
+      '<div class="kpi-card"><div class="kpi-value">' + formatCurrency(k.avgOrderValue || 0) + '</div><div class="kpi-label">' + t("analytics.avgBasket", "Panier moyen") + '</div></div>' +
+      '<div class="kpi-card"><div class="kpi-value">' + formatPricePerUnit(k.avgSellingPrice || 0) + '</div><div class="kpi-label">' + t("analytics.avgSellingPrice", "Prix vente moy.") + '</div></div>' +
+      '<div class="kpi-card"><div class="kpi-value">' + formatPricePerUnit(k.avgCMP || 0) + '</div><div class="kpi-label">' + t("analytics.avgCMP", "CMP moyen") + '</div></div>' +
       '</div>';
 
     // Top produits par CA
     var tops = d.topProducts || {};
-    var topRevenueHtml = '<div class="top-list"><h4><i data-lucide="trophy"></i> Top CA</h4>';
+    var topRevenueHtml = '<div class="top-list"><h4><i data-lucide="trophy"></i> ' + t("analytics.topRevenue", "Top CA") + '</h4>';
     (tops.byRevenue || []).forEach(function(p, i) {
       topRevenueHtml += '<div class="top-item"><span class="top-rank">' + (i + 1) + '</span><span class="top-name">' + esc(p.name) + '</span><span class="top-value">' + formatCurrency(p.revenue) + '</span></div>';
     });
-    if (!(tops.byRevenue || []).length) topRevenueHtml += '<p class="text-secondary text-sm">Aucune vente</p>';
+    if (!(tops.byRevenue || []).length) topRevenueHtml += '<p class="text-secondary text-sm">' + t("analytics.noSales", "Aucune vente") + '</p>';
     topRevenueHtml += '</div>';
 
     // Top produits par marge
-    var topMarginHtml = '<div class="top-list"><h4><i data-lucide="piggy-bank"></i> Top Marge EUR</h4>';
+    var topMarginHtml = '<div class="top-list"><h4><i data-lucide="piggy-bank"></i> ' + t("analytics.topMarginEur", "Top Marge EUR") + '</h4>';
     (tops.byMargin || []).forEach(function(p, i) {
       topMarginHtml += '<div class="top-item"><span class="top-rank success">' + (i + 1) + '</span><span class="top-name">' + esc(p.name) + '</span><span class="top-value success">' + formatCurrency(p.margin) + '</span></div>';
     });
-    if (!(tops.byMargin || []).length) topMarginHtml += '<p class="text-secondary text-sm">Aucune vente</p>';
+    if (!(tops.byMargin || []).length) topMarginHtml += '<p class="text-secondary text-sm">' + t("analytics.noSales", "Aucune vente") + '</p>';
     topMarginHtml += '</div>';
 
     // Top produits par marge %
-    var topMarginPctHtml = '<div class="top-list"><h4><i data-lucide="percent"></i> Top Marge %</h4>';
+    var topMarginPctHtml = '<div class="top-list"><h4><i data-lucide="percent"></i> ' + t("analytics.topMarginPct", "Top Marge %") + '</h4>';
     (tops.byMarginPercent || []).forEach(function(p, i) {
       topMarginPctHtml += '<div class="top-item"><span class="top-rank success">' + (i + 1) + '</span><span class="top-name">' + esc(p.name) + '</span><span class="top-value success">' + p.marginPercent + '%</span></div>';
     });
-    if (!(tops.byMarginPercent || []).length) topMarginPctHtml += '<p class="text-secondary text-sm">Pas assez de donnees</p>';
+    if (!(tops.byMarginPercent || []).length) topMarginPctHtml += '<p class="text-secondary text-sm">' + t("analytics.notEnoughData", "Pas assez de donnees") + '</p>';
     topMarginPctHtml += '</div>';
 
     // Top produits par volume
-    var topVolumeHtml = '<div class="top-list"><h4><i data-lucide="scale"></i> Top Volume</h4>';
+    var topVolumeHtml = '<div class="top-list"><h4><i data-lucide="scale"></i> ' + t("analytics.topVolume", "Top Volume") + '</h4>';
     (tops.byVolume || []).forEach(function(p, i) {
       topVolumeHtml += '<div class="top-item"><span class="top-rank">' + (i + 1) + '</span><span class="top-name">' + esc(p.name) + '</span><span class="top-value">' + formatWeight(p.gramsSold) + '</span></div>';
     });
-    if (!(tops.byVolume || []).length) topVolumeHtml += '<p class="text-secondary text-sm">Aucune vente</p>';
+    if (!(tops.byVolume || []).length) topVolumeHtml += '<p class="text-secondary text-sm">' + t("analytics.noSales", "Aucune vente") + '</p>';
     topVolumeHtml += '</div>';
 
     // Pires marges
-    var worstMarginHtml = '<div class="top-list"><h4><i data-lucide="alert-triangle"></i> A optimiser (marge faible)</h4>';
+    var worstMarginHtml = '<div class="top-list"><h4><i data-lucide="alert-triangle"></i> ' + t("analytics.toOptimize", "A optimiser (marge faible)") + '</h4>';
     (tops.worstMargin || []).forEach(function(p, i) {
       var badgeClass = p.marginPercent < 10 ? "danger" : "warning";
       worstMarginHtml += '<div class="top-item"><span class="top-rank ' + badgeClass + '">' + (i + 1) + '</span><span class="top-name">' + esc(p.name) + '</span><span class="top-value ' + badgeClass + '">' + p.marginPercent + '%</span></div>';
     });
-    if (!(tops.worstMargin || []).length) worstMarginHtml += '<p class="text-secondary text-sm">Tous vos produits ont une bonne marge!</p>';
+    if (!(tops.worstMargin || []).length) worstMarginHtml += '<p class="text-secondary text-sm">' + t("analytics.allGoodMargins", "Tous vos produits ont une bonne marge!") + '</p>';
     worstMarginHtml += '</div>';
 
     var topsSection = 
       '<div class="analytics-section">' +
       '<div class="section-header" onclick="app.toggleSection(\'topsales\')">' +
-      '<h3>Performance produits</h3><span class="section-toggle" id="toggle-topsales">-</span></div>' +
+      '<h3>' + t("analytics.productPerformance", "Performance produits") + '</h3><span class="section-toggle" id="toggle-topsales">-</span></div>' +
       '<div class="section-content" id="section-topsales">' +
       '<div class="tops-grid tops-grid-5">' + topRevenueHtml + topMarginHtml + topMarginPctHtml + topVolumeHtml + worstMarginHtml + '</div>' +
       '</div></div>';
@@ -5316,7 +5862,7 @@
     var products = d.products || [];
     if (products.length > 0) {
       productsHtml = '<table class="data-table"><thead><tr>' +
-        '<th>Produit</th><th>Qte vendue</th><th>CA</th><th>Cout</th><th>Marge</th><th>Marge %</th><th>Action</th>' +
+        '<th>' + t("analytics.product", "Produit") + '</th><th>' + t("analytics.qtySold", "Qte vendue") + '</th><th>' + t("analytics.revenueShort", "CA") + '</th><th>' + t("analytics.cost", "Cout") + '</th><th>' + t("analytics.marginShort", "Marge") + '</th><th>' + t("analytics.marginPct", "Marge %") + '</th><th>' + t("analytics.action", "Action") + '</th>' +
         '</tr></thead><tbody>';
       products.slice(0, 20).forEach(function(p) {
         var marginClass = p.marginPercent >= 30 ? "success" : p.marginPercent >= 15 ? "" : "danger";
@@ -5327,21 +5873,21 @@
           '<td>' + formatCurrency(p.cost) + '</td>' +
           '<td class="' + marginClass + '">' + formatCurrency(p.margin) + '</td>' +
           '<td class="' + marginClass + '">' + p.marginPercent + '%</td>' +
-          '<td>' + (p.marginPercent < 15 ? '<button class="btn btn-ghost btn-xs" onclick="app.showToast(\'Augmentez le prix ou reduisez le CMP\',\'info\')">Optimiser</button>' : '') + '</td>' +
+          '<td>' + (p.marginPercent < 15 ? '<button class="btn btn-ghost btn-xs" onclick="app.showToast(\'' + t("analytics.optimizeTip", "Augmentez le prix ou reduisez le CMP") + '\',\'info\')">' + t("analytics.optimize", "Optimiser") + '</button>' : '') + '</td>' +
           '</tr>';
       });
       productsHtml += '</tbody></table>';
       if (products.length > 20) {
-        productsHtml += '<p class="text-secondary text-sm mt-sm">' + (products.length - 20) + ' autres produits...</p>';
+        productsHtml += '<p class="text-secondary text-sm mt-sm">' + (products.length - 20) + ' ' + t("analytics.moreProducts", "autres produits...") + '</p>';
       }
     } else {
-      productsHtml = '<div class="empty-state-small"><p class="text-secondary">Aucune vente sur cette periode</p></div>';
+      productsHtml = '<div class="empty-state-small"><p class="text-secondary">' + t("analytics.noSalesThisPeriod", "Aucune vente sur cette periode") + '</p></div>';
     }
 
     var productsSection = 
       '<div class="analytics-section">' +
       '<div class="section-header" onclick="app.toggleSection(\'soldproducts\')">' +
-      '<h3>Detail des ventes par produit</h3><span class="section-toggle" id="toggle-soldproducts">-</span></div>' +
+      '<h3>' + t("analytics.salesDetail", "Detail des ventes par produit") + '</h3><span class="section-toggle" id="toggle-soldproducts">-</span></div>' +
       '<div class="section-content" id="section-soldproducts">' + productsHtml + '</div></div>';
 
     // Assembler
@@ -5374,7 +5920,14 @@
 
   function changeAnalyticsPeriod(period) {
     analyticsPeriod = period;
-    loadAnalytics();
+    // Recharger selon l'onglet actif
+    if (analyticsTab === "sales") {
+      analyticsSalesData = null; // Forcer le rechargement
+      loadAnalyticsSales();
+    } else {
+      analyticsData = null; // Forcer le rechargement
+      loadAnalytics();
+    }
   }
 
   function renderAnalyticsContent() {
@@ -5887,6 +6440,26 @@
     showAllTutorials: showAllTutorials,
     showSpecificTutorial: showSpecificTutorial,
     resetAllTutorials: resetAllTutorials,
+    // Notifications
+    loadNotifications: loadNotifications,
+    showNotificationsModal: showNotificationsModal,
+    markNotificationRead: markNotificationRead,
+    dismissNotification: dismissNotification,
+    checkAlerts: checkAlerts,
+    // Profils
+    loadProfiles: loadProfiles,
+    showProfilesModal: showProfilesModal,
+    showCreateProfileModal: showCreateProfileModal,
+    selectProfileColor: selectProfileColor,
+    createProfile: createProfile,
+    switchProfile: switchProfile,
+    deleteProfile: deleteProfile,
+    // Orders
+    openSODetails: openSODetails,
+    showReceivePOModal: showReceivePOModal,
+    receivePO: receivePO,
+    showLinkProductModal: showLinkProductModal,
+    linkProduct: linkProduct,
   };
   
   // Stocker les vraies fonctions
