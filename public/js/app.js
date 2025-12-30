@@ -2,6 +2,10 @@
 (function () {
   "use strict";
 
+  // Créer window.app immédiatement pour éviter les erreurs "app before initialization"
+  // Les fonctions seront définies plus tard
+  window.app = window.app || {};
+
   // Fonction de traduction locale (utilise I18N si disponible)
   function t(key, fallback) {
     if (typeof I18N !== "undefined" && I18N.t) {
@@ -5690,7 +5694,8 @@
     }
   }
 
-  window.app = {
+  // Ajouter toutes les fonctions à window.app (déjà créé au début)
+  Object.assign(window.app, {
     init: init,
     navigateTo: navigateTo,
     toggleSidebar: toggleSidebar,
@@ -5829,18 +5834,17 @@
     showAllTutorials: showAllTutorials,
     showSpecificTutorial: showSpecificTutorial,
     resetAllTutorials: resetAllTutorials,
-    get state() {
-      return state;
-    },
-  };
+  });
+  
+  // Ajouter le getter state
+  Object.defineProperty(window.app, 'state', {
+    get: function() { return state; }
+  });
 
-  // Init après que window.app soit défini
+  // Init - window.app est déjà défini au début du fichier
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", function() {
-      init();
-    });
+    document.addEventListener("DOMContentLoaded", init);
   } else {
-    // Petit délai pour s'assurer que tout est prêt
-    setTimeout(init, 10);
+    init();
   }
 })();
