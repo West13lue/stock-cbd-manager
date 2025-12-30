@@ -493,111 +493,118 @@
     showToast(t("tutorial.reset", "Tutoriels réinitialisés"), "success");
   }
 
-  // Définition des tutoriels par onglet
-  var tabTutorials = {
-    dashboard: {
-      title: t("tutorial.dashboard.title", "Bienvenue sur le Dashboard !"),
-      icon: "layout-dashboard",
-      steps: [
-        { icon: "boxes", text: t("tutorial.dashboard.step1", "Visualisez vos statistiques clés : nombre de produits, stock total et valeur.") },
-        { icon: "alert-triangle", text: t("tutorial.dashboard.step2", "Les alertes vous signalent les produits en stock bas ou en rupture.") },
-        { icon: "zap", text: t("tutorial.dashboard.step3", "Utilisez les actions rapides pour réappro, scanner ou ajuster le stock.") },
-        { icon: "activity", text: t("tutorial.dashboard.step4", "Les mouvements récents montrent l'activité de votre stock.") }
-      ],
-      tip: t("tutorial.dashboard.tip", "Astuce : Appuyez sur ? pour voir tous les raccourcis clavier !")
-    },
-    products: {
-      title: t("tutorial.products.title", "Gestion des Produits"),
-      icon: "boxes",
-      steps: [
-        { icon: "search", text: t("tutorial.products.step1", "Recherchez vos produits par nom, SKU ou code-barres.") },
-        { icon: "filter", text: t("tutorial.products.step2", "Filtrez par catégorie et triez selon vos besoins.") },
-        { icon: "scan-barcode", text: t("tutorial.products.step3", "Utilisez le scanner pour trouver un produit rapidement.") },
-        { icon: "mouse-pointer-click", text: t("tutorial.products.step4", "Cliquez sur un produit pour voir ses détails et ajuster le stock.") }
-      ],
-      tip: t("tutorial.products.tip", "Astuce : Raccourci N pour ajouter un produit, R pour réappro rapide !")
-    },
-    batches: {
-      title: t("tutorial.batches.title", "Lots et DLC"),
-      icon: "tags",
-      steps: [
-        { icon: "calendar", text: t("tutorial.batches.step1", "Gérez les dates de péremption de vos produits.") },
-        { icon: "alert-circle", text: t("tutorial.batches.step2", "Recevez des alertes pour les lots qui arrivent à expiration.") },
-        { icon: "package", text: t("tutorial.batches.step3", "Suivez la traçabilité de chaque lot entrant.") }
-      ],
-      tip: t("tutorial.batches.tip", "Astuce : Les lots expirés sont automatiquement signalés en rouge.")
-    },
-    suppliers: {
-      title: t("tutorial.suppliers.title", "Gestion Fournisseurs"),
-      icon: "factory",
-      steps: [
-        { icon: "users", text: t("tutorial.suppliers.step1", "Centralisez les informations de vos fournisseurs.") },
-        { icon: "phone", text: t("tutorial.suppliers.step2", "Gardez leurs contacts et conditions à portée de main.") },
-        { icon: "link", text: t("tutorial.suppliers.step3", "Associez les produits à leurs fournisseurs pour un suivi optimal.") }
-      ],
-      tip: t("tutorial.suppliers.tip", "Astuce : Ajoutez les délais de livraison pour anticiper vos commandes.")
-    },
-    orders: {
-      title: t("tutorial.orders.title", "Commandes"),
-      icon: "clipboard-list",
-      steps: [
-        { icon: "shopping-cart", text: t("tutorial.orders.step1", "Créez des bons de commande vers vos fournisseurs.") },
-        { icon: "truck", text: t("tutorial.orders.step2", "Suivez l'état de vos commandes en cours.") },
-        { icon: "check-circle", text: t("tutorial.orders.step3", "Réceptionnez les commandes pour mettre à jour le stock automatiquement.") }
-      ],
-      tip: t("tutorial.orders.tip", "Astuce : Importez vos commandes Shopify pour un suivi complet.")
-    },
-    forecast: {
-      title: t("tutorial.forecast.title", "Prévisions"),
-      icon: "trending-up",
-      steps: [
-        { icon: "bar-chart", text: t("tutorial.forecast.step1", "Analysez les tendances de ventes de vos produits.") },
-        { icon: "calendar", text: t("tutorial.forecast.step2", "Anticipez les ruptures grâce aux prévisions.") },
-        { icon: "shopping-bag", text: t("tutorial.forecast.step3", "Recevez des suggestions de réapprovisionnement.") }
-      ],
-      tip: t("tutorial.forecast.tip", "Astuce : Plus vous avez d'historique, plus les prévisions sont précises.")
-    },
-    kits: {
-      title: t("tutorial.kits.title", "Kits et Bundles"),
-      icon: "puzzle",
-      steps: [
-        { icon: "package", text: t("tutorial.kits.step1", "Créez des kits composés de plusieurs produits.") },
-        { icon: "layers", text: t("tutorial.kits.step2", "Le stock des composants est automatiquement déduit.") },
-        { icon: "calculator", text: t("tutorial.kits.step3", "Simulez l'assemblage avant de valider.") }
-      ],
-      tip: t("tutorial.kits.tip", "Astuce : Utilisez les kits pour vos coffrets cadeaux ou packs promo.")
-    },
-    analytics: {
-      title: t("tutorial.analytics.title", "Analytics"),
-      icon: "bar-chart-3",
-      steps: [
-        { icon: "pie-chart", text: t("tutorial.analytics.step1", "Visualisez la répartition de votre stock par catégorie.") },
-        { icon: "trending-up", text: t("tutorial.analytics.step2", "Suivez l'évolution de la valeur de votre inventaire.") },
-        { icon: "activity", text: t("tutorial.analytics.step3", "Analysez les mouvements pour optimiser votre gestion.") }
-      ],
-      tip: t("tutorial.analytics.tip", "Astuce : Exportez vos rapports en PDF ou Excel.")
-    },
-    inventory: {
-      title: t("tutorial.inventory.title", "Inventaire"),
-      icon: "clipboard-check",
-      steps: [
-        { icon: "list-checks", text: t("tutorial.inventory.step1", "Créez des sessions d'inventaire complet ou partiel.") },
-        { icon: "scan-barcode", text: t("tutorial.inventory.step2", "Utilisez le scanner pour compter plus rapidement.") },
-        { icon: "git-compare", text: t("tutorial.inventory.step3", "Comparez le stock théorique vs réel et validez les écarts.") }
-      ],
-      tip: t("tutorial.inventory.tip", "Astuce : Planifiez des inventaires réguliers pour une meilleure précision.")
-    },
-    settings: {
-      title: t("tutorial.settings.title", "Paramètres"),
-      icon: "settings",
-      steps: [
-        { icon: "globe", text: t("tutorial.settings.step1", "Configurez la langue et les unités de mesure.") },
-        { icon: "bell", text: t("tutorial.settings.step2", "Personnalisez vos seuils d'alerte de stock.") },
-        { icon: "palette", text: t("tutorial.settings.step3", "Adaptez l'interface à vos préférences.") }
-      ],
-      tip: t("tutorial.settings.tip", "Astuce : Sauvegardez vos paramètres pour les restaurer facilement.")
-    }
-  };
+  // Définition des tutoriels par onglet (fonction pour éviter appel t() au chargement)
+  function getTabTutorial(tab) {
+    var tutorials = {
+      dashboard: {
+        title: t("tutorial.dashboard.title", "Bienvenue sur le Dashboard !"),
+        icon: "layout-dashboard",
+        steps: [
+          { icon: "boxes", text: t("tutorial.dashboard.step1", "Visualisez vos statistiques clés : nombre de produits, stock total et valeur.") },
+          { icon: "alert-triangle", text: t("tutorial.dashboard.step2", "Les alertes vous signalent les produits en stock bas ou en rupture.") },
+          { icon: "zap", text: t("tutorial.dashboard.step3", "Utilisez les actions rapides pour réappro, scanner ou ajuster le stock.") },
+          { icon: "activity", text: t("tutorial.dashboard.step4", "Les mouvements récents montrent l'activité de votre stock.") }
+        ],
+        tip: t("tutorial.dashboard.tip", "Astuce : Appuyez sur ? pour voir tous les raccourcis clavier !")
+      },
+      products: {
+        title: t("tutorial.products.title", "Gestion des Produits"),
+        icon: "boxes",
+        steps: [
+          { icon: "search", text: t("tutorial.products.step1", "Recherchez vos produits par nom, SKU ou code-barres.") },
+          { icon: "filter", text: t("tutorial.products.step2", "Filtrez par catégorie et triez selon vos besoins.") },
+          { icon: "scan-barcode", text: t("tutorial.products.step3", "Utilisez le scanner pour trouver un produit rapidement.") },
+          { icon: "mouse-pointer-click", text: t("tutorial.products.step4", "Cliquez sur un produit pour voir ses détails et ajuster le stock.") }
+        ],
+        tip: t("tutorial.products.tip", "Astuce : Raccourci N pour ajouter un produit, R pour réappro rapide !")
+      },
+      batches: {
+        title: t("tutorial.batches.title", "Lots et DLC"),
+        icon: "tags",
+        steps: [
+          { icon: "calendar", text: t("tutorial.batches.step1", "Gérez les dates de péremption de vos produits.") },
+          { icon: "alert-circle", text: t("tutorial.batches.step2", "Recevez des alertes pour les lots qui arrivent à expiration.") },
+          { icon: "package", text: t("tutorial.batches.step3", "Suivez la traçabilité de chaque lot entrant.") }
+        ],
+        tip: t("tutorial.batches.tip", "Astuce : Les lots expirés sont automatiquement signalés en rouge.")
+      },
+      suppliers: {
+        title: t("tutorial.suppliers.title", "Gestion Fournisseurs"),
+        icon: "factory",
+        steps: [
+          { icon: "users", text: t("tutorial.suppliers.step1", "Centralisez les informations de vos fournisseurs.") },
+          { icon: "phone", text: t("tutorial.suppliers.step2", "Gardez leurs contacts et conditions à portée de main.") },
+          { icon: "link", text: t("tutorial.suppliers.step3", "Associez les produits à leurs fournisseurs pour un suivi optimal.") }
+        ],
+        tip: t("tutorial.suppliers.tip", "Astuce : Ajoutez les délais de livraison pour anticiper vos commandes.")
+      },
+      orders: {
+        title: t("tutorial.orders.title", "Commandes"),
+        icon: "clipboard-list",
+        steps: [
+          { icon: "shopping-cart", text: t("tutorial.orders.step1", "Créez des bons de commande vers vos fournisseurs.") },
+          { icon: "truck", text: t("tutorial.orders.step2", "Suivez l'état de vos commandes en cours.") },
+          { icon: "check-circle", text: t("tutorial.orders.step3", "Réceptionnez les commandes pour mettre à jour le stock automatiquement.") }
+        ],
+        tip: t("tutorial.orders.tip", "Astuce : Importez vos commandes Shopify pour un suivi complet.")
+      },
+      forecast: {
+        title: t("tutorial.forecast.title", "Prévisions"),
+        icon: "trending-up",
+        steps: [
+          { icon: "bar-chart", text: t("tutorial.forecast.step1", "Analysez les tendances de ventes de vos produits.") },
+          { icon: "calendar", text: t("tutorial.forecast.step2", "Anticipez les ruptures grâce aux prévisions.") },
+          { icon: "shopping-bag", text: t("tutorial.forecast.step3", "Recevez des suggestions de réapprovisionnement.") }
+        ],
+        tip: t("tutorial.forecast.tip", "Astuce : Plus vous avez d'historique, plus les prévisions sont précises.")
+      },
+      kits: {
+        title: t("tutorial.kits.title", "Kits et Bundles"),
+        icon: "puzzle",
+        steps: [
+          { icon: "package", text: t("tutorial.kits.step1", "Créez des kits composés de plusieurs produits.") },
+          { icon: "layers", text: t("tutorial.kits.step2", "Le stock des composants est automatiquement déduit.") },
+          { icon: "calculator", text: t("tutorial.kits.step3", "Simulez l'assemblage avant de valider.") }
+        ],
+        tip: t("tutorial.kits.tip", "Astuce : Utilisez les kits pour vos coffrets cadeaux ou packs promo.")
+      },
+      analytics: {
+        title: t("tutorial.analytics.title", "Analytics"),
+        icon: "bar-chart-3",
+        steps: [
+          { icon: "pie-chart", text: t("tutorial.analytics.step1", "Visualisez la répartition de votre stock par catégorie.") },
+          { icon: "trending-up", text: t("tutorial.analytics.step2", "Suivez l'évolution de la valeur de votre inventaire.") },
+          { icon: "activity", text: t("tutorial.analytics.step3", "Analysez les mouvements pour optimiser votre gestion.") }
+        ],
+        tip: t("tutorial.analytics.tip", "Astuce : Exportez vos rapports en PDF ou Excel.")
+      },
+      inventory: {
+        title: t("tutorial.inventory.title", "Inventaire"),
+        icon: "clipboard-check",
+        steps: [
+          { icon: "list-checks", text: t("tutorial.inventory.step1", "Créez des sessions d'inventaire complet ou partiel.") },
+          { icon: "scan-barcode", text: t("tutorial.inventory.step2", "Utilisez le scanner pour compter plus rapidement.") },
+          { icon: "git-compare", text: t("tutorial.inventory.step3", "Comparez le stock théorique vs réel et validez les écarts.") }
+        ],
+        tip: t("tutorial.inventory.tip", "Astuce : Planifiez des inventaires réguliers pour une meilleure précision.")
+      },
+      settings: {
+        title: t("tutorial.settings.title", "Paramètres"),
+        icon: "settings",
+        steps: [
+          { icon: "globe", text: t("tutorial.settings.step1", "Configurez la langue et les unités de mesure.") },
+          { icon: "bell", text: t("tutorial.settings.step2", "Personnalisez vos seuils d'alerte de stock.") },
+          { icon: "palette", text: t("tutorial.settings.step3", "Adaptez l'interface à vos préférences.") }
+        ],
+        tip: t("tutorial.settings.tip", "Astuce : Sauvegardez vos paramètres pour les restaurer facilement.")
+      }
+    };
+    return tutorials[tab] || null;
+  }
+  
+  function getAllTabTutorials() {
+    return ["dashboard", "products", "batches", "suppliers", "orders", "forecast", "kits", "analytics", "inventory", "settings"];
+  }
 
   function showTabTutorialIfNeeded(tab) {
     loadTutorialState();
@@ -606,7 +613,7 @@
     if (tutorialsSeen[tab]) return;
     
     // Ne pas afficher si pas de tutoriel défini
-    var tutorial = tabTutorials[tab];
+    var tutorial = getTabTutorial(tab);
     if (!tutorial) return;
     
     // Afficher le tutoriel
@@ -651,9 +658,9 @@
   }
 
   function showAllTutorials() {
-    var tabs = Object.keys(tabTutorials);
+    var tabs = getAllTabTutorials();
     var listHtml = tabs.map(function(tab) {
-      var tutorial = tabTutorials[tab];
+      var tutorial = getTabTutorial(tab);
       var seen = tutorialsSeen[tab];
       return '<div class="tutorial-list-item" onclick="app.showSpecificTutorial(\'' + tab + '\')">' +
         '<div class="tutorial-list-icon"><i data-lucide="' + tutorial.icon + '"></i></div>' +
@@ -677,7 +684,7 @@
   }
 
   function showSpecificTutorial(tab) {
-    var tutorial = tabTutorials[tab];
+    var tutorial = getTabTutorial(tab);
     if (tutorial) {
       closeModal();
       setTimeout(function() { showTutorialModal(tab, tutorial); }, 100);
