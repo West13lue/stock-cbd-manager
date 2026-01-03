@@ -1101,6 +1101,14 @@
     
     if (!video || !status) return;
     
+    // Vérifier si dans une iframe (Shopify Admin)
+    var inIframe = false;
+    try {
+      inIframe = window.self !== window.top;
+    } catch (e) {
+      inIframe = true;
+    }
+    
     // Vérifier si HTTPS ou localhost
     var isSecure = location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1';
     if (!isSecure) {
@@ -1162,20 +1170,36 @@
         }
       })
       .catch(function(err) {
-        console.error("[Scanner] Camera error:", err);
+        console.error("[Scanner] Camera error:", err.name, err.message);
         var errorMsg = t("scanner.cameraError", "Erreur caméra");
+        var showOpenInNewTab = false;
         
         if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-          errorMsg = t("scanner.permissionDenied", "Accès caméra refusé. Autorisez l'accès dans les paramètres de votre navigateur.");
+          // Vérifier si c'est un problème d'iframe
+          if (inIframe || err.message.includes('not allowed by the user agent') || err.message.includes('platform')) {
+            errorMsg = t("scanner.iframeBlocked", "La caméra est bloquée dans ce contexte. Ouvrez l'app dans un nouvel onglet.");
+            showOpenInNewTab = true;
+          } else {
+            errorMsg = t("scanner.permissionDenied", "Accès caméra refusé. Autorisez l'accès dans les paramètres.");
+          }
         } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
           errorMsg = t("scanner.noCameraFound", "Aucune caméra détectée sur cet appareil.");
         } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
           errorMsg = t("scanner.cameraInUse", "La caméra est utilisée par une autre application.");
+        } else if (err.name === 'SecurityError') {
+          errorMsg = t("scanner.securityError", "Accès caméra bloqué par les paramètres de sécurité.");
+          showOpenInNewTab = true;
         }
         
-        status.innerHTML = '<span class="text-danger"><i data-lucide="x-circle"></i> ' + errorMsg + '</span>' +
-          '<br><button class="btn btn-sm btn-secondary mt-sm" onclick="app.startCamera()">' + 
+        var buttonsHtml = '<br><button class="btn btn-sm btn-secondary mt-sm" onclick="app.startCamera()">' + 
           '<i data-lucide="refresh-cw"></i> ' + t("action.retry", "Réessayer") + '</button>';
+        
+        if (showOpenInNewTab) {
+          buttonsHtml += ' <button class="btn btn-sm btn-primary mt-sm" onclick="window.open(location.href, \'_blank\')">' + 
+            '<i data-lucide="external-link"></i> ' + t("scanner.openNewTab", "Ouvrir dans un nouvel onglet") + '</button>';
+        }
+        
+        status.innerHTML = '<span class="text-danger"><i data-lucide="x-circle"></i> ' + errorMsg + '</span>' + buttonsHtml;
         if (typeof lucide !== "undefined") lucide.createIcons();
       });
   }
@@ -1484,6 +1508,37 @@
     
     var options = { weekday: 'long', day: 'numeric', month: 'long' };
     return date.toLocaleDateString(undefined, options);
+  }
+
+  function formatDate(dateStr) {
+    if (!dateStr) return '';
+    var date = new Date(dateStr);
+    if (isNaN(date.getTime())) return dateStr;
+    
+    // Utiliser le format selon la langue
+    var lang = "fr";
+    if (settingsData && settingsData.general && settingsData.general.language) {
+      lang = settingsData.general.language;
+    }
+    
+    var localeMap = {
+      fr: "fr-FR",
+      en: "en-US",
+      de: "de-DE",
+      es: "es-ES",
+      it: "it-IT"
+    };
+    var locale = localeMap[lang] || "fr-FR";
+    
+    try {
+      return date.toLocaleDateString(locale, { 
+        day: '2-digit', 
+        month: '2-digit', 
+        year: 'numeric' 
+      });
+    } catch (e) {
+      return date.toLocaleDateString();
+    }
   }
 
   function getMovementIcon(type) {

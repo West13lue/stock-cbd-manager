@@ -590,6 +590,9 @@ var I18N = {
       "scanner.cameraInUse": "La caméra est utilisée par une autre application.",
       "scanner.tapToStart": "Touchez la vidéo pour démarrer",
       "scanner.productFound": "Produit trouvé!",
+      "scanner.iframeBlocked": "La caméra est bloquée dans ce contexte. Ouvrez l'app dans un nouvel onglet.",
+      "scanner.securityError": "Accès caméra bloqué par les paramètres de sécurité.",
+      "scanner.openNewTab": "Ouvrir dans un nouvel onglet",
       
       // Raccourcis clavier
       "shortcuts.title": "Raccourcis clavier",
@@ -1313,6 +1316,9 @@ var I18N = {
       "scanner.cameraInUse": "Camera is being used by another application.",
       "scanner.tapToStart": "Tap the video to start",
       "scanner.productFound": "Product found!",
+      "scanner.iframeBlocked": "Camera is blocked in this context. Open the app in a new tab.",
+      "scanner.securityError": "Camera access blocked by security settings.",
+      "scanner.openNewTab": "Open in new tab",
       
       // Keyboard shortcuts
       "shortcuts.title": "Keyboard shortcuts",

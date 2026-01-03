@@ -5,6 +5,14 @@ name = "Bulk Stock Manager"
 application_url = "https://stock-cbd-manager-1.onrender.com"
 embedded = true
 
+[build]
+automatically_update_urls_on_dev = true
+dev_store_url = "cbd-music-district.myshopify.com"
+
+[embedded]
+# Permissions iframe pour accéder à la caméra
+allow = ["camera", "microphone", "clipboard-write", "clipboard-read"]
+
 [webhooks]
 api_version = "2025-10"
 
@@ -41,4 +49,3 @@ use_legacy_install_flow = false
 redirect_urls = [
   "https://stock-cbd-manager-1.onrender.com/api/auth/callback"
 ]
-
