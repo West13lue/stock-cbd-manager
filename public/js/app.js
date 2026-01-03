@@ -35,7 +35,7 @@
     'applyBatchFilters', 'deleteBatch', 'resetBatchFilters',
     'loadInventorySessions', 'showCreateInventoryModal', 'createInventorySession',
     'openInventorySession', 'backToInventoryList', 'updateInventoryCount',
-    'validateInventorySession', 'applyInventorySession', 'archiveInventorySession',
+    'validateInventorySession', 'applyInventorySession', 'archiveInventorySession', 'deleteInventorySession',
     'updateSetting', 'updateNestedSetting', 'exportSettings', 'resetAllSettings',
     'showLowStockModal', 'showOutOfStockModal', 'showQuickRestockModal', 'doQuickRestock',
     'showQuickAdjustModal', 'doQuickAdjust', 'showScannerModal', 'startCamera', 'stopScanner', 'searchBarcode',
@@ -4120,8 +4120,9 @@
         '<td>' + (s.totals.itemsWithDiff || 0) + '</td>' +
         '<td class="' + (s.totals.totalDeltaValue < 0 ? "text-danger" : "") + '">' + formatCurrency(s.totals.totalDeltaValue || 0) + '</td>' +
         '<td onclick="event.stopPropagation()">' +
-        '<button class="btn btn-ghost btn-sm" onclick="app.duplicateInventorySession(\'' + s.id + '\')" title="Dupliquer"><i data-lucide="copy"></i></button>' +
-        '<button class="btn btn-ghost btn-sm" onclick="app.archiveInventorySession(\'' + s.id + '\')" title="Archiver"><i data-lucide="archive"></i></button>' +
+        '<button class="btn btn-ghost btn-sm" onclick="app.duplicateInventorySession(\'' + s.id + '\')" title="' + t("action.duplicate", "Dupliquer") + '"><i data-lucide="copy"></i></button>' +
+        '<button class="btn btn-ghost btn-sm" onclick="app.archiveInventorySession(\'' + s.id + '\')" title="' + t("action.archive", "Archiver") + '"><i data-lucide="archive"></i></button>' +
+        '<button class="btn btn-ghost btn-sm text-danger" onclick="app.deleteInventorySession(\'' + s.id + '\', \'' + esc(s.name).replace(/'/g, "\\'") + '\')" title="' + t("action.delete", "Supprimer") + '"><i data-lucide="trash-2"></i></button>' +
         '</td>' +
         '</tr>';
     }).join("");
@@ -4465,11 +4466,35 @@
   }
 
   async function archiveInventorySession(sessionId) {
-    if (!confirm("Archiver cette session ?")) return;
+    if (!confirm(t("inventory.confirmArchive", "Archiver cette session ?"))) return;
     try {
       var res = await authFetch(apiUrl("/inventory/sessions/" + sessionId), { method: "DELETE" });
       if (!res.ok) throw new Error("Erreur");
       showToast(t("inventory.sessionArchived", "Session archivee"), "success");
+      loadInventorySessions();
+    } catch (e) { showToast(t("msg.error", "Erreur"), "error"); }
+  }
+
+  async function deleteInventorySession(sessionId, sessionName) {
+    if (!confirm(t("inventory.confirmDelete", "Supprimer definitivement cette session ?") + "\n\n" + sessionName)) return;
+    try {
+      var res = await authFetch(apiUrl("/inventory/sessions/" + sessionId + "?permanent=true"), { method: "DELETE" });
+      if (!res.ok) throw new Error("Erreur");
+      showToast(t("inventory.sessionDeleted", "Session supprimee"), "success");
+      
+      // Enregistrer l'activite
+      try {
+        await authFetch(apiUrl("/movements"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            type: "inventory_deleted",
+            note: t("inventory.deletedBy", "Session inventaire supprimee") + ": " + sessionName,
+            profileId: state.currentProfile?.id
+          })
+        });
+      } catch (e) { console.warn("Could not log activity"); }
+      
       loadInventorySessions();
     } catch (e) { showToast(t("msg.error", "Erreur"), "error"); }
   }
@@ -4946,43 +4971,100 @@
 
   function showUpgradeModal() {
     var plans = [
-      { id: "starter", name: "Starter", price: 14.99, prods: "15", feats: ["Categories", "Import Shopify", "Valeur stock"] },
-      { id: "pro", name: "Pro", price: 39.99, prods: "75", badge: "POPULAIRE", feats: ["Lots & DLC", "Fournisseurs", "Analytics", "Inventaire"] },
-      { id: "business", name: "Business", price: 79.99, prods: "Illimite", badge: "BEST", feats: ["Previsions IA", "Kits", "Commandes", "Multi-users"] },
+      { 
+        id: "starter", 
+        name: "Starter", 
+        price: 14.99, 
+        prods: "15", 
+        feats: [
+          t("plans.feat.categories", "Categories"),
+          t("plans.feat.importShopify", "Import Shopify"),
+          t("plans.feat.stockValue", "Valeur stock")
+        ] 
+      },
+      { 
+        id: "pro", 
+        name: "Pro", 
+        price: 39.99, 
+        prods: "75", 
+        badge: t("plans.popular", "POPULAIRE"), 
+        feats: [
+          t("plans.feat.batches", "Lots & DLC"),
+          t("plans.feat.suppliers", "Fournisseurs"),
+          t("plans.feat.analytics", "Analytics"),
+          t("plans.feat.inventory", "Inventaire")
+        ] 
+      },
+      { 
+        id: "business", 
+        name: "Business", 
+        price: 79.99, 
+        prods: t("plans.unlimited", "Illimite"), 
+        badge: "BEST", 
+        feats: [
+          t("plans.feat.forecast", "Previsions IA"),
+          t("plans.feat.kits", "Kits & Bundles"),
+          t("plans.feat.orders", "Commandes"),
+          t("plans.feat.multiUsers", "Multi-utilisateurs")
+        ] 
+      },
     ];
-    var cards = plans
-      .map(function (p) {
-        var fl = p.feats.map(function (f) { return "<li>Ã¢Å“â€œ " + f + "</li>"; }).join("");
-        var isCurrent = state.planId === p.id;
-        return (
-          '<div class="card" style="' + (p.badge ? "border:2px solid var(--accent-primary)" : "") + '">' +
-          (p.badge ? '<div class="badge badge-info" style="position:absolute;top:-8px;right:16px">' + p.badge + "</div>" : "") +
-          '<div class="card-body text-center" style="position:relative"><h3>' + p.name + "</h3>" +
-          '<div style="font-size:28px;font-weight:700">' + p.price + "<small>EUR/mois</small></div>" +
-          '<div class="text-secondary text-sm mb-md">' + p.prods + " produits</div>" +
-          '<ul style="text-align:left;list-style:none">' + fl + "</ul>" +
-          '<button class="btn ' + (isCurrent ? "btn-secondary" : "btn-primary") + ' btn-sm" style="width:100%;margin-top:16px" ' +
-          (isCurrent ? "disabled" : 'onclick="app.upgradeTo(\'' + p.id + "')\"") +
-          ">" + (isCurrent ? "Actuel" : "Choisir") + "</button></div></div>"
-        );
-      })
-      .join("");
+    
+    var cards = plans.map(function (p) {
+      var fl = p.feats.map(function (f) { 
+        return '<li style="display:flex;align-items:center;margin-bottom:8px"><i data-lucide="check" style="width:16px;height:16px;color:var(--success);margin-right:8px;flex-shrink:0"></i>' + f + '</li>'; 
+      }).join("");
+      var isCurrent = state.planId === p.id;
+      var isPopular = p.badge === t("plans.popular", "POPULAIRE");
+      
+      return (
+        '<div class="plan-card" style="background:var(--surface-secondary);border-radius:12px;padding:24px;' + (isPopular ? 'border:2px solid var(--accent-primary);' : 'border:1px solid var(--border);') + 'position:relative;display:flex;flex-direction:column">' +
+        (p.badge ? '<div style="position:absolute;top:-10px;right:16px;background:var(--accent-primary);color:white;padding:4px 12px;border-radius:12px;font-size:11px;font-weight:600">' + p.badge + '</div>' : '') +
+        '<h3 style="text-align:center;margin:0 0 16px 0;font-size:20px">' + p.name + '</h3>' +
+        '<div style="text-align:center;margin-bottom:8px"><span style="font-size:32px;font-weight:700">' + p.price + '</span><span style="color:var(--text-secondary);font-size:14px">EUR/' + t("plans.month", "mois") + '</span></div>' +
+        '<div style="text-align:center;color:var(--text-secondary);font-size:13px;margin-bottom:20px">' + p.prods + ' ' + t("plans.products", "produits") + '</div>' +
+        '<ul style="list-style:none;padding:0;margin:0 0 20px 0;flex:1">' + fl + '</ul>' +
+        '<button class="btn ' + (isCurrent ? 'btn-secondary' : 'btn-primary') + '" style="width:100%" ' +
+        (isCurrent ? 'disabled' : 'onclick="app.upgradeTo(\'' + p.id + '\')"') + '>' +
+        (isCurrent ? t("plans.current", "Actuel") : t("plans.choose", "Choisir")) + 
+        '</button></div>'
+      );
+    }).join("");
+    
     showModal({
       title: t("plans.choosePlan", "Choisir un plan"),
       size: "xl",
-      content: '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px">' + cards + "</div>",
-      footer: '<button class="btn btn-ghost" onclick="app.closeModal()">Fermer</button>',
+      content: '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:20px;padding:8px">' + cards + '</div>',
+      footer: '<button class="btn btn-ghost" onclick="app.closeModal()">' + t("action.close", "Fermer") + '</button>',
     });
+    if (typeof lucide !== "undefined") lucide.createIcons();
   }
 
-  function showLockedModal(key) {
+  function showLockedModal(featureKey) {
+    var featureNames = {
+      hasBatchTracking: t("plans.feat.batches", "Lots & DLC"),
+      hasSuppliers: t("plans.feat.suppliers", "Fournisseurs"),
+      hasPurchaseOrders: t("plans.feat.orders", "Commandes"),
+      hasForecast: t("plans.feat.forecast", "Previsions"),
+      hasKits: t("plans.feat.kits", "Kits & Bundles"),
+      hasAnalytics: t("plans.feat.analytics", "Analytics"),
+      hasInventoryCount: t("plans.feat.inventory", "Inventaire"),
+    };
+    var featureName = featureNames[featureKey] || featureKey;
+    
     showModal({
       title: t("plans.featureLocked", "Fonctionnalite verrouillee"),
       content:
-        '<div class="text-center"><div class="lock-icon"><i data-lucide="lock"></i></div><p class="text-secondary mt-lg">Passez a un plan superieur pour debloquer cette fonctionnalite.</p></div>',
+        '<div class="text-center" style="padding:24px 0">' +
+        '<div style="width:64px;height:64px;background:var(--surface-tertiary);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 16px"><i data-lucide="lock" style="width:32px;height:32px;color:var(--text-tertiary)"></i></div>' +
+        '<h3 style="margin:0 0 8px 0">' + featureName + '</h3>' +
+        '<p style="color:var(--text-secondary);margin:0">' + t("plans.upgradeToUnlock", "Passez a un plan superieur pour debloquer cette fonctionnalite.") + '</p>' +
+        '</div>',
       footer:
-        '<button class="btn btn-ghost" onclick="app.closeModal()">Fermer</button><button class="btn btn-upgrade" onclick="app.showUpgradeModal()">Upgrader</button>',
+        '<button class="btn btn-ghost" onclick="app.closeModal()">' + t("action.close", "Fermer") + '</button>' +
+        '<button class="btn btn-primary" onclick="app.closeModal();app.showUpgradeModal()">' + t("plans.upgrade", "Upgrader") + '</button>',
     });
+    if (typeof lucide !== "undefined") lucide.createIcons();
   }
 
   function showToast(msg, type, dur) {
@@ -5197,16 +5279,16 @@
         trialBanner.innerHTML = 
           '<div class="trial-banner-content">' +
           '<span class="trial-icon">TRIAL</span>' +
-          '<span class="trial-text">Essai Starter gratuit - <strong>' + state.trial.daysLeft + ' jour(s) restant(s)</strong></span>' +
-          '<button class="btn btn-sm btn-upgrade" onclick="app.showUpgradeModal()">Garder les fonctionnalites</button>' +
+          '<span class="trial-text">' + t("trial.freeTrialStarter", "Essai Starter gratuit") + ' - <strong>' + state.trial.daysLeft + ' ' + t("trial.daysLeft", "jour(s) restant(s)") + '</strong></span>' +
+          '<button class="btn btn-sm btn-upgrade" onclick="app.showUpgradeModal()">' + t("trial.keepFeatures", "Garder les fonctionnalites") + '</button>' +
           '</div>';
         trialBanner.style.display = "block";
       } else if (state.trial && state.trial.expired) {
         trialBanner.innerHTML = 
           '<div class="trial-banner-content trial-expired">' +
           '<span class="trial-icon">!</span>' +
-          '<span class="trial-text">Votre essai est termine. Passez a Starter pour continuer.</span>' +
-          '<button class="btn btn-sm btn-upgrade" onclick="app.showUpgradeModal()">Choisir un plan</button>' +
+          '<span class="trial-text">' + t("trial.expired", "Votre essai est termine. Passez a Starter pour continuer.") + '</span>' +
+          '<button class="btn btn-sm btn-upgrade" onclick="app.showUpgradeModal()">' + t("plans.choosePlan", "Choisir un plan") + '</button>' +
           '</div>';
         trialBanner.style.display = "block";
       } else {

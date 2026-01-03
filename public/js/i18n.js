@@ -74,6 +74,8 @@ var I18N = {
       "action.export": "Exporter",
       "action.import": "Importer",
       "action.upgrade": "Passer a PRO",
+      "action.duplicate": "Dupliquer",
+      "action.archive": "Archiver",
       
       // Messages communs
       "msg.loading": "Chargement...",
@@ -103,6 +105,30 @@ var I18N = {
       "plan.changePlan": "Changer de plan",
       "plans.choosePlan": "Choisir un plan",
       "plans.featureLocked": "Fonctionnalite verrouillee",
+      "plans.upgradeToUnlock": "Passez a un plan superieur pour debloquer cette fonctionnalite.",
+      "plans.upgrade": "Upgrader",
+      "plans.popular": "POPULAIRE",
+      "plans.month": "mois",
+      "plans.products": "produits",
+      "plans.current": "Actuel",
+      "plans.choose": "Choisir",
+      "plans.feat.categories": "Categories",
+      "plans.feat.importShopify": "Import Shopify",
+      "plans.feat.stockValue": "Valeur stock",
+      "plans.feat.batches": "Lots & DLC",
+      "plans.feat.suppliers": "Fournisseurs",
+      "plans.feat.analytics": "Analytics",
+      "plans.feat.inventory": "Inventaire",
+      "plans.feat.forecast": "Previsions IA",
+      "plans.feat.kits": "Kits & Bundles",
+      "plans.feat.orders": "Commandes",
+      "plans.feat.multiUsers": "Multi-utilisateurs",
+      
+      // Trial
+      "trial.freeTrialStarter": "Essai Starter gratuit",
+      "trial.daysLeft": "jour(s) restant(s)",
+      "trial.keepFeatures": "Garder les fonctionnalites",
+      "trial.expired": "Votre essai est termine. Passez a Starter pour continuer.",
       
       // Settings
       "settings.title": "Parametres",
@@ -487,6 +513,10 @@ var I18N = {
       "inventory.sessionValidated": "Session validee",
       "inventory.sessionDuplicated": "Session dupliquee",
       "inventory.sessionArchived": "Session archivee",
+      "inventory.sessionDeleted": "Session supprimee",
+      "inventory.confirmArchive": "Archiver cette session ?",
+      "inventory.confirmDelete": "Supprimer definitivement cette session ?",
+      "inventory.deletedBy": "Session inventaire supprimee",
       "inventory.clickStart": "Cliquez sur Demarrer pour lancer le comptage.",
       "inventory.sessionFinished": "Cette session est terminee.",
       "inventory.noSessions": "Aucune session",
@@ -804,6 +834,8 @@ var I18N = {
       "action.export": "Export",
       "action.import": "Import",
       "action.upgrade": "Upgrade to PRO",
+      "action.duplicate": "Duplicate",
+      "action.archive": "Archive",
       
       // Common messages
       "msg.loading": "Loading...",
@@ -833,6 +865,30 @@ var I18N = {
       "plan.changePlan": "Change plan",
       "plans.choosePlan": "Choose a plan",
       "plans.featureLocked": "Feature locked",
+      "plans.upgradeToUnlock": "Upgrade to a higher plan to unlock this feature.",
+      "plans.upgrade": "Upgrade",
+      "plans.popular": "POPULAR",
+      "plans.month": "month",
+      "plans.products": "products",
+      "plans.current": "Current",
+      "plans.choose": "Choose",
+      "plans.feat.categories": "Categories",
+      "plans.feat.importShopify": "Shopify Import",
+      "plans.feat.stockValue": "Stock value",
+      "plans.feat.batches": "Batches & Expiry",
+      "plans.feat.suppliers": "Suppliers",
+      "plans.feat.analytics": "Analytics",
+      "plans.feat.inventory": "Inventory",
+      "plans.feat.forecast": "AI Forecast",
+      "plans.feat.kits": "Kits & Bundles",
+      "plans.feat.orders": "Orders",
+      "plans.feat.multiUsers": "Multi-users",
+      
+      // Trial
+      "trial.freeTrialStarter": "Free Starter trial",
+      "trial.daysLeft": "day(s) left",
+      "trial.keepFeatures": "Keep features",
+      "trial.expired": "Your trial has ended. Upgrade to Starter to continue.",
       
       // Settings
       "settings.title": "Settings",
@@ -1217,6 +1273,10 @@ var I18N = {
       "inventory.sessionValidated": "Session validated",
       "inventory.sessionDuplicated": "Session duplicated",
       "inventory.sessionArchived": "Session archived",
+      "inventory.sessionDeleted": "Session deleted",
+      "inventory.confirmArchive": "Archive this session?",
+      "inventory.confirmDelete": "Permanently delete this session?",
+      "inventory.deletedBy": "Inventory session deleted",
       "inventory.clickStart": "Click Start to begin counting.",
       "inventory.sessionFinished": "This session is finished.",
       "inventory.noSessions": "No sessions",
@@ -1619,6 +1679,40 @@ var I18N = {
       "plan.unlimited": "Unbegrenzt",
       "plans.choosePlan": "Plan wählen",
       "plans.featureLocked": "Funktion gesperrt",
+      "plans.upgradeToUnlock": "Upgraden Sie auf einen höheren Plan, um diese Funktion freizuschalten.",
+      "plans.upgrade": "Upgraden",
+      "plans.popular": "BELIEBT",
+      "plans.month": "Monat",
+      "plans.products": "Produkte",
+      "plans.current": "Aktuell",
+      "plans.choose": "Wählen",
+      "plans.feat.categories": "Kategorien",
+      "plans.feat.importShopify": "Shopify Import",
+      "plans.feat.stockValue": "Bestandswert",
+      "plans.feat.batches": "Chargen & MHD",
+      "plans.feat.suppliers": "Lieferanten",
+      "plans.feat.analytics": "Analytics",
+      "plans.feat.inventory": "Inventur",
+      "plans.feat.forecast": "KI Prognose",
+      "plans.feat.kits": "Kits & Bundles",
+      "plans.feat.orders": "Bestellungen",
+      "plans.feat.multiUsers": "Mehrere Benutzer",
+      
+      // Trial
+      "trial.freeTrialStarter": "Kostenlose Starter-Testversion",
+      "trial.daysLeft": "Tag(e) übrig",
+      "trial.keepFeatures": "Funktionen behalten",
+      "trial.expired": "Ihre Testversion ist abgelaufen. Upgraden Sie auf Starter.",
+      
+      // Actions extras
+      "action.duplicate": "Duplizieren",
+      "action.archive": "Archivieren",
+      
+      // Inventory extras
+      "inventory.sessionDeleted": "Sitzung gelöscht",
+      "inventory.confirmArchive": "Diese Sitzung archivieren?",
+      "inventory.confirmDelete": "Diese Sitzung endgültig löschen?",
+      "inventory.deletedBy": "Inventursitzung gelöscht",
       
       // Batches
       "batches.title": "Chargen & MHD",
@@ -1898,6 +1992,40 @@ var I18N = {
       "plan.unlimited": "Ilimitado",
       "plans.choosePlan": "Elegir plan",
       "plans.featureLocked": "Funcion bloqueada",
+      "plans.upgradeToUnlock": "Pase a un plan superior para desbloquear esta funcion.",
+      "plans.upgrade": "Actualizar",
+      "plans.popular": "POPULAR",
+      "plans.month": "mes",
+      "plans.products": "productos",
+      "plans.current": "Actual",
+      "plans.choose": "Elegir",
+      "plans.feat.categories": "Categorias",
+      "plans.feat.importShopify": "Importar Shopify",
+      "plans.feat.stockValue": "Valor del stock",
+      "plans.feat.batches": "Lotes y Caducidad",
+      "plans.feat.suppliers": "Proveedores",
+      "plans.feat.analytics": "Analytics",
+      "plans.feat.inventory": "Inventario",
+      "plans.feat.forecast": "Prevision IA",
+      "plans.feat.kits": "Kits y Paquetes",
+      "plans.feat.orders": "Pedidos",
+      "plans.feat.multiUsers": "Multi-usuarios",
+      
+      // Trial
+      "trial.freeTrialStarter": "Prueba Starter gratuita",
+      "trial.daysLeft": "dia(s) restante(s)",
+      "trial.keepFeatures": "Mantener funciones",
+      "trial.expired": "Su prueba ha terminado. Pase a Starter para continuar.",
+      
+      // Actions extras
+      "action.duplicate": "Duplicar",
+      "action.archive": "Archivar",
+      
+      // Inventory extras
+      "inventory.sessionDeleted": "Sesion eliminada",
+      "inventory.confirmArchive": "Archivar esta sesion?",
+      "inventory.confirmDelete": "Eliminar definitivamente esta sesion?",
+      "inventory.deletedBy": "Sesion de inventario eliminada",
       
       // Batches
       "batches.title": "Lotes y Caducidad",
@@ -2295,6 +2423,40 @@ var I18N = {
       "plan.unlimited": "Illimitato",
       "plans.choosePlan": "Scegli piano",
       "plans.featureLocked": "Funzione bloccata",
+      "plans.upgradeToUnlock": "Passa a un piano superiore per sbloccare questa funzione.",
+      "plans.upgrade": "Aggiorna",
+      "plans.popular": "POPOLARE",
+      "plans.month": "mese",
+      "plans.products": "prodotti",
+      "plans.current": "Attuale",
+      "plans.choose": "Scegli",
+      "plans.feat.categories": "Categorie",
+      "plans.feat.importShopify": "Importa Shopify",
+      "plans.feat.stockValue": "Valore stock",
+      "plans.feat.batches": "Lotti e Scadenze",
+      "plans.feat.suppliers": "Fornitori",
+      "plans.feat.analytics": "Analytics",
+      "plans.feat.inventory": "Inventario",
+      "plans.feat.forecast": "Previsioni IA",
+      "plans.feat.kits": "Kit e Bundle",
+      "plans.feat.orders": "Ordini",
+      "plans.feat.multiUsers": "Multi-utenti",
+      
+      // Trial
+      "trial.freeTrialStarter": "Prova Starter gratuita",
+      "trial.daysLeft": "giorno/i rimasto/i",
+      "trial.keepFeatures": "Mantieni funzioni",
+      "trial.expired": "La tua prova e terminata. Passa a Starter per continuare.",
+      
+      // Actions extras
+      "action.duplicate": "Duplica",
+      "action.archive": "Archivia",
+      
+      // Inventory extras
+      "inventory.sessionDeleted": "Sessione eliminata",
+      "inventory.confirmArchive": "Archiviare questa sessione?",
+      "inventory.confirmDelete": "Eliminare definitivamente questa sessione?",
+      "inventory.deletedBy": "Sessione inventario eliminata",
       
       // Batches
       "batches.title": "Lotti e Scadenze",
