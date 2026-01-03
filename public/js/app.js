@@ -5004,7 +5004,7 @@
       { 
         id: "starter", 
         name: "Starter", 
-        price: 14.99, 
+        price: 9.99, 
         prods: "15", 
         feats: [
           t("plans.feat.categories", "Categories"),
@@ -5016,7 +5016,7 @@
       { 
         id: "pro", 
         name: "Pro", 
-        price: 39.99, 
+        price: 24.99, 
         prods: "75", 
         badge: t("plans.popular", "POPULAIRE"), 
         feats: [
@@ -5029,7 +5029,7 @@
       { 
         id: "business", 
         name: "Business", 
-        price: 79.99, 
+        price: 59.99, 
         prods: t("plans.unlimited", "Illimite"), 
         badge: t("plans.bestValue", "BEST VALUE"), 
         feats: [
