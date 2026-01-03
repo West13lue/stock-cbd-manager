@@ -4723,7 +4723,6 @@
         body: JSON.stringify(body),
       });
       if (res.ok) {
-        showToast(t("settings.saved", "Parametre enregistre"), "success");
         // Mettre a jour le cache local
         if (!settingsData[section]) settingsData[section] = {};
         settingsData[section][key] = value;
@@ -4733,9 +4732,15 @@
           I18N.setLang(value);
         }
         
-        // Rafraichir l'affichage si c'est un parametre d'affichage
-        if (section === "currency" || section === "units" || section === "general") {
+        // Pour les parametres d'affichage importants, proposer un reload
+        if (section === "general" && key === "language") {
+          showReloadNotification(t("settings.languageChanged", "Langue modifiee. Rechargez pour appliquer completement."));
+        } else if (section === "currency" || section === "units") {
+          showToast(t("settings.saved", "Parametre enregistre"), "success");
           // Re-render la page courante pour appliquer les nouveaux formats
+          renderTab(state.currentTab);
+        } else {
+          showToast(t("settings.saved", "Parametre enregistre"), "success");
           renderTab(state.currentTab);
         }
       } else {
@@ -4745,6 +4750,31 @@
     } catch (e) {
       showToast(t("msg.error", "Erreur") + ": " + e.message, "error");
     }
+  }
+  
+  function showReloadNotification(message) {
+    // Supprimer une notification existante
+    var existing = document.getElementById("reloadNotification");
+    if (existing) existing.remove();
+    
+    var notif = document.createElement("div");
+    notif.id = "reloadNotification";
+    notif.className = "reload-notification";
+    notif.innerHTML = 
+      '<div class="reload-notification-content">' +
+      '<i data-lucide="refresh-cw" style="width:18px;height:18px"></i>' +
+      '<span>' + message + '</span>' +
+      '<div class="reload-notification-actions">' +
+      '<button class="btn btn-sm btn-ghost" onclick="document.getElementById(\'reloadNotification\').remove()">' + t("action.later", "Plus tard") + '</button>' +
+      '<button class="btn btn-sm btn-primary" onclick="location.reload()">' + t("action.reloadNow", "Recharger") + '</button>' +
+      '</div>' +
+      '</div>';
+    
+    document.body.appendChild(notif);
+    if (typeof lucide !== "undefined") lucide.createIcons();
+    
+    // Animation d'entree
+    setTimeout(function() { notif.classList.add("visible"); }, 10);
   }
 
   async function updateNestedSetting(section, subSection, key, value) {

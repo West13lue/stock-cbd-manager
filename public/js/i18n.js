@@ -76,6 +76,8 @@ var I18N = {
       "action.upgrade": "Passer a PRO",
       "action.duplicate": "Dupliquer",
       "action.archive": "Archiver",
+      "action.later": "Plus tard",
+      "action.reloadNow": "Recharger",
       
       // Messages communs
       "msg.loading": "Chargement...",
@@ -156,6 +158,7 @@ var I18N = {
       "settings.freezeCMP": "Figer le CMP",
       "settings.allowNegative": "Autoriser stock negatif",
       "settings.saved": "Parametre enregistre",
+      "settings.languageChanged": "Langue modifiee. Rechargez pour appliquer completement.",
       "settings.backupDownloaded": "Backup telecharge",
       "settings.reset": "Parametres reinitialises",
       "settings.thisThreshold": "ce seuil",
@@ -836,6 +839,8 @@ var I18N = {
       "action.upgrade": "Upgrade to PRO",
       "action.duplicate": "Duplicate",
       "action.archive": "Archive",
+      "action.later": "Later",
+      "action.reloadNow": "Reload now",
       
       // Common messages
       "msg.loading": "Loading...",
@@ -916,6 +921,7 @@ var I18N = {
       "settings.freezeCMP": "Freeze avg cost",
       "settings.allowNegative": "Allow negative stock",
       "settings.saved": "Setting saved",
+      "settings.languageChanged": "Language changed. Reload to fully apply.",
       "settings.backupDownloaded": "Backup downloaded",
       "settings.reset": "Settings reset",
       "settings.thisThreshold": "this threshold",
@@ -1707,6 +1713,9 @@ var I18N = {
       // Actions extras
       "action.duplicate": "Duplizieren",
       "action.archive": "Archivieren",
+      "action.later": "Später",
+      "action.reloadNow": "Jetzt neu laden",
+      "settings.languageChanged": "Sprache geändert. Neu laden, um vollständig anzuwenden.",
       
       // Inventory extras
       "inventory.sessionDeleted": "Sitzung gelöscht",
@@ -2020,6 +2029,9 @@ var I18N = {
       // Actions extras
       "action.duplicate": "Duplicar",
       "action.archive": "Archivar",
+      "action.later": "Mas tarde",
+      "action.reloadNow": "Recargar ahora",
+      "settings.languageChanged": "Idioma cambiado. Recargue para aplicar completamente.",
       
       // Inventory extras
       "inventory.sessionDeleted": "Sesion eliminada",
@@ -2451,6 +2463,9 @@ var I18N = {
       // Actions extras
       "action.duplicate": "Duplica",
       "action.archive": "Archivia",
+      "action.later": "Piu tardi",
+      "action.reloadNow": "Ricarica ora",
+      "settings.languageChanged": "Lingua modificata. Ricarica per applicare completamente.",
       
       // Inventory extras
       "inventory.sessionDeleted": "Sessione eliminata",
