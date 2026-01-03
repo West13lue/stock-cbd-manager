@@ -547,6 +547,7 @@ var I18N = {
       "action.create": "Créer",
       "action.back": "Retour",
       "action.retry": "Réessayer",
+      "action.reload": "Recharger",
       
       // Produits
       "products.quantity": "Quantité",
@@ -590,9 +591,12 @@ var I18N = {
       "scanner.cameraInUse": "La caméra est utilisée par une autre application.",
       "scanner.tapToStart": "Touchez la vidéo pour démarrer",
       "scanner.productFound": "Produit trouvé!",
-      "scanner.iframeBlocked": "La caméra est bloquée dans ce contexte. Ouvrez l'app dans un nouvel onglet.",
+      "scanner.iframeBlocked": "La caméra est bloquée par le navigateur.",
       "scanner.securityError": "Accès caméra bloqué par les paramètres de sécurité.",
-      "scanner.openNewTab": "Ouvrir dans un nouvel onglet",
+      "scanner.howToEnable": "Comment activer la caméra :",
+      "scanner.step1": "Cliquez sur l'icône caméra/cadenas dans la barre d'adresse",
+      "scanner.step2": "Autorisez l'accès à la caméra pour ce site",
+      "scanner.step3": "Rechargez la page si nécessaire",
       
       // Raccourcis clavier
       "shortcuts.title": "Raccourcis clavier",
@@ -1273,6 +1277,7 @@ var I18N = {
       "action.create": "Create",
       "action.back": "Back",
       "action.retry": "Retry",
+      "action.reload": "Reload",
       
       // Products
       "products.quantity": "Quantity",
@@ -1316,9 +1321,12 @@ var I18N = {
       "scanner.cameraInUse": "Camera is being used by another application.",
       "scanner.tapToStart": "Tap the video to start",
       "scanner.productFound": "Product found!",
-      "scanner.iframeBlocked": "Camera is blocked in this context. Open the app in a new tab.",
+      "scanner.iframeBlocked": "Camera is blocked by the browser.",
       "scanner.securityError": "Camera access blocked by security settings.",
-      "scanner.openNewTab": "Open in new tab",
+      "scanner.howToEnable": "How to enable camera:",
+      "scanner.step1": "Click on the camera/lock icon in the address bar",
+      "scanner.step2": "Allow camera access for this site",
+      "scanner.step3": "Reload the page if needed",
       
       // Keyboard shortcuts
       "shortcuts.title": "Keyboard shortcuts",

@@ -1172,43 +1172,46 @@
       .catch(function(err) {
         console.error("[Scanner] Camera error:", err.name, err.message);
         var errorMsg = t("scanner.cameraError", "Erreur caméra");
-        var showOpenInNewTab = false;
+        var showHelp = false;
         
         if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-          // Vérifier si c'est un problème d'iframe
-          if (inIframe || err.message.includes('not allowed by the user agent') || err.message.includes('platform')) {
-            errorMsg = t("scanner.iframeBlocked", "La caméra est bloquée dans ce contexte. Ouvrez l'app dans un nouvel onglet.");
-            showOpenInNewTab = true;
+          // Vérifier si c'est un problème d'iframe/permissions
+          if (err.message.includes('not allowed by the user agent') || err.message.includes('platform') || err.message.includes('Permissions')) {
+            errorMsg = t("scanner.iframeBlocked", "La caméra est bloquée par le navigateur.");
           } else {
-            errorMsg = t("scanner.permissionDenied", "Accès caméra refusé. Autorisez l'accès dans les paramètres.");
-            // Toujours proposer nouvel onglet au cas où
-            showOpenInNewTab = true;
+            errorMsg = t("scanner.permissionDenied", "Accès caméra refusé.");
           }
+          showHelp = true;
         } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
           errorMsg = t("scanner.noCameraFound", "Aucune caméra détectée sur cet appareil.");
         } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
           errorMsg = t("scanner.cameraInUse", "La caméra est utilisée par une autre application.");
         } else if (err.name === 'SecurityError') {
           errorMsg = t("scanner.securityError", "Accès caméra bloqué par les paramètres de sécurité.");
-          showOpenInNewTab = true;
+          showHelp = true;
         } else {
-          // Erreur inconnue - proposer nouvel onglet
-          showOpenInNewTab = true;
+          showHelp = true;
         }
         
-        var buttonsHtml = '<br><div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:12px">' +
+        var helpHtml = '';
+        if (showHelp) {
+          helpHtml = '<div style="text-align:left;background:var(--surface-secondary);padding:12px;border-radius:8px;margin-top:12px;font-size:13px">' +
+            '<strong>' + t("scanner.howToEnable", "Comment activer la caméra :") + '</strong><br>' +
+            '<ol style="margin:8px 0 0 16px;padding:0">' +
+            '<li>' + t("scanner.step1", "Cliquez sur l'icône caméra/cadenas dans la barre d'adresse") + '</li>' +
+            '<li>' + t("scanner.step2", "Autorisez l'accès à la caméra pour ce site") + '</li>' +
+            '<li>' + t("scanner.step3", "Rechargez la page si nécessaire") + '</li>' +
+            '</ol></div>';
+        }
+        
+        var buttonsHtml = '<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:12px">' +
           '<button class="btn btn-sm btn-secondary" onclick="app.startCamera()">' + 
-          '<i data-lucide="refresh-cw"></i> ' + t("action.retry", "Réessayer") + '</button>';
+          '<i data-lucide="refresh-cw"></i> ' + t("action.retry", "Réessayer") + '</button>' +
+          '<button class="btn btn-sm btn-ghost" onclick="location.reload()">' + 
+          '<i data-lucide="rotate-cw"></i> ' + t("action.reload", "Recharger") + '</button>' +
+          '</div>';
         
-        if (showOpenInNewTab) {
-          // Construire l'URL de l'app hors iframe
-          var appUrl = window.location.origin + window.location.pathname;
-          buttonsHtml += '<button class="btn btn-sm btn-primary" onclick="window.open(\'' + appUrl + '\', \'_blank\')">' + 
-            '<i data-lucide="external-link"></i> ' + t("scanner.openNewTab", "Nouvel onglet") + '</button>';
-        }
-        buttonsHtml += '</div>';
-        
-        status.innerHTML = '<span class="text-danger"><i data-lucide="x-circle"></i> ' + errorMsg + '</span>' + buttonsHtml;
+        status.innerHTML = '<span class="text-danger"><i data-lucide="x-circle"></i> ' + errorMsg + '</span>' + helpHtml + buttonsHtml;
         if (typeof lucide !== "undefined") lucide.createIcons();
       });
   }
