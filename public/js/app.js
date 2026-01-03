@@ -38,7 +38,7 @@
     'validateInventorySession', 'applyInventorySession', 'archiveInventorySession',
     'updateSetting', 'updateNestedSetting', 'exportSettings', 'resetAllSettings',
     'showLowStockModal', 'showOutOfStockModal', 'showQuickRestockModal', 'doQuickRestock',
-    'showQuickAdjustModal', 'doQuickAdjust', 'showScannerModal', 'stopScanner', 'searchBarcode',
+    'showQuickAdjustModal', 'doQuickAdjust', 'showScannerModal', 'startCamera', 'stopScanner', 'searchBarcode',
     'showKeyboardShortcutsHelp', 'closeTutorial', 'showAllTutorials', 'showSpecificTutorial', 'resetAllTutorials',
     'loadNotifications', 'showNotificationsModal', 'markNotificationRead', 'dismissNotification', 'checkAlerts',
     'loadProfiles', 'showProfilesModal', 'showCreateProfileModal', 'selectProfileColor', 'createProfile', 'switchProfile', 'deleteProfile',
@@ -1068,76 +1068,162 @@
       title: '<i data-lucide="scan-barcode"></i> ' + t("scanner.title", "Scanner code-barres"),
       size: "md",
       content: '<div class="scanner-container">' +
-        '<div id="scanner-video-container" style="width:100%;height:250px;background:#000;border-radius:8px;overflow:hidden;position:relative">' +
-        '<video id="scanner-video" style="width:100%;height:100%;object-fit:cover"></video>' +
+        '<div id="scanner-video-container" style="width:100%;height:280px;background:#1a1a2e;border-radius:8px;overflow:hidden;position:relative">' +
+        '<video id="scanner-video" autoplay playsinline muted style="width:100%;height:100%;object-fit:cover"></video>' +
         '<div class="scanner-overlay"><div class="scanner-line"></div></div>' +
         '</div>' +
-        '<div class="scanner-status" id="scanner-status">' + t("scanner.initializing", "Initialisation caméra...") + '</div>' +
+        '<div class="scanner-status" id="scanner-status" style="text-align:center;padding:12px">' + 
+        '<button class="btn btn-primary" id="start-camera-btn" onclick="app.startCamera()">' +
+        '<i data-lucide="camera"></i> ' + t("scanner.startCamera", "Demarrer la camera") + '</button>' +
+        '</div>' +
         '<div class="scanner-manual" style="margin-top:16px">' +
         '<label>' + t("scanner.manualEntry", "Ou saisir manuellement") + '</label>' +
-        '<div style="display:flex;gap:8px"><input type="text" id="manual-barcode" class="form-input" placeholder="' + t("scanner.barcodePlaceholder", "Code-barres...") + '">' +
+        '<div style="display:flex;gap:8px"><input type="text" id="manual-barcode" class="form-input" placeholder="' + t("scanner.barcodePlaceholder", "Code-barres...") + '" onkeypress="if(event.key===\'Enter\')app.searchBarcode()">' +
         '<button class="btn btn-primary" onclick="app.searchBarcode()">' + t("action.search", "Rechercher") + '</button></div>' +
         '</div></div>',
       footer: '<button class="btn btn-secondary" onclick="app.stopScanner();app.closeModal()">' + t("action.close", "Fermer") + '</button>'
     });
     if (typeof lucide !== "undefined") lucide.createIcons();
-    initScanner();
+    
+    // Sur desktop, démarrer automatiquement
+    if (window.innerWidth > 768) {
+      setTimeout(function() { startCamera(); }, 300);
+    }
   }
 
   var scannerStream = null;
+  var scannerActive = false;
   
-  function initScanner() {
+  function startCamera() {
     var video = document.getElementById('scanner-video');
     var status = document.getElementById('scanner-status');
+    var startBtn = document.getElementById('start-camera-btn');
     
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      status.innerHTML = '<span class="text-warning">' + t("scanner.notSupported", "Caméra non supportée sur ce navigateur") + '</span>';
+    if (!video || !status) return;
+    
+    // Vérifier si HTTPS ou localhost
+    var isSecure = location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+    if (!isSecure) {
+      status.innerHTML = '<span class="text-warning"><i data-lucide="alert-triangle"></i> ' + 
+        t("scanner.httpsRequired", "HTTPS requis pour accéder à la caméra") + '</span>';
+      if (typeof lucide !== "undefined") lucide.createIcons();
       return;
     }
     
-    navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      status.innerHTML = '<span class="text-warning"><i data-lucide="alert-triangle"></i> ' + 
+        t("scanner.notSupported", "Caméra non supportée sur ce navigateur") + '</span>';
+      if (typeof lucide !== "undefined") lucide.createIcons();
+      return;
+    }
+    
+    // Afficher loading
+    status.innerHTML = '<div class="spinner"></div> ' + t("scanner.requesting", "Demande d\'accès à la caméra...");
+    
+    // Contraintes optimisées pour mobile
+    var constraints = {
+      video: {
+        facingMode: { ideal: "environment" },
+        width: { ideal: 1280 },
+        height: { ideal: 720 }
+      },
+      audio: false
+    };
+    
+    navigator.mediaDevices.getUserMedia(constraints)
       .then(function(stream) {
         scannerStream = stream;
+        scannerActive = true;
         video.srcObject = stream;
-        video.play();
-        status.innerHTML = '<span class="text-success"><i data-lucide="check-circle"></i> ' + t("scanner.ready", "Caméra prête - Présentez un code-barres") + '</span>';
-        if (typeof lucide !== "undefined") lucide.createIcons();
         
-        // Détection simple via BarcodeDetector API (si supporté)
-        if ('BarcodeDetector' in window) {
-          var detector = new BarcodeDetector({ formats: ['ean_13', 'ean_8', 'code_128', 'code_39', 'upc_a', 'upc_e', 'qr_code'] });
-          var scanning = true;
-          
-          function scanFrame() {
-            if (!scanning || !video.srcObject) return;
-            detector.detect(video).then(function(barcodes) {
-              if (barcodes.length > 0) {
-                scanning = false;
-                var code = barcodes[0].rawValue;
-                stopScanner();
-                searchBarcode(code);
-              } else {
-                requestAnimationFrame(scanFrame);
-              }
-            }).catch(function() {
-              requestAnimationFrame(scanFrame);
-            });
-          }
-          scanFrame();
-        } else {
-          status.innerHTML += '<br><span class="text-muted text-sm">' + t("scanner.manualOnly", "Détection auto non supportée - utilisez la saisie manuelle") + '</span>';
+        // Forcer la lecture sur mobile
+        video.setAttribute('autoplay', '');
+        video.setAttribute('playsinline', '');
+        video.setAttribute('muted', '');
+        
+        var playPromise = video.play();
+        if (playPromise !== undefined) {
+          playPromise.then(function() {
+            status.innerHTML = '<span class="text-success"><i data-lucide="check-circle"></i> ' + 
+              t("scanner.ready", "Caméra prête - Présentez un code-barres") + '</span>';
+            if (typeof lucide !== "undefined") lucide.createIcons();
+            startBarcodeDetection(video, status);
+          }).catch(function(err) {
+            console.warn("[Scanner] Play error:", err);
+            status.innerHTML = '<span class="text-warning">' + t("scanner.tapToStart", "Touchez la vidéo pour démarrer") + '</span>';
+            video.onclick = function() {
+              video.play();
+              video.onclick = null;
+              status.innerHTML = '<span class="text-success"><i data-lucide="check-circle"></i> ' + t("scanner.ready", "Caméra prête") + '</span>';
+              if (typeof lucide !== "undefined") lucide.createIcons();
+              startBarcodeDetection(video, status);
+            };
+          });
         }
       })
       .catch(function(err) {
-        status.innerHTML = '<span class="text-danger"><i data-lucide="x-circle"></i> ' + t("scanner.cameraError", "Erreur caméra") + ': ' + err.message + '</span>';
+        console.error("[Scanner] Camera error:", err);
+        var errorMsg = t("scanner.cameraError", "Erreur caméra");
+        
+        if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+          errorMsg = t("scanner.permissionDenied", "Accès caméra refusé. Autorisez l'accès dans les paramètres de votre navigateur.");
+        } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+          errorMsg = t("scanner.noCameraFound", "Aucune caméra détectée sur cet appareil.");
+        } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
+          errorMsg = t("scanner.cameraInUse", "La caméra est utilisée par une autre application.");
+        }
+        
+        status.innerHTML = '<span class="text-danger"><i data-lucide="x-circle"></i> ' + errorMsg + '</span>' +
+          '<br><button class="btn btn-sm btn-secondary mt-sm" onclick="app.startCamera()">' + 
+          '<i data-lucide="refresh-cw"></i> ' + t("action.retry", "Réessayer") + '</button>';
         if (typeof lucide !== "undefined") lucide.createIcons();
       });
   }
+  
+  function startBarcodeDetection(video, status) {
+    // Détection via BarcodeDetector API (Chrome, Edge, Android)
+    if ('BarcodeDetector' in window) {
+      var detector = new BarcodeDetector({ 
+        formats: ['ean_13', 'ean_8', 'code_128', 'code_39', 'upc_a', 'upc_e', 'qr_code', 'codabar'] 
+      });
+      
+      function scanFrame() {
+        if (!scannerActive || !video.srcObject) return;
+        
+        detector.detect(video).then(function(barcodes) {
+          if (barcodes.length > 0) {
+            scannerActive = false;
+            var code = barcodes[0].rawValue;
+            // Vibrer sur mobile pour feedback
+            if (navigator.vibrate) navigator.vibrate(100);
+            stopScanner();
+            searchBarcode(code);
+          } else if (scannerActive) {
+            requestAnimationFrame(scanFrame);
+          }
+        }).catch(function(err) {
+          if (scannerActive) requestAnimationFrame(scanFrame);
+        });
+      }
+      scanFrame();
+    } else {
+      // BarcodeDetector non supporté (Safari, Firefox)
+      status.innerHTML += '<br><span class="text-muted text-sm">' + 
+        t("scanner.manualOnly", "Détection auto non supportée - utilisez la saisie manuelle") + '</span>';
+    }
+  }
 
   function stopScanner() {
+    scannerActive = false;
     if (scannerStream) {
-      scannerStream.getTracks().forEach(function(track) { track.stop(); });
+      scannerStream.getTracks().forEach(function(track) { 
+        track.stop(); 
+      });
       scannerStream = null;
+    }
+    var video = document.getElementById('scanner-video');
+    if (video) {
+      video.srcObject = null;
     }
   }
 
@@ -1161,6 +1247,7 @@
     closeModal();
     
     if (product) {
+      showToast(t("scanner.productFound", "Produit trouvé!"), "success");
       openProductDetails(product.id);
     } else {
       showModal({
@@ -5097,6 +5184,7 @@
     var factors = {
       g: 1,
       kg: 1000,
+      t: 1000000,
       oz: 28.3495,
       lb: 453.592
     };
@@ -5177,7 +5265,7 @@
   // Helper: convertir de l'unite utilisateur vers grammes (pour envoi API)
   function toGrams(value) {
     var unit = getWeightUnit();
-    var factors = { g: 1, kg: 1000, oz: 28.3495, lb: 453.592 };
+    var factors = { g: 1, kg: 1000, t: 1000000, oz: 28.3495, lb: 453.592 };
     return value * (factors[unit] || 1);
   }
   
@@ -6659,6 +6747,7 @@
     doQuickAdjust: doQuickAdjust,
     // Scanner
     showScannerModal: showScannerModal,
+    startCamera: startCamera,
     stopScanner: stopScanner,
     searchBarcode: searchBarcode,
     // Raccourcis

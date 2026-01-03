@@ -546,6 +546,7 @@ var I18N = {
       "action.search": "Rechercher",
       "action.create": "Créer",
       "action.back": "Retour",
+      "action.retry": "Réessayer",
       
       // Produits
       "products.quantity": "Quantité",
@@ -581,6 +582,14 @@ var I18N = {
       "scanner.scanAgain": "Scanner à nouveau",
       "scanner.manualOnly": "Détection auto non supportée - utilisez la saisie manuelle",
       "scanner.cameraError": "Erreur caméra",
+      "scanner.startCamera": "Démarrer la caméra",
+      "scanner.requesting": "Demande d'accès à la caméra...",
+      "scanner.httpsRequired": "HTTPS requis pour accéder à la caméra",
+      "scanner.permissionDenied": "Accès caméra refusé. Autorisez l'accès dans les paramètres.",
+      "scanner.noCameraFound": "Aucune caméra détectée sur cet appareil.",
+      "scanner.cameraInUse": "La caméra est utilisée par une autre application.",
+      "scanner.tapToStart": "Touchez la vidéo pour démarrer",
+      "scanner.productFound": "Produit trouvé!",
       
       // Raccourcis clavier
       "shortcuts.title": "Raccourcis clavier",
@@ -1260,6 +1269,7 @@ var I18N = {
       "action.search": "Search",
       "action.create": "Create",
       "action.back": "Back",
+      "action.retry": "Retry",
       
       // Products
       "products.quantity": "Quantity",
@@ -1295,6 +1305,14 @@ var I18N = {
       "scanner.scanAgain": "Scan again",
       "scanner.manualOnly": "Auto detection not supported - use manual entry",
       "scanner.cameraError": "Camera error",
+      "scanner.startCamera": "Start camera",
+      "scanner.requesting": "Requesting camera access...",
+      "scanner.httpsRequired": "HTTPS required to access camera",
+      "scanner.permissionDenied": "Camera access denied. Allow access in your browser settings.",
+      "scanner.noCameraFound": "No camera found on this device.",
+      "scanner.cameraInUse": "Camera is being used by another application.",
+      "scanner.tapToStart": "Tap the video to start",
+      "scanner.productFound": "Product found!",
       
       // Keyboard shortcuts
       "shortcuts.title": "Keyboard shortcuts",
