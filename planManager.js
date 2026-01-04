@@ -183,7 +183,7 @@ const PLANS = {
       "Historique 30 jours",
       "Exports CSV avances",
     ],
-    cta: "Essai gratuit 14 jours",
+    cta: "Choisir Starter",
   },
 
   pro: {
