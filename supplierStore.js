@@ -142,6 +142,7 @@ function createSupplier(shop, supplierData) {
     id: generateId(),
     name: String(supplierData.name || "").trim(),
     code: String(supplierData.code || "").trim().toUpperCase() || null,
+    type: supplierData.type || null,
     
     contact: {
       name: supplierData.contact?.name || "",
@@ -204,6 +205,7 @@ function updateSupplier(shop, supplierId, updates) {
   // Champs modifiables
   if (updates.name !== undefined) supplier.name = String(updates.name).trim();
   if (updates.code !== undefined) supplier.code = String(updates.code).trim().toUpperCase() || null;
+  if (updates.type !== undefined) supplier.type = updates.type || null;
   
   if (updates.contact) {
     supplier.contact = { ...supplier.contact, ...updates.contact };

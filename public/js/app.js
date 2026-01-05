@@ -475,10 +475,30 @@
       }
     });
     
-    // Traduire aussi le placeholder de recherche
+    // Traduire aussi le placeholder de recherche et ajouter le handler
     var searchInput = document.getElementById("globalSearch");
     if (searchInput) {
       searchInput.placeholder = t("nav.searchPlaceholder", "Rechercher un produit, lot, fournisseur...");
+      
+      // Handler de recherche globale
+      searchInput.addEventListener("keyup", function(e) {
+        if (e.key === "Enter") {
+          var query = searchInput.value.trim().toLowerCase();
+          if (query) {
+            // Rechercher dans les produits
+            state.filters.search = query;
+            navigateTo("products");
+          }
+        }
+      });
+      
+      // Effacer avec Escape
+      searchInput.addEventListener("keydown", function(e) {
+        if (e.key === "Escape") {
+          searchInput.value = "";
+          searchInput.blur();
+        }
+      });
     }
     
     // Traduire le widget plan
@@ -5242,13 +5262,13 @@
     if (!ct) return;
     var t = document.createElement("div");
     t.className = "toast " + (type || "info");
+    var iconName = { success: "check", error: "x", warning: "alert-triangle", info: "info" }[type] || "info";
     t.innerHTML =
-      '<span class="toast-icon">' +
-      ({ success: "Ã¢Å“â€œ", error: "X", warning: "!", info: "i" }[type] || "i") +
-      '</span><div class="toast-message">' +
-      esc(msg) +
-      '</div><button class="toast-close" onclick="this.parentElement.remove()">X</button>';
+      '<span class="toast-icon"><i data-lucide="' + iconName + '"></i></span>' +
+      '<div class="toast-message">' + esc(msg) + '</div>' +
+      '<button class="toast-close" onclick="this.parentElement.remove()"><i data-lucide="x"></i></button>';
     ct.appendChild(t);
+    if (typeof lucide !== "undefined") lucide.createIcons();
     setTimeout(function () { t.classList.add("visible"); }, 10);
     setTimeout(function () { t.remove(); }, dur || 4000);
   }

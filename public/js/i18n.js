@@ -2177,6 +2177,8 @@ var I18N = {
       "action.edit": "Editar",
       "action.delete": "Eliminar",
       "action.add": "Anadir",
+      "action.sync": "Sincronizar",
+      "action.details": "Detalles",
       "action.upgrade": "Actualizar a PRO",
       
       // Messages
