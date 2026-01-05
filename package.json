@@ -22,6 +22,7 @@
     "express-rate-limit": "^7.1.5",
     "express-validator": "^7.0.1",
     "helmet": "^7.1.0",
+    "lucide": "^0.562.0",
     "shopify-api-node": "^3.15.0",
     "winston": "^3.19.0"
   },
