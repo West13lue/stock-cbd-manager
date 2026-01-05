@@ -4571,3 +4571,247 @@ html, body {
   display: flex;
   gap: 4px;
 }
+
+/* ============================================
+   TUTORIAL MODAL - IMPROVED DESIGN
+   ============================================ */
+
+.tutorial-modal-content {
+  padding: 0;
+}
+
+.tutorial-hero {
+  text-align: center;
+  padding: 24px;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  margin: -20px -20px 20px -20px;
+}
+
+.tutorial-hero-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent-primary) 0%, #8b5cf6 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 16px;
+  color: white;
+}
+
+.tutorial-hero-icon i {
+  width: 32px;
+  height: 32px;
+}
+
+.tutorial-hero-icon.locked {
+  background: linear-gradient(135deg, var(--warning) 0%, #f59e0b 100%);
+}
+
+.tutorial-hero-title {
+  margin: 0 0 8px 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.tutorial-steps-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  padding: 0 4px;
+}
+
+.tutorial-step-card {
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.tutorial-step-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.tutorial-step-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.tutorial-step-badge {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--accent-primary);
+  color: white;
+  font-size: 12px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tutorial-step-icon-wrapper {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-sm);
+  background: rgba(99, 102, 241, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent-primary);
+}
+
+.tutorial-step-icon-wrapper i {
+  width: 20px;
+  height: 20px;
+}
+
+.tutorial-step-text {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.tutorial-tip-box {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-top: 20px;
+  padding: 16px;
+  background: rgba(245, 158, 11, 0.1);
+  border-radius: var(--radius-md);
+  border-left: 3px solid var(--warning);
+}
+
+.tutorial-tip-icon {
+  color: var(--warning);
+  flex-shrink: 0;
+}
+
+.tutorial-tip-box p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.tutorial-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  margin-right: auto;
+}
+
+.tutorial-checkbox input {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+/* Locked Feature Card */
+.locked-feature-card {
+  min-height: 400px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.locked-feature-content {
+  text-align: center;
+  padding: 40px;
+  max-width: 400px;
+}
+
+.locked-feature-icon {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: rgba(245, 158, 11, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 24px;
+  color: var(--warning);
+}
+
+.locked-feature-icon i {
+  width: 40px;
+  height: 40px;
+}
+
+.locked-feature-content h2 {
+  margin: 0 0 8px 0;
+  font-size: 1.5rem;
+}
+
+.locked-feature-content p {
+  margin: 0 0 24px 0;
+}
+
+.locked-feature-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+/* Tutorial List */
+.tutorial-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tutorial-list-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.tutorial-list-item:hover {
+  background: var(--surface-hover);
+}
+
+.tutorial-list-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-sm);
+  background: rgba(99, 102, 241, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent-primary);
+  flex-shrink: 0;
+}
+
+.tutorial-list-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.tutorial-list-title {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.tutorial-list-status {
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+.tutorial-list-action {
+  color: var(--text-tertiary);
+}

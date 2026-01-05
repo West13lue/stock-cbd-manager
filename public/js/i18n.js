@@ -56,6 +56,24 @@ var I18N = {
       "products.importShopify": "Import Shopify",
       "products.restock": "Reapprovisionner",
       "products.product": "Produit",
+      "products.totalStock": "STOCK TOTAL",
+      "products.avgCost": "COUT MOYEN (CMP)",
+      "products.stockValue": "VALEUR STOCK",
+      "products.variants": "VARIANTES",
+      "products.units": "unites",
+      "products.activeBatches": "Lots actifs",
+      "products.salesCapacity": "Capacite de vente par variante",
+      "products.salesCapacityDesc": "Nombre d'unites vendables si le stock etait vendu uniquement via cette variante",
+      "products.variantDetails": "Detail des variantes",
+      "products.weight": "Grammage",
+      "products.unitsAvailable": "Unites dispo",
+      "products.stockEquivalent": "Equivalent stock",
+      "products.distribution": "Repartition",
+      "products.poolMode": "Mode Pool Global",
+      "products.poolModeDesc": "Le stock est partage entre toutes les variantes. Les unites dispo representent la capacite maximale de vente pour chaque grammage.",
+      "action.restock": "Reappro",
+      "action.adjust": "Ajuster",
+      "action.editCMP": "Modifier CMP",
       
       // Statuts
       "status.ok": "OK",
@@ -88,6 +106,21 @@ var I18N = {
       "msg.featureLocked": "Fonctionnalite verrouillee",
       "msg.upgradeRequired": "Passez a un plan superieur pour debloquer.",
       "msg.nameRequired": "Nom requis",
+      
+      // Forms
+      "form.select": "-- Selectionner --",
+      
+      // Sync
+      "sync.starting": "Synchronisation en cours...",
+      "sync.success": "Synchronisation terminee",
+      "sync.error": "Erreur de synchronisation",
+      "msg.syncing": "Sync...",
+      "msg.noItems": "Aucun element",
+      
+      // Tutorial
+      "tutorial.quickGuide": "Guide rapide",
+      "tutorial.viewGuide": "Voir le guide",
+      "tutorial.understood": "Compris !",
       "msg.productQtyRequired": "Produit et quantite requis",
       "msg.selectProducts": "Selectionnez au moins un produit",
       "msg.noProducts": "Aucun produit a afficher.",
@@ -822,6 +855,24 @@ var I18N = {
       "products.importShopify": "Import Shopify",
       "products.restock": "Restock",
       "products.product": "Product",
+      "products.totalStock": "TOTAL STOCK",
+      "products.avgCost": "AVG COST (CMP)",
+      "products.stockValue": "STOCK VALUE",
+      "products.variants": "VARIANTS",
+      "products.units": "units",
+      "products.activeBatches": "Active batches",
+      "products.salesCapacity": "Sales capacity by variant",
+      "products.salesCapacityDesc": "Number of units sellable if stock was sold only via this variant",
+      "products.variantDetails": "Variant details",
+      "products.weight": "Weight",
+      "products.unitsAvailable": "Units available",
+      "products.stockEquivalent": "Stock equivalent",
+      "products.distribution": "Distribution",
+      "products.poolMode": "Global Pool Mode",
+      "products.poolModeDesc": "Stock is shared between all variants. Units available represent max selling capacity for each weight.",
+      "action.restock": "Restock",
+      "action.adjust": "Adjust",
+      "action.editCMP": "Edit CMP",
       
       // Status
       "status.ok": "OK",
@@ -854,6 +905,22 @@ var I18N = {
       "msg.featureLocked": "Feature locked",
       "msg.upgradeRequired": "Upgrade to a higher plan to unlock.",
       "msg.nameRequired": "Name required",
+      
+      // Forms
+      "form.select": "-- Select --",
+      
+      // Sync
+      "sync.starting": "Synchronization in progress...",
+      "sync.success": "Synchronization complete",
+      "sync.error": "Synchronization error",
+      "msg.syncing": "Syncing...",
+      "msg.noItems": "No items",
+      
+      // Tutorial
+      "tutorial.quickGuide": "Quick guide",
+      "tutorial.viewGuide": "View guide",
+      "tutorial.understood": "Got it!",
+      
       "msg.productQtyRequired": "Product and quantity required",
       "msg.selectProducts": "Select at least one product",
       "msg.noProducts": "No products to display.",

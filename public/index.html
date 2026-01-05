@@ -107,10 +107,14 @@
         </div>
 
         <div class="topbar-actions">
-          <div class="sync-status" id="syncStatus">
-            <span class="sync-dot"></span>
-            <span class="sync-text">Synchronise</span>
-          </div>
+          <button class="btn btn-primary btn-sm" onclick="app.syncShopifyProducts()" id="syncBtn">
+            <i data-lucide="refresh-cw" class="icon"></i>
+            <span class="btn-text">Synchroniser</span>
+          </button>
+
+          <button class="btn-icon" onclick="app.showKeyboardShortcutsHelp()" data-tooltip="Raccourcis clavier (?)">
+            <i data-lucide="keyboard" class="icon"></i>
+          </button>
 
           <button class="btn-icon" onclick="app.toggleNotifications()" data-tooltip="Notifications">
             <i data-lucide="bell" class="icon"></i>

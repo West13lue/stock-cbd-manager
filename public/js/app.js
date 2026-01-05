@@ -732,33 +732,51 @@
     if (!tutorial) return;
     
     // Afficher le tutoriel
-    showTutorialModal(tab, tutorial);
+    showTutorialModal(tab, tutorial, false);
+  }
+  
+  function showLockedFeatureTutorial(tab) {
+    var tutorial = getTabTutorial(tab);
+    if (tutorial) {
+      showTutorialModal(tab, tutorial, true);
+    }
   }
 
-  function showTutorialModal(tab, tutorial) {
+  function showTutorialModal(tab, tutorial, isLocked) {
     var stepsHtml = tutorial.steps.map(function(step, index) {
-      return '<div class="tutorial-step">' +
-        '<div class="tutorial-step-number">' + (index + 1) + '</div>' +
-        '<div class="tutorial-step-icon"><i data-lucide="' + step.icon + '"></i></div>' +
-        '<div class="tutorial-step-text">' + step.text + '</div>' +
+      return '<div class="tutorial-step-card">' +
+        '<div class="tutorial-step-header">' +
+        '<span class="tutorial-step-badge">' + (index + 1) + '</span>' +
+        '<span class="tutorial-step-icon-wrapper"><i data-lucide="' + step.icon + '"></i></span>' +
+        '</div>' +
+        '<p class="tutorial-step-text">' + step.text + '</p>' +
         '</div>';
     }).join('');
     
-    var content = '<div class="tutorial-content">' +
-      '<div class="tutorial-header">' +
-      '<div class="tutorial-icon"><i data-lucide="' + tutorial.icon + '"></i></div>' +
-      '<h2>' + tutorial.title + '</h2>' +
+    var content = '<div class="tutorial-modal-content">' +
+      '<div class="tutorial-hero">' +
+      '<div class="tutorial-hero-icon' + (isLocked ? ' locked' : '') + '"><i data-lucide="' + tutorial.icon + '"></i></div>' +
+      '<h2 class="tutorial-hero-title">' + tutorial.title + '</h2>' +
+      (isLocked ? '<span class="badge badge-warning"><i data-lucide="lock"></i> ' + t("plan.upgradeRequired", "Plan superieur requis") + '</span>' : '') +
       '</div>' +
-      '<div class="tutorial-steps">' + stepsHtml + '</div>' +
-      (tutorial.tip ? '<div class="tutorial-tip"><i data-lucide="lightbulb"></i> ' + tutorial.tip + '</div>' : '') +
+      '<div class="tutorial-steps-grid">' + stepsHtml + '</div>' +
+      (tutorial.tip ? '<div class="tutorial-tip-box"><div class="tutorial-tip-icon"><i data-lucide="lightbulb"></i></div><p>' + tutorial.tip + '</p></div>' : '') +
       '</div>';
     
+    var footerHtml = '';
+    if (isLocked) {
+      footerHtml = '<button class="btn btn-ghost" onclick="app.closeModal()">' + t("action.close", "Fermer") + '</button>' +
+        '<button class="btn btn-primary" onclick="app.closeModal();app.showUpgradeModal()"><i data-lucide="sparkles"></i> ' + t("plan.upgrade", "Passer au plan superieur") + '</button>';
+    } else {
+      footerHtml = '<label class="tutorial-checkbox"><input type="checkbox" id="dontShowAgain" checked> ' + t("tutorial.dontShowAgain", "Ne plus afficher pour cet onglet") + '</label>' +
+        '<button class="btn btn-primary" onclick="app.closeTutorial(\'' + tab + '\')">' + t("tutorial.understood", "Compris !") + '</button>';
+    }
+    
     showModal({
-      title: '<i data-lucide="graduation-cap"></i> ' + t("tutorial.title", "Guide rapide"),
+      title: '<i data-lucide="graduation-cap"></i> ' + t("tutorial.quickGuide", "Guide rapide"),
       size: "md",
       content: content,
-      footer: '<label class="tutorial-checkbox"><input type="checkbox" id="dontShowAgain" checked> ' + t("tutorial.dontShowAgain", "Ne plus afficher pour cet onglet") + '</label>' +
-        '<button class="btn btn-primary" onclick="app.closeTutorial(\'' + tab + '\')">' + t("tutorial.understood", "Compris !") + '</button>'
+      footer: footerHtml
     });
     
     if (typeof lucide !== "undefined") lucide.createIcons();
@@ -802,23 +820,29 @@
     var tutorial = getTabTutorial(tab);
     if (tutorial) {
       closeModal();
-      setTimeout(function() { showTutorialModal(tab, tutorial); }, 100);
+      setTimeout(function() { showTutorialModal(tab, tutorial, false); }, 100);
     }
   }
 
-  function renderFeature(c, key, title, iconName) {
+  function renderFeature(c, key, title, iconName, tab) {
     var iconHtml = '<i data-lucide="' + iconName + '"></i>';
     if (!hasFeature(key)) {
+      var tabName = tab || key.replace('has', '').toLowerCase();
       c.innerHTML =
         '<div class="page-header"><h1 class="page-title">' +
         iconHtml +
         " " +
         title +
         "</h1></div>" +
-        '<div class="card" style="min-height:400px;display:flex;align-items:center;justify-content:center"><div class="text-center">' +
-        '<div class="lock-icon"><i data-lucide="lock"></i></div><h2>Fonctionnalite verrouillee</h2>' +
-        '<p class="text-secondary">Passez a un plan superieur pour debloquer.</p>' +
-        '<button class="btn btn-upgrade mt-lg" onclick="app.showUpgradeModal()">Upgrader</button></div></div>';
+        '<div class="card locked-feature-card">' +
+        '<div class="locked-feature-content">' +
+        '<div class="locked-feature-icon"><i data-lucide="lock"></i></div>' +
+        '<h2>' + t("msg.featureLocked", "Fonctionnalite verrouillee") + '</h2>' +
+        '<p class="text-secondary">' + t("msg.upgradeRequired", "Passez a un plan superieur pour debloquer.") + '</p>' +
+        '<div class="locked-feature-actions">' +
+        '<button class="btn btn-ghost" onclick="app.showLockedFeatureTutorial(\'' + tabName + '\')"><i data-lucide="info"></i> ' + t("tutorial.viewGuide", "Voir le guide") + '</button>' +
+        '<button class="btn btn-primary" onclick="app.showUpgradeModal()"><i data-lucide="sparkles"></i> ' + t("plan.upgrade", "Upgrader") + '</button>' +
+        '</div></div></div>';
     } else {
       c.innerHTML =
         '<div class="page-header"><h1 class="page-title">' +
@@ -827,7 +851,7 @@
         title +
         "</h1></div>" +
         '<div class="card"><div class="card-body"><div class="empty-state"><div class="empty-icon"><i data-lucide="package-open"></i></div>' +
-        "<p>Aucun element</p></div></div></div>";
+        "<p>" + t("msg.noItems", "Aucun element") + "</p></div></div></div>";
     }
     // Refresh Lucide icons
     if (typeof lucide !== "undefined") lucide.createIcons();
@@ -2388,12 +2412,12 @@
         '<div class="form-row">' +
         '<div class="form-group" style="flex:1"><label class="form-label">' + t("suppliers.type", "Type") + '</label>' +
         '<select class="form-select" id="supplierType">' +
-        '<option value="">-- Selectionner --</option>' +
-        '<option value="grossiste">' + t("suppliers.typeWholesaler", "Grossiste") + '</option>' +
-        '<option value="producteur">' + t("suppliers.typeProducer", "Producteur") + '</option>' +
-        '<option value="importateur">' + t("suppliers.typeImporter", "Importateur") + '</option>' +
-        '<option value="distributeur">' + t("suppliers.typeDistributor", "Distributeur") + '</option>' +
-        '<option value="autre">' + t("suppliers.typeOther", "Autre") + '</option>' +
+        '<option value="">' + t("form.select", "-- Selectionner --") + '</option>' +
+        '<option value="wholesaler">' + t("suppliers.typeWholesaler", "Grossiste") + '</option>' +
+        '<option value="producer">' + t("suppliers.typeProducer", "Producteur") + '</option>' +
+        '<option value="importer">' + t("suppliers.typeImporter", "Importateur") + '</option>' +
+        '<option value="distributor">' + t("suppliers.typeDistributor", "Distributeur") + '</option>' +
+        '<option value="other">' + t("suppliers.typeOther", "Autre") + '</option>' +
         '</select></div>' +
         '<div class="form-group" style="flex:1"><label class="form-label">' + t("suppliers.country", "Pays") + '</label>' +
         '<input type="text" class="form-input" id="supplierCountry" placeholder="France"></div>' +
@@ -5327,7 +5351,39 @@
   }
 
   function syncShopify() {
-    showToast("Sync...", "info");
+    syncShopifyProducts();
+  }
+  
+  async function syncShopifyProducts() {
+    var btn = document.getElementById("syncBtn");
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '<i data-lucide="loader" class="icon spin"></i> <span class="btn-text">' + t("msg.syncing", "Sync...") + '</span>';
+      if (typeof lucide !== "undefined") lucide.createIcons();
+    }
+    
+    try {
+      showToast(t("sync.starting", "Synchronisation en cours..."), "info", 3000);
+      var res = await authFetch(apiUrl("/sync/shopify"), { method: "POST" });
+      
+      if (res.ok) {
+        var data = await res.json();
+        showToast(t("sync.success", "Synchronisation terminee") + (data.imported ? " - " + data.imported + " " + t("products.title", "produits") : ""), "success");
+        await loadProducts();
+        renderTab(state.currentTab);
+      } else {
+        var err = await res.json().catch(function() { return {}; });
+        showToast(err.error || t("sync.error", "Erreur de synchronisation"), "error");
+      }
+    } catch (e) {
+      showToast(t("sync.error", "Erreur de synchronisation") + ": " + e.message, "error");
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<i data-lucide="refresh-cw" class="icon"></i> <span class="btn-text">' + t("action.sync", "Synchroniser") + '</span>';
+        if (typeof lucide !== "undefined") lucide.createIcons();
+      }
+    }
   }
 
   async function upgradeTo(planId) {
@@ -5976,7 +6032,7 @@
     // Status badge
     var statusClass = p.stockStatus || "good";
     var statusLabel = p.stockLabel || "OK";
-    var statusIcon = statusClass === "critical" ? "ðŸ”´" : statusClass === "low" ? "ðŸŸ¡" : "ðŸŸ¢";
+    var statusBadgeClass = statusClass === "critical" ? "badge-danger" : statusClass === "low" ? "badge-warning" : "badge-success";
 
     // Categories chips
     var categoriesHtml = "";
@@ -5985,7 +6041,7 @@
         return '<span class="tag">' + esc(c.name) + '</span>';
       }).join(" ");
     } else {
-      categoriesHtml = '<span class="text-secondary text-sm">Aucune categorie</span>';
+      categoriesHtml = '<span class="text-secondary text-sm">' + t("products.noCategory", "Aucune categorie") + '</span>';
     }
 
     // Variants table
@@ -5995,7 +6051,7 @@
         '<tr>' +
         '<td class="cell-primary">' + v.gramsPerUnit + 'g</td>' +
         '<td class="cell-mono">' + (v.inventoryItemId || '-') + '</td>' +
-        '<td style="font-weight:600">' + v.canSell + ' unites</td>' +
+        '<td style="font-weight:600">' + v.canSell + ' ' + t("products.units", "unites") + '</td>' +
         '<td>' + formatWeight(v.gramsEquivalent) + '</td>' +
         '<td style="width:150px">' +
         '<div class="variant-bar-container">' +
@@ -6027,39 +6083,39 @@
       '<div class="product-detail-header">' +
       '<div class="product-detail-title">' +
       '<h2>' + esc(p.name) + '</h2>' +
-      '<span class="stock-badge ' + statusClass + '">' + statusIcon + ' ' + statusLabel + '</span>' +
+      '<span class="badge ' + statusBadgeClass + '">' + statusLabel + '</span>' +
       '</div>' +
       '<div class="product-detail-categories">' + categoriesHtml + '</div>' +
       '</div>' +
 
       // Stats grid
       '<div class="product-detail-stats">' +
-      '<div class="detail-stat"><div class="detail-stat-value">' + formatWeight(p.totalGrams) + '</div><div class="detail-stat-label">Stock total</div></div>' +
-      '<div class="detail-stat"><div class="detail-stat-value">' + formatPricePerUnit(p.averageCostPerGram) + '</div><div class="detail-stat-label">Cout moyen (CMP)</div></div>' +
-      '<div class="detail-stat"><div class="detail-stat-value">' + formatCurrency(p.stockValue) + '</div><div class="detail-stat-label">Valeur stock</div></div>' +
-      '<div class="detail-stat"><div class="detail-stat-value">' + summary.variantCount + '</div><div class="detail-stat-label">Variantes</div></div>' +
+      '<div class="detail-stat"><div class="detail-stat-value">' + formatWeight(p.totalGrams) + '</div><div class="detail-stat-label">' + t("products.totalStock", "STOCK TOTAL") + '</div></div>' +
+      '<div class="detail-stat"><div class="detail-stat-value">' + formatPricePerUnit(p.averageCostPerGram) + '</div><div class="detail-stat-label">' + t("products.avgCost", "COUT MOYEN (CMP)") + '</div></div>' +
+      '<div class="detail-stat"><div class="detail-stat-value">' + formatCurrency(p.stockValue) + '</div><div class="detail-stat-label">' + t("products.stockValue", "VALEUR STOCK") + '</div></div>' +
+      '<div class="detail-stat"><div class="detail-stat-value">' + summary.variantCount + '</div><div class="detail-stat-label">' + t("products.variants", "VARIANTES") + '</div></div>' +
       '</div>' +
 
       // Actions rapides
       '<div class="product-detail-actions">' +
-      '<button class="btn btn-primary btn-sm" onclick="app.closeModal();app.showRestockModal(\'' + p.productId + '\')"><i data-lucide="package-plus"></i> Reappro</button>' +
-      '<button class="btn btn-secondary btn-sm" onclick="app.closeModal();app.showAdjustModal(\'' + p.productId + '\')"><i data-lucide="sliders"></i> Ajuster</button>' +
-      '<button class="btn btn-ghost btn-sm" onclick="app.showEditCMPModal(\'' + p.productId + '\',' + p.averageCostPerGram + ')"><i data-lucide="coins"></i> Modifier CMP</button>' +
-      (hasFeature("hasBatchTracking") ? '<button class="btn btn-ghost btn-sm" onclick="app.closeModal();app.showAddBatchForProduct(\'' + p.productId + '\',\'' + esc(p.name).replace(/'/g, "\\'") + '\')"><i data-lucide="layers"></i> + Lot</button>' : '') +
+      '<button class="btn btn-primary btn-sm" onclick="app.closeModal();app.showRestockModal(\'' + p.productId + '\')"><i data-lucide="package-plus"></i> ' + t("action.restock", "Reappro") + '</button>' +
+      '<button class="btn btn-secondary btn-sm" onclick="app.closeModal();app.showAdjustModal(\'' + p.productId + '\')"><i data-lucide="sliders"></i> ' + t("action.adjust", "Ajuster") + '</button>' +
+      '<button class="btn btn-ghost btn-sm" onclick="app.showEditCMPModal(\'' + p.productId + '\',' + p.averageCostPerGram + ')"><i data-lucide="coins"></i> ' + t("action.editCMP", "Modifier CMP") + '</button>' +
+      (hasFeature("hasBatchTracking") ? '<button class="btn btn-ghost btn-sm" onclick="app.closeModal();app.showAddBatchForProduct(\'' + p.productId + '\',\'' + esc(p.name).replace(/'/g, "\\'") + '\')"><i data-lucide="layers"></i> + ' + t("batches.addBatch", "Lot") + '</button>' : '') +
       '</div>' +
 
       // Section Lots (si PRO)
       (hasFeature("hasBatchTracking") ? 
         '<div class="product-detail-section">' +
-        '<h3 class="section-title"><i data-lucide="layers"></i> Lots actifs</h3>' +
+        '<h3 class="section-title"><i data-lucide="layers"></i> ' + t("products.activeBatches", "Lots actifs") + '</h3>' +
         '<div id="productLotsContainer" data-product-id="' + p.productId + '"><div class="text-center py-md"><div class="spinner"></div></div></div>' +
         '</div>'
         : '') +
 
       // Graphique capacite de vente
       '<div class="product-detail-section">' +
-      '<h3 class="section-title">ðŸ“Š Capacite de vente par variante</h3>' +
-      '<p class="text-secondary text-sm mb-md">Nombre d\'unites vendables si le stock etait vendu uniquement via cette variante</p>' +
+      '<h3 class="section-title"><i data-lucide="bar-chart-3"></i> ' + t("products.salesCapacity", "Capacite de vente par variante") + '</h3>' +
+      '<p class="text-secondary text-sm mb-md">' + t("products.salesCapacityDesc", "Nombre d\'unites vendables si le stock etait vendu uniquement via cette variante") + '</p>' +
       '<div class="chart-container">' +
       '<div class="simple-bar-chart">' + chartBars + '</div>' +
       '</div>' +
@@ -6067,10 +6123,10 @@
 
       // Tableau variantes
       '<div class="product-detail-section">' +
-      '<h3 class="section-title">ðŸ“¦ Detail des variantes</h3>' +
+      '<h3 class="section-title"><i data-lucide="package"></i> ' + t("products.variantDetails", "Detail des variantes") + '</h3>' +
       '<div class="table-container">' +
       '<table class="data-table data-table-compact">' +
-      '<thead><tr><th>Grammage</th><th>Inventory ID</th><th>Unites dispo</th><th>Ã‰quivalent stock</th><th>Repartition</th></tr></thead>' +
+      '<thead><tr><th>' + t("products.weight", "Grammage") + '</th><th>Inventory ID</th><th>' + t("products.unitsAvailable", "Unites dispo") + '</th><th>' + t("products.stockEquivalent", "Equivalent stock") + '</th><th>' + t("products.distribution", "Repartition") + '</th></tr></thead>' +
       '<tbody>' + variantsRows + '</tbody>' +
       '</table>' +
       '</div>' +
@@ -6078,10 +6134,10 @@
 
       // Info pool global
       '<div class="product-detail-info">' +
-      '<div class="info-icon">â„¹ï¸</div>' +
+      '<div class="info-icon"><i data-lucide="info"></i></div>' +
       '<div class="info-text">' +
-      '<strong>Mode Pool Global</strong><br>' +
-      '<span class="text-secondary">Le stock est partage entre toutes les variantes. Les "unites dispo" representent la capacite maximale de vente pour chaque grammage.</span>' +
+      '<strong>' + t("products.poolMode", "Mode Pool Global") + '</strong><br>' +
+      '<span class="text-secondary">' + t("products.poolModeDesc", "Le stock est partage entre toutes les variantes. Les unites dispo representent la capacite maximale de vente pour chaque grammage.") + '</span>' +
       '</div>' +
       '</div>';
 
@@ -6089,7 +6145,7 @@
       title: t("products.details", "Fiche produit"),
       size: "xl",
       content: content,
-      footer: '<button class="btn btn-ghost" onclick="app.closeModal()">Fermer</button>',
+      footer: '<button class="btn btn-ghost" onclick="app.closeModal()">' + t("action.close", "Fermer") + '</button>',
     });
 
     // Charger les lots du produit si PRO
@@ -6865,6 +6921,7 @@
     saveRestock: saveRestock,
     saveAdjust: saveAdjust,
     syncShopify: syncShopify,
+    syncShopifyProducts: syncShopifyProducts,
     upgradeTo: upgradeTo,
     showToast: showToast,
     hasFeature: hasFeature,
@@ -6985,6 +7042,7 @@
     closeTutorial: closeTutorial,
     showAllTutorials: showAllTutorials,
     showSpecificTutorial: showSpecificTutorial,
+    showLockedFeatureTutorial: showLockedFeatureTutorial,
     resetAllTutorials: resetAllTutorials,
     // Notifications
     loadNotifications: loadNotifications,
