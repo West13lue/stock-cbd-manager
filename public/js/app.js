@@ -131,28 +131,53 @@
       console.warn("[AppBridge] apiKey introuvable");
       return false;
     }
-    var AB = window["app-bridge"];
-    if (!AB || typeof AB.createApp !== "function") {
-      console.warn("[AppBridge] non charge");
-      return false;
+    
+    // App Bridge v4 - utilise shopify global
+    if (typeof shopify !== "undefined") {
+      appBridgeApp = shopify;
+      console.log("[AppBridge v4] OK - using shopify global");
+      return true;
     }
-    appBridgeApp = AB.createApp({ apiKey: apiKey, host: host, forceRedirect: true });
-    console.log("[AppBridge] OK");
-    return true;
+    
+    // Fallback App Bridge v3
+    var AB = window["app-bridge"];
+    if (AB && typeof AB.createApp === "function") {
+      appBridgeApp = AB.createApp({ apiKey: apiKey, host: host, forceRedirect: true });
+      console.log("[AppBridge v3] OK");
+      return true;
+    }
+    
+    console.warn("[AppBridge] non charge");
+    return false;
   }
 
   async function getSessionToken() {
     if (sessionToken) return sessionToken;
+    
+    // App Bridge v4 - utilise shopify.idToken()
+    if (typeof shopify !== "undefined" && typeof shopify.idToken === "function") {
+      try {
+        sessionToken = await shopify.idToken();
+        console.log("[AppBridge v4] Token obtenu");
+        return sessionToken;
+      } catch (e) {
+        console.warn("[AppBridge v4] Erreur idToken:", e);
+      }
+    }
+    
+    // Fallback App Bridge v3
     if (!appBridgeApp) return null;
     var ABU = window["app-bridge-utils"];
-    if (!ABU || typeof ABU.getSessionToken !== "function") return null;
-    try {
-      sessionToken = await ABU.getSessionToken(appBridgeApp);
-      return sessionToken;
-    } catch (e) {
-      console.warn("[AppBridge] Erreur:", e);
-      return null;
+    if (ABU && typeof ABU.getSessionToken === "function") {
+      try {
+        sessionToken = await ABU.getSessionToken(appBridgeApp);
+        return sessionToken;
+      } catch (e) {
+        console.warn("[AppBridge v3] Erreur:", e);
+      }
     }
+    
+    return null;
   }
 
   function clearSessionToken() {
