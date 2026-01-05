@@ -1319,12 +1319,13 @@
       
       var html = '<div class="movements-list">';
       movements.forEach(function(m) {
-        var typeIcon = getMovementIcon(m.type);
-        var typeClass = getMovementClass(m.type);
-        var typeLabel = getMovementLabel(m.type);
-        var delta = m.delta || 0;
+        var mType = m.type || m.source || 'adjustment';
+        var typeIcon = getMovementIcon(mType);
+        var typeClass = getMovementClass(mType);
+        var typeLabel = getMovementLabel(mType);
+        var delta = m.delta || m.gramsDelta || 0;
         var deltaStr = delta >= 0 ? '+' + formatWeight(delta) : formatWeight(delta);
-        var dateStr = formatRelativeDate(m.createdAt || m.date);
+        var dateStr = formatRelativeDate(m.createdAt || m.date || m.ts);
         
         html += '<div class="movement-item">' +
           '<div class="movement-icon ' + typeClass + '"><i data-lucide="' + typeIcon + '"></i></div>' +
@@ -1371,12 +1372,13 @@
       
       var html = '<div class="activity-list">';
       movements.forEach(function(m) {
-        var typeIcon = getMovementIcon(m.type);
-        var typeClass = getMovementClass(m.type);
-        var typeLabel = getMovementLabel(m.type);
-        var delta = m.delta || 0;
+        var mType = m.type || m.source || 'adjustment';
+        var typeIcon = getMovementIcon(mType);
+        var typeClass = getMovementClass(mType);
+        var typeLabel = getMovementLabel(mType);
+        var delta = m.delta || m.gramsDelta || 0;
         var deltaStr = delta >= 0 ? '+' + formatWeight(delta) : formatWeight(delta);
-        var dateStr = formatRelativeDate(m.createdAt || m.date);
+        var dateStr = formatRelativeDate(m.createdAt || m.date || m.ts);
         var profileName = m.profileName || m.userName || t("dashboard.unknownUser", "Utilisateur");
         var profileColor = m.profileColor || '#6366f1';
         var profileInitials = getInitials(profileName);
@@ -1386,7 +1388,7 @@
           '<div class="activity-content" style="flex:1;min-width:0">' +
           '<div class="activity-action" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">' +
           '<span style="font-weight:500;color:var(--text-primary)">' + esc(profileName) + '</span>' +
-          '<span style="color:var(--text-secondary)">' + getActivityVerb(m.type) + '</span>' +
+          '<span style="color:var(--text-secondary)">' + getActivityVerb(mType) + '</span>' +
           '<span style="font-weight:500;color:var(--text-primary)">' + esc(m.productName || m.product || 'Produit') + '</span>' +
           '</div>' +
           '<div class="activity-details" style="display:flex;align-items:center;gap:8px;margin-top:2px">' +
@@ -1457,7 +1459,7 @@
       // Grouper par date
       var groupedByDate = {};
       movements.forEach(function(m) {
-        var dateKey = (m.createdAt || m.date || '').slice(0, 10);
+        var dateKey = (m.createdAt || m.date || m.ts || '').slice(0, 10);
         if (!groupedByDate[dateKey]) groupedByDate[dateKey] = [];
         groupedByDate[dateKey].push(m);
       });
@@ -1469,11 +1471,12 @@
           '<div class="activity-date-header" style="font-weight:600;color:var(--text-secondary);padding:8px 0;border-bottom:1px solid var(--border-color);margin-bottom:8px">' + dateLabel + '</div>';
         
         groupedByDate[dateKey].forEach(function(m) {
-          var typeClass = getMovementClass(m.type);
-          var typeLabel = getMovementLabel(m.type);
-          var delta = m.delta || 0;
+          var mType = m.type || m.source || 'adjustment';
+          var typeClass = getMovementClass(mType);
+          var typeLabel = getMovementLabel(mType);
+          var delta = m.delta || m.gramsDelta || 0;
           var deltaStr = delta >= 0 ? '+' + formatWeight(delta) : formatWeight(delta);
-          var timeStr = (m.createdAt || m.date || '').slice(11, 16);
+          var timeStr = (m.createdAt || m.date || m.ts || '').slice(11, 16);
           var profileName = m.profileName || m.userName || t("dashboard.unknownUser", "Utilisateur");
           var profileColor = m.profileColor || '#6366f1';
           var profileInitials = getInitials(profileName);
@@ -1483,7 +1486,7 @@
             '<div style="width:28px;height:28px;border-radius:50%;background:' + profileColor + ';display:flex;align-items:center;justify-content:center;color:white;font-size:10px;font-weight:600">' + profileInitials + '</div>' +
             '<div style="flex:1">' +
             '<span style="font-weight:500">' + esc(profileName) + '</span> ' +
-            '<span style="color:var(--text-secondary)">' + getActivityVerb(m.type) + '</span> ' +
+            '<span style="color:var(--text-secondary)">' + getActivityVerb(mType) + '</span> ' +
             '<span style="font-weight:500">' + esc(m.productName || m.product || '') + '</span>' +
             '</div>' +
             '<span class="badge badge-' + typeClass + '" style="font-size:10px">' + typeLabel + '</span>' +
@@ -1562,7 +1565,18 @@
       'return': 'rotate-ccw',
       'loss': 'trash-2',
       'production': 'factory',
-      'inventory': 'clipboard-check'
+      'inventory': 'clipboard-check',
+      'adjust_total': 'sliders',
+      'adjust_location': 'map-pin',
+      'sync_shopify': 'refresh-cw',
+      'category_rename': 'tag',
+      'category_delete': 'tag',
+      'batch_create': 'layers',
+      'batch_adjust': 'layers',
+      'kit_assemble': 'puzzle',
+      'kit_disassemble': 'puzzle',
+      'po_receive': 'package-check',
+      'inventory_apply': 'clipboard-check'
     };
     return icons[type] || 'activity';
   }
@@ -1576,7 +1590,18 @@
       'return': 'info',
       'loss': 'danger',
       'production': 'success',
-      'inventory': 'secondary'
+      'inventory': 'secondary',
+      'adjust_total': 'warning',
+      'adjust_location': 'info',
+      'sync_shopify': 'primary',
+      'category_rename': 'secondary',
+      'category_delete': 'danger',
+      'batch_create': 'success',
+      'batch_adjust': 'warning',
+      'kit_assemble': 'success',
+      'kit_disassemble': 'warning',
+      'po_receive': 'success',
+      'inventory_apply': 'primary'
     };
     return classes[type] || '';
   }
@@ -1590,7 +1615,18 @@
       'return': t("movement.return", "Retour"),
       'loss': t("movement.loss", "Perte"),
       'production': t("movement.production", "Production"),
-      'inventory': t("movement.inventory", "Inventaire")
+      'inventory': t("movement.inventory", "Inventaire"),
+      'adjust_total': t("movement.adjustTotal", "Ajustement stock"),
+      'adjust_location': t("movement.adjustLocation", "Ajustement emplacement"),
+      'sync_shopify': t("movement.syncShopify", "Sync Shopify"),
+      'category_rename': t("movement.categoryRename", "Renommage categorie"),
+      'category_delete': t("movement.categoryDelete", "Suppression categorie"),
+      'batch_create': t("movement.batchCreate", "Creation lot"),
+      'batch_adjust': t("movement.batchAdjust", "Ajustement lot"),
+      'kit_assemble': t("movement.kitAssemble", "Assemblage kit"),
+      'kit_disassemble': t("movement.kitDisassemble", "Desassemblage kit"),
+      'po_receive': t("movement.poReceive", "Reception commande"),
+      'inventory_apply': t("movement.inventoryApply", "Application inventaire")
     };
     return labels[type] || type;
   }

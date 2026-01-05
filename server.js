@@ -1011,6 +1011,7 @@ router.get("/api/movements", (req, res) => {
     const rows = movementStore.listMovements ? movementStore.listMovements({ shop, days, limit }) : [];
     res.json({ 
       count: rows.length, 
+      movements: rows,
       data: rows,
       daysLimited,
       maxDays: days,
