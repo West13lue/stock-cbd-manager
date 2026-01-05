@@ -1001,16 +1001,29 @@
   // Réappro rapide (sélection produit)
   function showQuickRestockModal() {
     var productOptions = state.products.map(function(p) {
-      return '<option value="' + p.id + '">' + esc(p.title || p.name) + ' (' + formatWeight(p.totalGrams || 0) + ')</option>';
+      return '<option value="' + p.id + '" data-cmp="' + (p.averageCostPerGram || 0) + '">' + esc(p.title || p.name) + ' (' + formatWeight(p.totalGrams || 0) + ')</option>';
     }).join('');
+    
+    var currencySymbol = getCurrencySymbol();
+    var weightUnit = getWeightUnit();
     
     showModal({
       title: '<i data-lucide="package-plus"></i> ' + t("dashboard.quickRestock", "Réappro rapide"),
       size: "sm",
       content: '<div class="form-group"><label>' + t("products.product", "Produit") + '</label>' +
-        '<select id="quickRestockProduct" class="form-select"><option value="">' + t("action.selectProduct", "Sélectionner...") + '</option>' + productOptions + '</select></div>' +
-        '<div class="form-group"><label>' + t("products.quantity", "Quantité") + ' (g)</label>' +
-        '<input type="number" id="quickRestockQty" class="form-input" placeholder="0" min="0" step="0.1"></div>' +
+        '<select id="quickRestockProduct" class="form-select" onchange="app.updateQuickRestockCMP()">' +
+        '<option value="">' + t("action.selectProduct", "Sélectionner...") + '</option>' + productOptions + '</select></div>' +
+        '<div class="form-row" style="display:flex;gap:12px">' +
+        '<div class="form-group" style="flex:1"><label>' + t("products.quantity", "Quantité") + ' (' + weightUnit + ')</label>' +
+        '<input type="number" id="quickRestockQty" class="form-input" placeholder="0" min="0" step="0.1" onchange="app.updateQuickRestockTotal()"></div>' +
+        '<div class="form-group" style="flex:1"><label>' + t("products.purchasePrice", "Prix d\'achat") + ' (' + currencySymbol + '/' + weightUnit + ')</label>' +
+        '<input type="number" id="quickRestockPrice" class="form-input" placeholder="0.00" min="0" step="0.01" onchange="app.updateQuickRestockTotal()"></div>' +
+        '</div>' +
+        '<div class="form-group" id="quickRestockTotalContainer" style="display:none">' +
+        '<div class="quick-restock-summary" style="background:var(--bg-tertiary);padding:12px;border-radius:var(--radius-md)">' +
+        '<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span class="text-secondary">' + t("products.totalCost", "Coût total") + '</span><span id="quickRestockTotalCost" style="font-weight:600">0.00 ' + currencySymbol + '</span></div>' +
+        '<div style="display:flex;justify-content:space-between"><span class="text-secondary">' + t("products.currentCMP", "CMP actuel") + '</span><span id="quickRestockCurrentCMP">-</span></div>' +
+        '</div></div>' +
         '<div class="form-group"><label>' + t("products.note", "Note") + ' (' + t("products.optional", "optionnel") + ')</label>' +
         '<input type="text" id="quickRestockNote" class="form-input" placeholder="' + t("products.notePlaceholder", "Ex: Livraison fournisseur") + '"></div>',
       footer: '<button class="btn btn-secondary" onclick="app.closeModal()">' + t("action.cancel", "Annuler") + '</button>' +
@@ -1018,18 +1031,72 @@
     });
     if (typeof lucide !== "undefined") lucide.createIcons();
   }
+  
+  function updateQuickRestockCMP() {
+    var select = document.getElementById('quickRestockProduct');
+    var selectedOption = select.options[select.selectedIndex];
+    var cmp = selectedOption ? parseFloat(selectedOption.dataset.cmp) || 0 : 0;
+    var cmpDisplay = document.getElementById('quickRestockCurrentCMP');
+    var priceInput = document.getElementById('quickRestockPrice');
+    
+    if (cmpDisplay) {
+      cmpDisplay.textContent = cmp > 0 ? formatPricePerUnit(cmp) : '-';
+    }
+    // Pré-remplir avec le CMP actuel si pas de prix saisi
+    if (priceInput && !priceInput.value && cmp > 0) {
+      priceInput.value = cmp.toFixed(2);
+    }
+    updateQuickRestockTotal();
+  }
+  
+  function updateQuickRestockTotal() {
+    var qty = parseFloat(document.getElementById('quickRestockQty').value) || 0;
+    var price = parseFloat(document.getElementById('quickRestockPrice').value) || 0;
+    var container = document.getElementById('quickRestockTotalContainer');
+    var totalDisplay = document.getElementById('quickRestockTotalCost');
+    
+    if (qty > 0 && price > 0) {
+      var total = qty * price;
+      if (totalDisplay) totalDisplay.textContent = formatCurrency(total);
+      if (container) container.style.display = 'block';
+    } else {
+      if (container) container.style.display = 'none';
+    }
+  }
 
   function doQuickRestock() {
     var productId = document.getElementById('quickRestockProduct').value;
     var qty = parseFloat(document.getElementById('quickRestockQty').value) || 0;
+    var price = parseFloat(document.getElementById('quickRestockPrice').value) || 0;
     var note = document.getElementById('quickRestockNote').value || '';
     
     if (!productId) { showToast(t("msg.selectProduct", "Sélectionnez un produit"), "error"); return; }
     if (qty <= 0) { showToast(t("msg.invalidQty", "Quantité invalide"), "error"); return; }
     
+    // Convertir en grammes si nécessaire
+    var qtyInGrams = toGrams(qty);
+    
+    // Préparer les données avec le profil actif
+    var data = { 
+      grams: qtyInGrams, 
+      note: note 
+    };
+    
+    // Ajouter le prix d'achat si spécifié
+    if (price > 0) {
+      data.purchasePricePerGram = price;
+    }
+    
+    // Ajouter le profil actif
+    if (activeProfile) {
+      data.profileId = activeProfile.id;
+      data.profileName = activeProfile.name;
+      data.profileColor = activeProfile.color;
+    }
+    
     authFetch(apiUrl("/products/" + productId + "/restock"), {
       method: "POST",
-      body: JSON.stringify({ grams: qty, note: note })
+      body: JSON.stringify(data)
     }).then(function(res) {
       if (res.ok) {
         showToast(t("msg.restockSuccess", "Réappro effectuée"), "success");
@@ -1688,30 +1755,30 @@
 
     // Options tri
     var sortOptions = [
-      { value: "alpha", label: "Nom A-Z" },
-      { value: "alpha_desc", label: "Nom Z-A" },
-      { value: "stock_asc", label: "Stock croissant" },
-      { value: "stock_desc", label: "Stock decroissant" },
-      { value: "value_asc", label: "Valeur croissante" },
-      { value: "value_desc", label: "Valeur decroissante" }
+      { value: "alpha", label: t("sort.nameAZ", "Nom A-Z") },
+      { value: "alpha_desc", label: t("sort.nameZA", "Nom Z-A") },
+      { value: "stock_asc", label: t("sort.stockAsc", "Stock croissant") },
+      { value: "stock_desc", label: t("sort.stockDesc", "Stock decroissant") },
+      { value: "value_asc", label: t("sort.valueAsc", "Valeur croissante") },
+      { value: "value_desc", label: t("sort.valueDesc", "Valeur decroissante") }
     ];
     var sortOptionsHtml = sortOptions.map(function(opt) {
       return '<option value="' + opt.value + '"' + (state.filters.sort === opt.value ? " selected" : "") + '>' + opt.label + '</option>';
     }).join("");
 
     c.innerHTML =
-      '<div class="page-header"><div><h1 class="page-title">Produits</h1><p class="page-subtitle">' +
-      state.products.length + " produit(s)</p></div>" +
+      '<div class="page-header"><div><h1 class="page-title">' + t("products.title", "Produits") + '</h1><p class="page-subtitle">' +
+      state.products.length + " " + t("products.productCount", "produit(s)") + "</p></div>" +
       '<div class="page-actions">' +
-      '<button class="btn btn-ghost" onclick="app.showScannerModal()" title="Scanner code-barres"><i data-lucide="scan-barcode"></i></button>' +
-      '<button class="btn btn-ghost" onclick="app.showCategoriesModal()">Categories</button>' +
-      '<button class="btn btn-secondary" onclick="app.showImportModal()">Import Shopify</button>' +
-      '<button class="btn btn-primary" onclick="app.showAddProductModal()">+ Ajouter</button></div></div>' +
+      '<button class="btn btn-ghost" onclick="app.showScannerModal()" title="' + t("scanner.title", "Scanner code-barres") + '"><i data-lucide="scan-barcode"></i></button>' +
+      '<button class="btn btn-ghost" onclick="app.showCategoriesModal()">' + t("categories.title", "Categories") + '</button>' +
+      '<button class="btn btn-secondary" onclick="app.showImportModal()">' + t("products.importShopify", "Import Shopify") + '</button>' +
+      '<button class="btn btn-primary" onclick="app.showAddProductModal()">+ ' + t("action.add", "Ajouter") + '</button></div></div>' +
       
       // Toolbar filtres
       '<div class="toolbar-filters">' +
       '<div class="filter-group">' +
-      '<input type="text" class="form-input" id="searchInput" placeholder="Rechercher... (Ctrl+K)" value="' + esc(state.filters.search) + '" onkeyup="app.onSearchChange(event)">' +
+      '<input type="text" class="form-input" id="searchInput" placeholder="' + t("products.searchPlaceholder", "Rechercher... (Ctrl+K)") + '" value="' + esc(state.filters.search) + '" onkeyup="app.onSearchChange(event)">' +
       '</div>' +
       '<div class="filter-group">' +
       '<select class="form-select" id="categoryFilter" onchange="app.onCategoryChange(this.value)">' + catOptions + '</select>' +
@@ -3475,21 +3542,28 @@
         
         return (
           '<tr class="product-row" data-product-id="' + esc(p.productId) + '" onclick="app.openProductDetails(\'' + esc(p.productId) + '\')" style="cursor:pointer">' +
-          "<td>" + esc(p.name || p.title || "Sans nom") + "</td>" +
+          "<td>" + esc(p.name || p.title || t("products.unnamed", "Sans nom")) + "</td>" +
           '<td class="cell-categories" onclick="event.stopPropagation();app.showAssignCategoriesModal(\'' + esc(p.productId) + '\')">' + catChips + '</td>' +
           "<td>" + formatWeight(s) + "</td>" +
           "<td>" + formatPricePerUnit(cost) + "</td>" +
           "<td>" + formatCurrency(s * cost) + "</td>" +
           '<td><span class="stock-badge ' + st.c + '">' + st.i + " " + st.l + "</span></td>" +
           '<td class="cell-actions" onclick="event.stopPropagation()">' +
-          '<button class="btn btn-ghost btn-xs" onclick="app.showRestockModal(\'' + p.productId + "')\">+</button>" +
-          '<button class="btn btn-ghost btn-xs" onclick="app.showAdjustModal(\'' + p.productId + "')\">Edit</button>" +
-          '<button class="btn btn-ghost btn-xs" onclick="app.openProductDetails(\'' + p.productId + "')\">Details</button></td></tr>"
+          '<button class="btn btn-ghost btn-xs" onclick="app.showRestockModal(\'' + p.productId + '\')">+</button>' +
+          '<button class="btn btn-ghost btn-xs" onclick="app.showAdjustModal(\'' + p.productId + '\')">' + t("action.edit", "Edit") + '</button>' +
+          '<button class="btn btn-ghost btn-xs" onclick="app.openProductDetails(\'' + p.productId + '\')">' + t("action.details", "Details") + '</button></td></tr>'
         );
       })
       .join("");
     return (
-      '<table class="data-table"><thead><tr><th>Produit</th><th>Categories</th><th>Stock</th><th>CMP</th><th>Valeur</th><th>Statut</th><th></th></tr></thead><tbody>' +
+      '<table class="data-table"><thead><tr>' +
+      '<th>' + t("table.product", "Produit") + '</th>' +
+      '<th>' + t("table.categories", "Categories") + '</th>' +
+      '<th>' + t("table.stock", "Stock") + '</th>' +
+      '<th>' + t("table.cmp", "CMP") + '</th>' +
+      '<th>' + t("table.value", "Valeur") + '</th>' +
+      '<th>' + t("table.status", "Statut") + '</th>' +
+      '<th></th></tr></thead><tbody>' +
       rows +
       "</tbody></table>"
     );
@@ -3497,10 +3571,10 @@
 
   function renderEmpty() {
     return (
-      '<div class="empty-state"><div class="empty-icon"><i data-lucide="package-open"></i></div><h3>Aucun produit</h3>' +
-      '<p class="text-secondary">Ajoutez ou importez des produits.</p>' +
-      '<button class="btn btn-primary" onclick="app.showAddProductModal()">+ Ajouter</button> ' +
-      '<button class="btn btn-secondary" onclick="app.showImportModal()">Import Shopify</button></div>'
+      '<div class="empty-state"><div class="empty-icon"><i data-lucide="package-open"></i></div><h3>' + t("products.noProducts", "Aucun produit") + '</h3>' +
+      '<p class="text-secondary">' + t("products.addOrImport", "Ajoutez ou importez des produits.") + '</p>' +
+      '<button class="btn btn-primary" onclick="app.showAddProductModal()">+ ' + t("action.add", "Ajouter") + '</button> ' +
+      '<button class="btn btn-secondary" onclick="app.showImportModal()">' + t("products.importShopify", "Import Shopify") + '</button></div>'
     );
   }
 
@@ -7029,6 +7103,8 @@
     showOutOfStockModal: showOutOfStockModal,
     showQuickRestockModal: showQuickRestockModal,
     doQuickRestock: doQuickRestock,
+    updateQuickRestockCMP: updateQuickRestockCMP,
+    updateQuickRestockTotal: updateQuickRestockTotal,
     showQuickAdjustModal: showQuickAdjustModal,
     doQuickAdjust: doQuickAdjust,
     // Scanner

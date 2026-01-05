@@ -37,6 +37,7 @@ var I18N = {
       // Produits
       "products.title": "Produits",
       "products.search": "Rechercher...",
+      "products.searchPlaceholder": "Rechercher... (Ctrl+K)",
       "products.allCategories": "Toutes les categories",
       "products.noCategory": "Sans categorie",
       "products.sortBy": "Trier par",
@@ -48,6 +49,7 @@ var I18N = {
       "products.categories": "Categories",
       "products.noProducts": "Aucun produit",
       "products.addFirst": "Commencez par synchroniser vos produits Shopify",
+      "products.addOrImport": "Ajoutez ou importez des produits.",
       "products.add": "Ajouter un produit",
       "products.added": "Produit ajoute",
       "products.adjustStock": "Ajuster le stock",
@@ -56,7 +58,30 @@ var I18N = {
       "products.importShopify": "Import Shopify",
       "products.restock": "Reapprovisionner",
       "products.product": "Produit",
+      "products.productCount": "produit(s)",
+      "products.unnamed": "Sans nom",
       "products.totalStock": "STOCK TOTAL",
+      
+      // Tri
+      "sort.nameAZ": "Nom A-Z",
+      "sort.nameZA": "Nom Z-A",
+      "sort.stockAsc": "Stock croissant",
+      "sort.stockDesc": "Stock decroissant",
+      "sort.valueAsc": "Valeur croissante",
+      "sort.valueDesc": "Valeur decroissante",
+      
+      // Table
+      "table.product": "Produit",
+      "table.categories": "Categories",
+      "table.stock": "Stock",
+      "table.cmp": "CMP",
+      "table.value": "Valeur",
+      "table.status": "Statut",
+      
+      // Actions
+      "action.details": "Details",
+      
+      "products.avgCost": "COUT MOYEN (CMP)",
       "products.avgCost": "COUT MOYEN (CMP)",
       "products.stockValue": "VALEUR STOCK",
       "products.variants": "VARIANTES",
@@ -621,7 +646,10 @@ var I18N = {
       "action.reload": "Recharger",
       
       // Produits
-      "products.quantity": "QuantitÃ©",
+      "products.quantity": "Quantite",
+      "products.purchasePrice": "Prix d'achat",
+      "products.totalCost": "Cout total",
+      "products.currentCMP": "CMP actuel",
       "products.note": "Note",
       "products.optional": "optionnel",
       "products.notePlaceholder": "Ex: Livraison fournisseur",
@@ -838,6 +866,7 @@ var I18N = {
       // Products
       "products.title": "Products",
       "products.search": "Search...",
+      "products.searchPlaceholder": "Search... (Ctrl+K)",
       "products.allCategories": "All categories",
       "products.noCategory": "Uncategorized",
       "products.sortBy": "Sort by",
@@ -849,6 +878,7 @@ var I18N = {
       "products.categories": "Categories",
       "products.noProducts": "No products",
       "products.addFirst": "Start by syncing your Shopify products",
+      "products.addOrImport": "Add or import products.",
       "products.add": "Add product",
       "products.added": "Product added",
       "products.adjustStock": "Adjust stock",
@@ -857,7 +887,30 @@ var I18N = {
       "products.importShopify": "Import Shopify",
       "products.restock": "Restock",
       "products.product": "Product",
+      "products.productCount": "product(s)",
+      "products.unnamed": "Unnamed",
       "products.totalStock": "TOTAL STOCK",
+      
+      // Sort
+      "sort.nameAZ": "Name A-Z",
+      "sort.nameZA": "Name Z-A",
+      "sort.stockAsc": "Stock ascending",
+      "sort.stockDesc": "Stock descending",
+      "sort.valueAsc": "Value ascending",
+      "sort.valueDesc": "Value descending",
+      
+      // Table
+      "table.product": "Product",
+      "table.categories": "Categories",
+      "table.stock": "Stock",
+      "table.cmp": "Avg Cost",
+      "table.value": "Value",
+      "table.status": "Status",
+      
+      // Actions
+      "action.details": "Details",
+      
+      "products.avgCost": "AVG COST (CMP)",
       "products.avgCost": "AVG COST (CMP)",
       "products.stockValue": "STOCK VALUE",
       "products.variants": "VARIANTS",
@@ -1424,6 +1477,9 @@ var I18N = {
       
       // Products
       "products.quantity": "Quantity",
+      "products.purchasePrice": "Purchase price",
+      "products.totalCost": "Total cost",
+      "products.currentCMP": "Current avg cost",
       "products.note": "Note",
       "products.optional": "optional",
       "products.notePlaceholder": "Ex: Supplier delivery",
@@ -1676,20 +1732,49 @@ var I18N = {
       // Products
       "products.title": "Produkte",
       "products.search": "Suchen...",
+      "products.searchPlaceholder": "Suchen... (Ctrl+K)",
       "products.allCategories": "Alle Kategorien",
       "products.noCategory": "Ohne Kategorie",
+      "products.noProducts": "Keine Produkte",
+      "products.addOrImport": "Produkte hinzufugen oder importieren.",
+      "products.productCount": "Produkt(e)",
+      "products.unnamed": "Ohne Namen",
       "products.name": "Name",
       "products.stock": "Bestand",
       "products.cmp": "Durchschnittkosten",
       "products.value": "Wert",
       "products.status": "Status",
-      "products.add": "Produkt hinzufÃ¼gen",
-      "products.added": "Produkt hinzugefÃ¼gt",
+      "products.add": "Produkt hinzufugen",
+      "products.added": "Produkt hinzugefugt",
       "products.adjustStock": "Bestand anpassen",
       "products.details": "Produktdetails",
       "products.restock": "Nachbestellen",
       "products.product": "Produkt",
+      "products.importShopify": "Shopify importieren",
+      
+      // Sort
+      "sort.nameAZ": "Name A-Z",
+      "sort.nameZA": "Name Z-A",
+      "sort.stockAsc": "Bestand aufsteigend",
+      "sort.stockDesc": "Bestand absteigend",
+      "sort.valueAsc": "Wert aufsteigend",
+      "sort.valueDesc": "Wert absteigend",
+      
+      // Table
+      "table.product": "Produkt",
+      "table.categories": "Kategorien",
+      "table.stock": "Bestand",
+      "table.cmp": "Durchschnitt",
+      "table.value": "Wert",
+      "table.status": "Status",
+      
+      // Actions
+      "action.details": "Details",
+      
       "products.quantity": "Menge",
+      "products.purchasePrice": "Einkaufspreis",
+      "products.totalCost": "Gesamtkosten",
+      "products.currentCMP": "Aktueller Durchschnittspreis",
       "products.note": "Notiz",
       "products.optional": "optional",
       "products.notePlaceholder": "z.B.: Lieferantenlieferung",
@@ -2041,8 +2126,13 @@ var I18N = {
       // Products
       "products.title": "Productos",
       "products.search": "Buscar...",
+      "products.searchPlaceholder": "Buscar... (Ctrl+K)",
       "products.allCategories": "Todas las categorias",
       "products.noCategory": "Sin categoria",
+      "products.noProducts": "Sin productos",
+      "products.addOrImport": "Anadir o importar productos.",
+      "products.productCount": "producto(s)",
+      "products.unnamed": "Sin nombre",
       "products.name": "Nombre",
       "products.stock": "Stock",
       "products.value": "Valor",
@@ -2053,6 +2143,26 @@ var I18N = {
       "products.details": "Detalles del producto",
       "products.restock": "Reabastecer",
       "products.product": "Producto",
+      "products.importShopify": "Importar Shopify",
+      
+      // Sort
+      "sort.nameAZ": "Nombre A-Z",
+      "sort.nameZA": "Nombre Z-A",
+      "sort.stockAsc": "Stock ascendente",
+      "sort.stockDesc": "Stock descendente",
+      "sort.valueAsc": "Valor ascendente",
+      "sort.valueDesc": "Valor descendente",
+      
+      // Table
+      "table.product": "Producto",
+      "table.categories": "Categorias",
+      "table.stock": "Stock",
+      "table.cmp": "Costo prom.",
+      "table.value": "Valor",
+      "table.status": "Estado",
+      
+      // Actions
+      "action.details": "Detalles",
       
       // Status
       "status.ok": "OK",
@@ -2290,6 +2400,9 @@ var I18N = {
       "action.create": "Crear",
       "action.back": "Volver",
       "products.quantity": "Cantidad",
+      "products.purchasePrice": "Precio de compra",
+      "products.totalCost": "Costo total",
+      "products.currentCMP": "Costo promedio actual",
       "products.note": "Nota",
       "products.optional": "opcional",
       "reason.count": "Conteo de inventario",
@@ -2481,8 +2594,13 @@ var I18N = {
       // Products
       "products.title": "Prodotti",
       "products.search": "Cerca...",
+      "products.searchPlaceholder": "Cerca... (Ctrl+K)",
       "products.allCategories": "Tutte le categorie",
       "products.noCategory": "Senza categoria",
+      "products.noProducts": "Nessun prodotto",
+      "products.addOrImport": "Aggiungi o importa prodotti.",
+      "products.productCount": "prodotto/i",
+      "products.unnamed": "Senza nome",
       "products.name": "Nome",
       "products.stock": "Stock",
       "products.cmp": "Costo medio",
@@ -2494,7 +2612,31 @@ var I18N = {
       "products.details": "Dettagli prodotto",
       "products.restock": "Rifornisci",
       "products.product": "Prodotto",
+      "products.importShopify": "Importa Shopify",
+      
+      // Sort
+      "sort.nameAZ": "Nome A-Z",
+      "sort.nameZA": "Nome Z-A",
+      "sort.stockAsc": "Stock crescente",
+      "sort.stockDesc": "Stock decrescente",
+      "sort.valueAsc": "Valore crescente",
+      "sort.valueDesc": "Valore decrescente",
+      
+      // Table
+      "table.product": "Prodotto",
+      "table.categories": "Categorie",
+      "table.stock": "Stock",
+      "table.cmp": "Costo medio",
+      "table.value": "Valore",
+      "table.status": "Stato",
+      
+      // Actions
+      "action.details": "Dettagli",
+      
       "products.quantity": "Quantita",
+      "products.purchasePrice": "Prezzo di acquisto",
+      "products.totalCost": "Costo totale",
+      "products.currentCMP": "Costo medio attuale",
       "products.note": "Nota",
       "products.optional": "opzionale",
       
