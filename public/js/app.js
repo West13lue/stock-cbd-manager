@@ -395,6 +395,218 @@
     });
   }
 
+  // ============================================
+  // RECHERCHE GLOBALE
+  // ============================================
+  
+  var globalSearchResults = [];
+  var selectedSearchIndex = -1;
+  
+  function performGlobalSearch(query) {
+    var q = query.toLowerCase();
+    var results = [];
+    
+    // Rechercher dans les produits
+    var productResults = state.products.filter(function(p) {
+      var name = (p.name || p.title || "").toLowerCase();
+      var sku = (p.sku || "").toLowerCase();
+      var barcode = (p.barcode || "").toLowerCase();
+      return name.indexOf(q) !== -1 || sku.indexOf(q) !== -1 || barcode.indexOf(q) !== -1;
+    }).slice(0, 5).map(function(p) {
+      return {
+        type: "product",
+        id: p.productId,
+        title: p.name || p.title,
+        meta: formatWeight(p.totalGrams || 0) + " - " + formatCurrency((p.totalGrams || 0) * (p.averageCostPerGram || 0)),
+        icon: "package",
+        action: function() { openProductDetails(p.productId); }
+      };
+    });
+    if (productResults.length) results.push({ category: "products", items: productResults });
+    
+    // Rechercher dans les fournisseurs (si disponible)
+    if (typeof suppliersData !== "undefined" && Array.isArray(suppliersData)) {
+      var supplierResults = suppliersData.filter(function(s) {
+        var name = (s.name || "").toLowerCase();
+        var code = (s.code || "").toLowerCase();
+        var email = (s.contact && s.contact.email || "").toLowerCase();
+        return name.indexOf(q) !== -1 || code.indexOf(q) !== -1 || email.indexOf(q) !== -1;
+      }).slice(0, 3).map(function(s) {
+        return {
+          type: "supplier",
+          id: s.id,
+          title: s.name,
+          meta: s.contact && s.contact.email || s.code || "",
+          icon: "factory",
+          action: function() { navigateTo("suppliers"); openSupplierDetails(s.id); }
+        };
+      });
+      if (supplierResults.length) results.push({ category: "suppliers", items: supplierResults });
+    }
+    
+    // Rechercher dans les lots (si disponible)
+    if (typeof batchesData !== "undefined" && Array.isArray(batchesData)) {
+      var batchResults = batchesData.filter(function(b) {
+        var lotNumber = (b.lotNumber || "").toLowerCase();
+        var productName = (b.productName || "").toLowerCase();
+        return lotNumber.indexOf(q) !== -1 || productName.indexOf(q) !== -1;
+      }).slice(0, 3).map(function(b) {
+        return {
+          type: "batch",
+          id: b.id,
+          title: b.lotNumber || "Lot",
+          meta: b.productName + " - " + (b.expiryDate ? formatDate(b.expiryDate) : ""),
+          icon: "calendar-clock",
+          action: function() { navigateTo("batches"); }
+        };
+      });
+      if (batchResults.length) results.push({ category: "batches", items: batchResults });
+    }
+    
+    // Rechercher dans les kits (si disponible)
+    if (typeof kitsData !== "undefined" && Array.isArray(kitsData)) {
+      var kitResults = kitsData.filter(function(k) {
+        var name = (k.name || "").toLowerCase();
+        var sku = (k.sku || "").toLowerCase();
+        return name.indexOf(q) !== -1 || sku.indexOf(q) !== -1;
+      }).slice(0, 3).map(function(k) {
+        return {
+          type: "kit",
+          id: k.id,
+          title: k.name,
+          meta: k.type || "Kit",
+          icon: "boxes",
+          action: function() { navigateTo("kits"); }
+        };
+      });
+      if (kitResults.length) results.push({ category: "kits", items: kitResults });
+    }
+    
+    globalSearchResults = results;
+    selectedSearchIndex = -1;
+    renderSearchDropdown(results, query);
+  }
+  
+  function renderSearchDropdown(results, query) {
+    var dropdown = document.getElementById("searchDropdown");
+    if (!dropdown) return;
+    
+    if (results.length === 0) {
+      dropdown.innerHTML = 
+        '<div class="search-dropdown-empty">' +
+        '<i data-lucide="search-x"></i>' +
+        '<div>' + t("search.noResults", "Aucun resultat pour") + ' "' + esc(query) + '"</div>' +
+        '</div>';
+      dropdown.style.display = "block";
+      if (typeof lucide !== "undefined") lucide.createIcons();
+      return;
+    }
+    
+    var categoryLabels = {
+      products: { label: t("nav.products", "Produits"), icon: "package" },
+      suppliers: { label: t("nav.suppliers", "Fournisseurs"), icon: "factory" },
+      batches: { label: t("nav.batches", "Lots"), icon: "calendar-clock" },
+      kits: { label: t("nav.kits", "Kits"), icon: "boxes" },
+      orders: { label: t("nav.orders", "Commandes"), icon: "clipboard-list" }
+    };
+    
+    var html = "";
+    var globalIndex = 0;
+    
+    results.forEach(function(group) {
+      var cat = categoryLabels[group.category] || { label: group.category, icon: "folder" };
+      html += '<div class="search-category"><i data-lucide="' + cat.icon + '"></i>' + cat.label + 
+              '<span class="search-category-badge">' + group.items.length + '</span></div>';
+      
+      group.items.forEach(function(item) {
+        var highlighted = highlightMatch(item.title, query);
+        html += '<div class="search-result-item" data-index="' + globalIndex + '" onclick="app.selectSearchResultByIndex(' + globalIndex + ')">' +
+          '<div class="search-result-icon ' + item.type + '"><i data-lucide="' + item.icon + '"></i></div>' +
+          '<div class="search-result-info">' +
+          '<div class="search-result-title">' + highlighted + '</div>' +
+          '<div class="search-result-meta">' + esc(item.meta) + '</div>' +
+          '</div>' +
+          '</div>';
+        globalIndex++;
+      });
+    });
+    
+    html += '<div class="search-shortcut-hint">' +
+      '<span><kbd>↑↓</kbd> ' + t("search.navigate", "Naviguer") + '</span>' +
+      '<span><kbd>Enter</kbd> ' + t("search.select", "Selectionner") + '</span>' +
+      '<span><kbd>Esc</kbd> ' + t("search.close", "Fermer") + '</span>' +
+      '</div>';
+    
+    dropdown.innerHTML = html;
+    dropdown.style.display = "block";
+    if (typeof lucide !== "undefined") lucide.createIcons();
+  }
+  
+  function highlightMatch(text, query) {
+    var escaped = esc(text);
+    var q = query.toLowerCase();
+    var idx = text.toLowerCase().indexOf(q);
+    if (idx === -1) return escaped;
+    
+    var before = esc(text.substring(0, idx));
+    var match = esc(text.substring(idx, idx + query.length));
+    var after = esc(text.substring(idx + query.length));
+    return before + '<span class="search-highlight">' + match + '</span>' + after;
+  }
+  
+  function hideSearchDropdown() {
+    var dropdown = document.getElementById("searchDropdown");
+    if (dropdown) dropdown.style.display = "none";
+    globalSearchResults = [];
+    selectedSearchIndex = -1;
+  }
+  
+  function navigateSearchResults(direction) {
+    var allItems = [];
+    globalSearchResults.forEach(function(g) { allItems = allItems.concat(g.items); });
+    if (allItems.length === 0) return;
+    
+    // Retirer la sélection actuelle
+    var items = document.querySelectorAll(".search-result-item");
+    items.forEach(function(el) { el.classList.remove("selected"); });
+    
+    // Calculer le nouvel index
+    selectedSearchIndex += direction;
+    if (selectedSearchIndex < 0) selectedSearchIndex = allItems.length - 1;
+    if (selectedSearchIndex >= allItems.length) selectedSearchIndex = 0;
+    
+    // Appliquer la nouvelle sélection
+    var selected = document.querySelector('.search-result-item[data-index="' + selectedSearchIndex + '"]');
+    if (selected) {
+      selected.classList.add("selected");
+      selected.scrollIntoView({ block: "nearest" });
+    }
+  }
+  
+  function selectSearchResult() {
+    var allItems = [];
+    globalSearchResults.forEach(function(g) { allItems = allItems.concat(g.items); });
+    
+    if (selectedSearchIndex >= 0 && selectedSearchIndex < allItems.length) {
+      var item = allItems[selectedSearchIndex];
+      hideSearchDropdown();
+      document.getElementById("globalSearch").value = "";
+      if (item.action) item.action();
+    }
+  }
+  
+  function selectSearchResultByIndex(index) {
+    var allItems = [];
+    globalSearchResults.forEach(function(g) { allItems = allItems.concat(g.items); });
+    
+    if (index >= 0 && index < allItems.length) {
+      var item = allItems[index];
+      hideSearchDropdown();
+      document.getElementById("globalSearch").value = "";
+      if (item.action) item.action();
+    }
+  }
+
   function showKeyboardShortcutsHelp() {
     showModal({
       title: '<i data-lucide="keyboard"></i> ' + t("shortcuts.title", "Raccourcis clavier"),
@@ -477,28 +689,65 @@
     
     // Traduire aussi le placeholder de recherche et ajouter le handler
     var searchInput = document.getElementById("globalSearch");
+    var searchDropdown = document.getElementById("searchDropdown");
+    
     if (searchInput) {
-      searchInput.placeholder = t("nav.searchPlaceholder", "Rechercher un produit, lot, fournisseur...");
+      searchInput.placeholder = t("nav.searchPlaceholder", "Search product, batch, supplier...");
       
-      // Handler de recherche globale
-      searchInput.addEventListener("keyup", function(e) {
-        if (e.key === "Enter") {
-          var query = searchInput.value.trim().toLowerCase();
-          if (query) {
-            // Rechercher dans les produits
-            state.filters.search = query;
-            navigateTo("products");
-          }
+      // Handler de recherche globale avec dropdown
+      var searchTimeout = null;
+      searchInput.addEventListener("input", function(e) {
+        clearTimeout(searchTimeout);
+        var query = searchInput.value.trim();
+        
+        if (query.length < 2) {
+          hideSearchDropdown();
+          return;
         }
+        
+        searchTimeout = setTimeout(function() {
+          performGlobalSearch(query);
+        }, 200);
       });
       
-      // Effacer avec Escape
+      // Navigation clavier dans le dropdown
       searchInput.addEventListener("keydown", function(e) {
         if (e.key === "Escape") {
           searchInput.value = "";
+          hideSearchDropdown();
           searchInput.blur();
+        } else if (e.key === "ArrowDown") {
+          e.preventDefault();
+          navigateSearchResults(1);
+        } else if (e.key === "ArrowUp") {
+          e.preventDefault();
+          navigateSearchResults(-1);
+        } else if (e.key === "Enter") {
+          e.preventDefault();
+          selectSearchResult();
         }
       });
+      
+      // Fermer le dropdown quand on clique ailleurs
+      document.addEventListener("click", function(e) {
+        var searchBox = document.getElementById("globalSearchBox");
+        if (searchBox && !searchBox.contains(e.target)) {
+          hideSearchDropdown();
+        }
+      });
+      
+      // Focus sur le champ rouvre le dropdown
+      searchInput.addEventListener("focus", function() {
+        if (searchInput.value.trim().length >= 2) {
+          performGlobalSearch(searchInput.value.trim());
+        }
+      });
+    }
+    
+    // Traduire le bouton Sync
+    var syncBtnText = document.getElementById("syncBtnText");
+    if (syncBtnText) {
+      syncBtnText.textContent = t("action.sync", "Sync");
     }
     
     // Traduire le widget plan
@@ -4005,15 +4254,15 @@
       title: t("kits.newKit", "Nouveau kit"),
       size: "lg",
       content:
-        '<div class="form-group"><label class="form-label">Nom *</label><input type="text" class="form-input" id="kitName" placeholder="Pack Decouverte"></div>' +
+        '<div class="form-group"><label class="form-label">' + t("kits.name", "Nom") + ' *</label><input type="text" class="form-input" id="kitName" placeholder="' + t("kits.namePlaceholder", "Pack Decouverte") + '"></div>' +
         '<div style="display:flex;gap:16px">' +
-        '<div class="form-group" style="flex:1"><label class="form-label">Type</label><select class="form-select" id="kitType"><option value="kit">Kit / Pack</option><option value="bundle">Bundle Shopify</option><option value="recipe">Recette</option></select></div>' +
+        '<div class="form-group" style="flex:1"><label class="form-label">' + t("kits.type", "Type") + '</label><select class="form-select" id="kitType"><option value="kit">' + t("kits.typeKit", "Kit / Pack") + '</option><option value="bundle">' + t("kits.typeBundle", "Bundle Shopify") + '</option><option value="recipe">' + t("kits.typeRecipe", "Recette") + '</option></select></div>' +
         '<div class="form-group" style="flex:1"><label class="form-label">SKU</label><input type="text" class="form-input" id="kitSku" placeholder="PACK-001"></div></div>' +
         '<div style="display:flex;gap:16px">' +
-        '<div class="form-group" style="flex:1"><label class="form-label">Mode de prix</label><select class="form-select" id="kitPricingMode"><option value="fixed">Prix fixe</option><option value="sum">Somme composants</option><option value="discount">Somme - remise %</option></select></div>' +
-        '<div class="form-group" style="flex:1"><label class="form-label">Prix de vente (' + getCurrencySymbol() + ')</label><input type="number" class="form-input" id="kitSalePrice" step="0.01" placeholder="29.99"></div></div>' +
-        '<div class="form-group"><label class="form-label">Notes</label><textarea class="form-textarea" id="kitNotes" rows="2"></textarea></div>',
-      footer: '<button class="btn btn-secondary" onclick="app.closeModal()">Annuler</button><button class="btn btn-primary" onclick="app.saveKit()">Creer</button>'
+        '<div class="form-group" style="flex:1"><label class="form-label">' + t("kits.pricingMode", "Mode de prix") + '</label><select class="form-select" id="kitPricingMode"><option value="fixed">' + t("kits.pricingFixed", "Prix fixe") + '</option><option value="sum">' + t("kits.pricingSum", "Somme composants") + '</option><option value="discount">' + t("kits.pricingDiscount", "Somme - remise %") + '</option></select></div>' +
+        '<div class="form-group" style="flex:1"><label class="form-label">' + t("kits.salePrice", "Prix de vente") + ' (' + getCurrencySymbol() + ')</label><input type="number" class="form-input" id="kitSalePrice" step="0.01" placeholder="29.99"></div></div>' +
+        '<div class="form-group"><label class="form-label">' + t("products.note", "Notes") + '</label><textarea class="form-textarea" id="kitNotes" rows="2"></textarea></div>',
+      footer: '<button class="btn btn-secondary" onclick="app.closeModal()">' + t("action.cancel", "Annuler") + '</button><button class="btn btn-primary" onclick="app.saveKit()">' + t("action.create", "Creer") + '</button>'
     });
   }
 
@@ -4316,24 +4565,24 @@
         title: t("inventory.newSession", "Nouvelle session d'inventaire"),
         size: "lg",
         content:
-          '<div class="form-group"><label class="form-label">Nom de la session *</label>' +
-          '<input type="text" class="form-input" id="invSessionName" placeholder="Inventaire Janvier 2025"></div>' +
-          '<div class="form-group"><label class="form-label">Perimetre</label>' +
+          '<div class="form-group"><label class="form-label">' + t("inventory.sessionName", "Nom de la session") + ' *</label>' +
+          '<input type="text" class="form-input" id="invSessionName" placeholder="' + t("inventory.sessionPlaceholder", "Inventaire Janvier 2025") + '"></div>' +
+          '<div class="form-group"><label class="form-label">' + t("inventory.scope", "Perimetre") + '</label>' +
           '<select class="form-select" id="invScopeType" onchange="app.onInvScopeTypeChange()">' +
-          '<option value="all">Tous les produits</option>' +
-          '<option value="category">Par categorie</option>' +
+          '<option value="all">' + t("inventory.allProducts", "Tous les produits") + '</option>' +
+          '<option value="category">' + t("inventory.byCategory", "Par categorie") + '</option>' +
           '</select></div>' +
-          '<div class="form-group" id="invCategoryGroup" style="display:none"><label class="form-label">Categorie</label>' +
-          '<select class="form-select" id="invCategoryId"><option value="">-- Selectionner --</option>' + categoryOptions + '</select></div>' +
-          '<div class="form-group"><label class="form-label">Mode de comptage</label>' +
+          '<div class="form-group" id="invCategoryGroup" style="display:none"><label class="form-label">' + t("categories.category", "Categorie") + '</label>' +
+          '<select class="form-select" id="invCategoryId"><option value="">' + t("form.select", "-- Selectionner --") + '</option>' + categoryOptions + '</select></div>' +
+          '<div class="form-group"><label class="form-label">' + t("inventory.countingMode", "Mode de comptage") + '</label>' +
           '<select class="form-select" id="invCountingMode">' +
-          '<option value="totalOnly">Stock total uniquement</option>' +
-          '<option value="variants">Par variantes</option>' +
+          '<option value="totalOnly">' + t("inventory.totalOnly", "Stock total uniquement") + '</option>' +
+          '<option value="variants">' + t("inventory.byVariants", "Par variantes") + '</option>' +
           '</select></div>' +
-          '<div class="form-group"><label class="form-label">Notes</label>' +
+          '<div class="form-group"><label class="form-label">' + t("products.note", "Notes") + '</label>' +
           '<textarea class="form-textarea" id="invNotes" rows="2"></textarea></div>',
-        footer: '<button class="btn btn-secondary" onclick="app.closeModal()">Annuler</button>' +
-          '<button class="btn btn-primary" onclick="app.createInventorySession()">Creer</button>'
+        footer: '<button class="btn btn-secondary" onclick="app.closeModal()">' + t("action.cancel", "Annuler") + '</button>' +
+          '<button class="btn btn-primary" onclick="app.createInventorySession()">' + t("action.create", "Creer") + '</button>'
       });
       console.log("[Inventory] Modal should be displayed");
     } catch (e) {
@@ -7134,6 +7383,7 @@
     searchBarcode: searchBarcode,
     // Raccourcis
     showKeyboardShortcutsHelp: showKeyboardShortcutsHelp,
+    selectSearchResultByIndex: selectSearchResultByIndex,
     // Tutoriels
     closeTutorial: closeTutorial,
     showAllTutorials: showAllTutorials,

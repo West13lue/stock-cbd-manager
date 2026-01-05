@@ -101,18 +101,19 @@
           <i data-lucide="menu" class="icon"></i>
         </button>
 
-        <div class="search-box">
+        <div class="search-box" id="globalSearchBox">
           <i data-lucide="search" class="search-icon icon"></i>
-          <input type="text" placeholder="Rechercher un produit, lot, fournisseur..." id="globalSearch">
+          <input type="text" placeholder="Search product, batch, supplier..." id="globalSearch" autocomplete="off">
+          <div class="search-dropdown" id="searchDropdown" style="display:none"></div>
         </div>
 
         <div class="topbar-actions">
           <button class="btn btn-primary btn-sm" onclick="app.syncShopifyProducts()" id="syncBtn">
             <i data-lucide="refresh-cw" class="icon"></i>
-            <span class="btn-text">Synchroniser</span>
+            <span class="btn-text" id="syncBtnText">Sync</span>
           </button>
 
-          <button class="btn-icon" onclick="app.showKeyboardShortcutsHelp()" data-tooltip="Raccourcis clavier (?)">
+          <button class="btn-icon" onclick="app.showKeyboardShortcutsHelp()" data-tooltip="Raccourcis clavier (?)">>
             <i data-lucide="keyboard" class="icon"></i>
           </button>
 
