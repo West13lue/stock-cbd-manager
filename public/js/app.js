@@ -104,7 +104,7 @@
     console.log("[Shop]", CURRENT_SHOP);
   }
 
-  // Ã¢Å“â€¦ IMPORTANT: API calls should NOT include ?shop=... in an embedded app.
+  // ✅ IMPORTANT: API calls should NOT include ?shop=... in an embedded app.
   // The server should resolve shop from the Session Token (JWT) for security + Shopify review.
   function apiUrl(endpoint) {
     return API_BASE + endpoint;
@@ -202,7 +202,7 @@
     sessionToken = null;
   }
 
-  // Ã¢Å“â€¦ authFetch correctly closed + sends Session Token
+  // ✅ authFetch correctly closed + sends Session Token
   async function authFetch(url, options) {
     options = options || {};
     var token = await getSessionToken();
@@ -225,7 +225,7 @@
       res = await doFetch();
     }
 
-    // Ã°Å¸â€Â OAuth AUTO if token missing/revoked
+    // ÃƒÂ°Ã…Â¸ââ‚¬ÂÃ‚Â OAuth AUTO if token missing/revoked
     if (res.status === 401) {
       var data = null;
       try {
@@ -301,7 +301,7 @@
     try {
       var token = await getSessionToken();
       if (!token) {
-        console.warn("[OAuth] Aucun session token Ã¢â€ â€™ redirection");
+        console.warn("[OAuth] Aucun session token âââ‚¬Â ââ‚¬â„¢ redirection");
         var shop = CURRENT_SHOP;
         if (!shop) throw new Error("Shop manquant");
         var url = "/api/auth/start?shop=" + encodeURIComponent(shop);
@@ -311,7 +311,7 @@
       }
       return true;
     } catch (e) {
-      console.warn("[OAuth] Erreur session Ã¢â€ â€™ redirection", e);
+      console.warn("[OAuth] Erreur session âââ‚¬Â ââ‚¬â„¢ redirection", e);
       var shop2 = CURRENT_SHOP;
       if (shop2) {
         var url2 = "/api/auth/start?shop=" + encodeURIComponent(shop2);
@@ -572,7 +572,7 @@
     });
     
     html += '<div class="search-shortcut-hint">' +
-      '<span><kbd>↑↓</kbd> ' + t("search.navigate", "Naviguer") + '</span>' +
+      '<span><kbd>â†‘â†“</kbd> ' + t("search.navigate", "Naviguer") + '</span>' +
       '<span><kbd>Enter</kbd> ' + t("search.select", "Selectionner") + '</span>' +
       '<span><kbd>Esc</kbd> ' + t("search.close", "Fermer") + '</span>' +
       '</div>';
@@ -3240,7 +3240,7 @@
     document.getElementById("ordersContent").innerHTML =
       '<div class="card"><div class="card-body" style="padding:0">' +
       '<table class="data-table"><thead><tr>' +
-      '<th>' + t("orders.number", "NÂ°") + '</th>' +
+      '<th>' + t("orders.number", "N°") + '</th>' +
       '<th>' + t("orders.supplier", "Fournisseur") + '</th>' +
       '<th>' + t("orders.lines", "Lignes") + '</th>' +
       '<th>' + t("orders.total", "Total") + '</th>' +
@@ -3630,7 +3630,7 @@
     document.getElementById("ordersContent").innerHTML =
       '<div class="card"><div class="card-body" style="padding:0">' +
       '<table class="data-table"><thead><tr>' +
-      '<th>' + t("orders.number", "NÂ°") + '</th>' +
+      '<th>' + t("orders.number", "N°") + '</th>' +
       '<th>' + t("orders.source", "Source") + '</th>' +
       '<th>' + t("orders.revenue", "CA") + '</th>' +
       '<th>' + t("orders.cost", "Cout") + '</th>' +
@@ -4020,7 +4020,7 @@
 
     var rows = filtered.map(function(f) {
       var statusBadge = getForecastStatusBadge(f.status);
-      var daysDisplay = f.daysOfStock === Infinity ? "∞" : (f.daysOfStock !== null ? f.daysOfStock.toFixed(0) + "j" : "-");
+      var daysDisplay = f.daysOfStock === Infinity ? "âˆž" : (f.daysOfStock !== null ? f.daysOfStock.toFixed(0) + "j" : "-");
       var stockoutDisplay = f.stockoutDate || "-";
       var reorderDisplay = f.reorderQty > 0 ? formatWeight(f.reorderQty) : "-";
 
@@ -4090,16 +4090,16 @@
         sparklineHtml = '<div class="sparkline-container">' + bars + '</div>';
       }
 
-      // ScÃ©narios
+      // Scénarios
       var scenariosHtml = '';
       if (data.scenarios) {
         scenariosHtml = '<div class="scenarios-grid">' +
           '<div class="scenario pessimistic"><div class="scenario-label">Pessimiste</div><div class="scenario-value">' + 
-          (data.scenarios.pessimistic.daysOfStock === Infinity ? "âˆž" : data.scenarios.pessimistic.daysOfStock.toFixed(0) + "j") + '</div></div>' +
+          (data.scenarios.pessimistic.daysOfStock === Infinity ? "âË†Å¾" : data.scenarios.pessimistic.daysOfStock.toFixed(0) + "j") + '</div></div>' +
           '<div class="scenario normal"><div class="scenario-label">Normal</div><div class="scenario-value">' + 
-          (data.scenarios.normal.daysOfStock === Infinity ? "âˆž" : data.scenarios.normal.daysOfStock.toFixed(0) + "j") + '</div></div>' +
+          (data.scenarios.normal.daysOfStock === Infinity ? "âË†Å¾" : data.scenarios.normal.daysOfStock.toFixed(0) + "j") + '</div></div>' +
           '<div class="scenario optimistic"><div class="scenario-label">Optimiste</div><div class="scenario-value">' + 
-          (data.scenarios.optimistic.daysOfStock === Infinity ? "âˆž" : data.scenarios.optimistic.daysOfStock.toFixed(0) + "j") + '</div></div>' +
+          (data.scenarios.optimistic.daysOfStock === Infinity ? "âË†Å¾" : data.scenarios.optimistic.daysOfStock.toFixed(0) + "j") + '</div></div>' +
           '</div>';
       }
 
@@ -6379,7 +6379,7 @@
   }
 
   // ============================================
-  // âœ… FICHE DÃ‰TAIL PRODUIT
+  // âÅ“â€¦ FICHE DÉTAIL PRODUIT
   // ============================================
   async function openProductDetails(productId) {
     if (!productId) return;
@@ -6605,7 +6605,7 @@
   }
 
   function showAddBatchForProduct(productId, productName) {
-    // Ouvrir le modal de crÃ©ation de lot avec le produit prÃ©-sÃ©lectionnÃ©
+    // Ouvrir le modal de création de lot avec le produit pré-sélectionné
     showModal({
       title: t("batches.addBatchFor", "Nouveau lot pour") + ' ' + (productName || 'ce produit'),
       size: "md",
@@ -6649,7 +6649,7 @@
         '<p class="text-secondary mb-md">Le CMP actuel est de <strong>' + formatPricePerUnit(currentCMP) + '</strong>.</p>' +
         '<div class="form-group"><label class="form-label">Nouveau CMP (" + getCurrencySymbol() + "/" + getWeightUnit() + ")</label>' +
         '<input type="number" class="form-input" id="newCMP" value="' + currentCMP + '" step="0.01" min="0"></div>' +
-        '<p class="form-hint">âš ï¸ La modification manuelle du CMP ecrase le calcul automatique.</p>',
+        '<p class="form-hint">âÅ¡Â ïÂ¸Â La modification manuelle du CMP ecrase le calcul automatique.</p>',
       footer:
         '<button class="btn btn-ghost" onclick="app.closeModal()">Annuler</button>' +
         '<button class="btn btn-primary" onclick="app.saveCMP(\'' + productId + '\')">Enregistrer</button>',

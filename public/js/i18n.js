@@ -5,7 +5,7 @@ var I18N = {
   
   translations: {
     // =========================================
-    // FRANÃƒâ€¡AIS (FR) - Langue par dÃƒÂ©faut
+    // FRANÃƒÆ’ââ‚¬Â¡AIS (FR) - Langue par dÃƒÆ’Ã‚Â©faut
     // =========================================
     fr: {
       // Navigation
@@ -625,9 +625,9 @@ var I18N = {
       "inventory.scopeCategory": "Categorie",
       "inventory.scopeSelection": "Selection",
       
-      // Dashboard amÃ©liorÃ©
+      // Dashboard amélioré
       "dashboard.quickActions": "Actions rapides",
-      "dashboard.quickRestock": "RÃ©appro rapide",
+      "dashboard.quickRestock": "Réappro rapide",
       "dashboard.quickAdjust": "Ajustement",
       "dashboard.scanBarcode": "Scanner",
       "dashboard.alerts": "Alertes",
@@ -644,7 +644,7 @@ var I18N = {
       "dashboard.noActivity": "Aucune activite",
       "dashboard.unknownUser": "Utilisateur",
       
-      // Verbes d'activitÃ©
+      // Verbes d'activité
       "activity.restocked": "a reapprovisionne",
       "activity.sold": "a vendu",
       "activity.adjusted": "a ajuste",
@@ -660,13 +660,13 @@ var I18N = {
       "time.yesterday": "Hier",
       
       // Actions
-      "action.selectProduct": "SÃ©lectionner...",
-      "action.restock": "RÃ©appro",
+      "action.selectProduct": "Sélectionner...",
+      "action.restock": "Réappro",
       "action.confirm": "Valider",
       "action.search": "Rechercher",
-      "action.create": "CrÃ©er",
+      "action.create": "Créer",
       "action.back": "Retour",
-      "action.retry": "RÃ©essayer",
+      "action.retry": "Réessayer",
       "action.reload": "Recharger",
       
       // Produits
@@ -682,146 +682,146 @@ var I18N = {
       
       // Raisons ajustement
       "reason.count": "Comptage inventaire",
-      "reason.damage": "Produit endommagÃ©",
+      "reason.damage": "Produit endommagé",
       "reason.theft": "Vol/Perte",
       "reason.correction": "Correction erreur",
       
       // Messages
-      "msg.selectProduct": "SÃ©lectionnez un produit",
-      "msg.invalidQty": "QuantitÃ© invalide",
-      "msg.restockSuccess": "RÃ©appro effectuÃ©e",
-      "msg.adjustSuccess": "Ajustement effectuÃ©",
+      "msg.selectProduct": "Sélectionnez un produit",
+      "msg.invalidQty": "Quantité invalide",
+      "msg.restockSuccess": "Réappro effectuée",
+      "msg.adjustSuccess": "Ajustement effectué",
       
       // Scanner
       "scanner.title": "Scanner code-barres",
-      "scanner.initializing": "Initialisation camÃ©ra...",
-      "scanner.notSupported": "CamÃ©ra non supportÃ©e sur ce navigateur",
-      "scanner.ready": "CamÃ©ra prÃªte - PrÃ©sentez un code-barres",
+      "scanner.initializing": "Initialisation caméra...",
+      "scanner.notSupported": "Caméra non supportée sur ce navigateur",
+      "scanner.ready": "Caméra prête - Présentez un code-barres",
       "scanner.manualEntry": "Ou saisir manuellement",
       "scanner.barcodePlaceholder": "Code-barres...",
       "scanner.enterBarcode": "Entrez un code-barres",
-      "scanner.notFound": "Produit non trouvÃ©",
-      "scanner.notFoundMsg": "Aucun produit trouvÃ© avec le code",
-      "scanner.notFoundHint": "VÃ©rifiez que le code-barres est configurÃ© sur le produit dans Shopify.",
-      "scanner.scanAgain": "Scanner Ã  nouveau",
-      "scanner.manualOnly": "DÃ©tection auto non supportÃ©e - utilisez la saisie manuelle",
-      "scanner.cameraError": "Erreur camÃ©ra",
-      "scanner.startCamera": "DÃ©marrer la camÃ©ra",
-      "scanner.requesting": "Demande d'accÃ¨s Ã  la camÃ©ra...",
-      "scanner.httpsRequired": "HTTPS requis pour accÃ©der Ã  la camÃ©ra",
-      "scanner.permissionDenied": "AccÃ¨s camÃ©ra refusÃ©. Autorisez l'accÃ¨s dans les paramÃ¨tres.",
-      "scanner.noCameraFound": "Aucune camÃ©ra dÃ©tectÃ©e sur cet appareil.",
-      "scanner.cameraInUse": "La camÃ©ra est utilisÃ©e par une autre application.",
-      "scanner.tapToStart": "Touchez la vidÃ©o pour dÃ©marrer",
-      "scanner.productFound": "Produit trouvÃ©!",
-      "scanner.iframeBlocked": "La camÃ©ra est bloquÃ©e par le navigateur.",
-      "scanner.securityError": "AccÃ¨s camÃ©ra bloquÃ© par les paramÃ¨tres de sÃ©curitÃ©.",
-      "scanner.howToEnable": "Comment activer la camÃ©ra :",
-      "scanner.step1": "Cliquez sur l'icÃ´ne camÃ©ra/cadenas dans la barre d'adresse",
-      "scanner.step2": "Autorisez l'accÃ¨s Ã  la camÃ©ra pour ce site",
-      "scanner.step3": "Rechargez la page si nÃ©cessaire",
+      "scanner.notFound": "Produit non trouvé",
+      "scanner.notFoundMsg": "Aucun produit trouvé avec le code",
+      "scanner.notFoundHint": "Vérifiez que le code-barres est configuré sur le produit dans Shopify.",
+      "scanner.scanAgain": "Scanner à nouveau",
+      "scanner.manualOnly": "Détection auto non supportée - utilisez la saisie manuelle",
+      "scanner.cameraError": "Erreur caméra",
+      "scanner.startCamera": "Démarrer la caméra",
+      "scanner.requesting": "Demande d'accès à la caméra...",
+      "scanner.httpsRequired": "HTTPS requis pour accéder à la caméra",
+      "scanner.permissionDenied": "Accès caméra refusé. Autorisez l'accès dans les paramètres.",
+      "scanner.noCameraFound": "Aucune caméra détectée sur cet appareil.",
+      "scanner.cameraInUse": "La caméra est utilisée par une autre application.",
+      "scanner.tapToStart": "Touchez la vidéo pour démarrer",
+      "scanner.productFound": "Produit trouvé!",
+      "scanner.iframeBlocked": "La caméra est bloquée par le navigateur.",
+      "scanner.securityError": "Accès caméra bloqué par les paramètres de sécurité.",
+      "scanner.howToEnable": "Comment activer la caméra :",
+      "scanner.step1": "Cliquez sur l'icône caméra/cadenas dans la barre d'adresse",
+      "scanner.step2": "Autorisez l'accès à la caméra pour ce site",
+      "scanner.step3": "Rechargez la page si nécessaire",
       
       // Raccourcis clavier
       "shortcuts.title": "Raccourcis clavier",
       "shortcuts.search": "Rechercher",
       "shortcuts.newProduct": "Nouveau produit",
-      "shortcuts.quickRestock": "RÃ©appro rapide",
+      "shortcuts.quickRestock": "Réappro rapide",
       "shortcuts.scanner": "Scanner code-barres",
       "shortcuts.dashboard": "Dashboard",
       "shortcuts.products": "Produits",
-      "shortcuts.closeModal": "Fermer fenÃªtre",
+      "shortcuts.closeModal": "Fermer fenêtre",
       "shortcuts.help": "Afficher cette aide",
       
       // Tutoriels
       "tutorial.title": "Guide rapide",
       "tutorial.dontShowAgain": "Ne plus afficher pour cet onglet",
       "tutorial.understood": "Compris !",
-      "tutorial.reset": "Tutoriels rÃ©initialisÃ©s",
+      "tutorial.reset": "Tutoriels réinitialisés",
       "tutorial.allTutorials": "Tous les tutoriels",
-      "tutorial.resetAll": "RÃ©initialiser tout",
+      "tutorial.resetAll": "Réinitialiser tout",
       "tutorial.seen": "Vu",
       "tutorial.notSeen": "Non vu",
       
       // Tutoriel Dashboard
       "tutorial.dashboard.title": "Bienvenue sur le Dashboard !",
-      "tutorial.dashboard.step1": "Visualisez vos statistiques clÃ©s : nombre de produits, stock total et valeur.",
+      "tutorial.dashboard.step1": "Visualisez vos statistiques clés : nombre de produits, stock total et valeur.",
       "tutorial.dashboard.step2": "Les alertes vous signalent les produits en stock bas ou en rupture.",
-      "tutorial.dashboard.step3": "Utilisez les actions rapides pour rÃ©appro, scanner ou ajuster le stock.",
-      "tutorial.dashboard.step4": "Les mouvements rÃ©cents montrent l'activitÃ© de votre stock.",
+      "tutorial.dashboard.step3": "Utilisez les actions rapides pour réappro, scanner ou ajuster le stock.",
+      "tutorial.dashboard.step4": "Les mouvements récents montrent l'activité de votre stock.",
       "tutorial.dashboard.tip": "Astuce : Appuyez sur ? pour voir tous les raccourcis clavier !",
       
       // Tutoriel Produits
       "tutorial.products.title": "Gestion des Produits",
       "tutorial.products.step1": "Recherchez vos produits par nom, SKU ou code-barres.",
-      "tutorial.products.step2": "Filtrez par catÃ©gorie et triez selon vos besoins.",
+      "tutorial.products.step2": "Filtrez par catégorie et triez selon vos besoins.",
       "tutorial.products.step3": "Utilisez le scanner pour trouver un produit rapidement.",
-      "tutorial.products.step4": "Cliquez sur un produit pour voir ses dÃ©tails et ajuster le stock.",
-      "tutorial.products.tip": "Astuce : Raccourci N pour ajouter un produit, R pour rÃ©appro rapide !",
+      "tutorial.products.step4": "Cliquez sur un produit pour voir ses détails et ajuster le stock.",
+      "tutorial.products.tip": "Astuce : Raccourci N pour ajouter un produit, R pour réappro rapide !",
       
       // Tutoriel Lots
       "tutorial.batches.title": "Lots et DLC",
-      "tutorial.batches.step1": "GÃ©rez les dates de pÃ©remption de vos produits.",
-      "tutorial.batches.step2": "Recevez des alertes pour les lots qui arrivent Ã  expiration.",
-      "tutorial.batches.step3": "Suivez la traÃ§abilitÃ© de chaque lot entrant.",
-      "tutorial.batches.tip": "Les lots expirÃ©s sont automatiquement signalÃ©s en rouge.",
+      "tutorial.batches.step1": "Gérez les dates de péremption de vos produits.",
+      "tutorial.batches.step2": "Recevez des alertes pour les lots qui arrivent à expiration.",
+      "tutorial.batches.step3": "Suivez la traçabilité de chaque lot entrant.",
+      "tutorial.batches.tip": "Les lots expirés sont automatiquement signalés en rouge.",
       
       // Tutoriel Fournisseurs
       "tutorial.suppliers.title": "Gestion Fournisseurs",
       "tutorial.suppliers.step1": "Centralisez les informations de vos fournisseurs.",
-      "tutorial.suppliers.step2": "Gardez leurs contacts et conditions Ã  portÃ©e de main.",
-      "tutorial.suppliers.step3": "Associez les produits Ã  leurs fournisseurs pour un suivi optimal.",
-      "tutorial.suppliers.tip": "Ajoutez les dÃ©lais de livraison pour anticiper vos commandes.",
+      "tutorial.suppliers.step2": "Gardez leurs contacts et conditions à portée de main.",
+      "tutorial.suppliers.step3": "Associez les produits à leurs fournisseurs pour un suivi optimal.",
+      "tutorial.suppliers.tip": "Ajoutez les délais de livraison pour anticiper vos commandes.",
       
       // Tutoriel Commandes
       "tutorial.orders.title": "Commandes",
-      "tutorial.orders.step1": "CrÃ©ez des bons de commande vers vos fournisseurs.",
-      "tutorial.orders.step2": "Suivez l'Ã©tat de vos commandes en cours.",
-      "tutorial.orders.step3": "RÃ©ceptionnez les commandes pour mettre Ã  jour le stock automatiquement.",
+      "tutorial.orders.step1": "Créez des bons de commande vers vos fournisseurs.",
+      "tutorial.orders.step2": "Suivez l'état de vos commandes en cours.",
+      "tutorial.orders.step3": "Réceptionnez les commandes pour mettre à jour le stock automatiquement.",
       "tutorial.orders.tip": "Importez vos commandes Shopify pour un suivi complet.",
       
-      // Tutoriel PrÃ©visions
-      "tutorial.forecast.title": "PrÃ©visions",
+      // Tutoriel Prévisions
+      "tutorial.forecast.title": "Prévisions",
       "tutorial.forecast.step1": "Analysez les tendances de ventes de vos produits.",
-      "tutorial.forecast.step2": "Anticipez les ruptures grÃ¢ce aux prÃ©visions.",
-      "tutorial.forecast.step3": "Recevez des suggestions de rÃ©approvisionnement.",
-      "tutorial.forecast.tip": "Plus vous avez d'historique, plus les prÃ©visions sont prÃ©cises.",
+      "tutorial.forecast.step2": "Anticipez les ruptures grâce aux prévisions.",
+      "tutorial.forecast.step3": "Recevez des suggestions de réapprovisionnement.",
+      "tutorial.forecast.tip": "Plus vous avez d'historique, plus les prévisions sont précises.",
       
       // Tutoriel Kits
       "tutorial.kits.title": "Kits et Bundles",
-      "tutorial.kits.step1": "CrÃ©ez des kits composÃ©s de plusieurs produits.",
-      "tutorial.kits.step2": "Le stock des composants est automatiquement dÃ©duit.",
+      "tutorial.kits.step1": "Créez des kits composés de plusieurs produits.",
+      "tutorial.kits.step2": "Le stock des composants est automatiquement déduit.",
       "tutorial.kits.step3": "Simulez l'assemblage avant de valider.",
       "tutorial.kits.tip": "Utilisez les kits pour vos coffrets cadeaux ou packs promo.",
       
       // Tutoriel Analytics
       "tutorial.analytics.title": "Analytics",
-      "tutorial.analytics.step1": "Visualisez la rÃ©partition de votre stock par catÃ©gorie.",
-      "tutorial.analytics.step2": "Suivez l'Ã©volution de la valeur de votre inventaire.",
+      "tutorial.analytics.step1": "Visualisez la répartition de votre stock par catégorie.",
+      "tutorial.analytics.step2": "Suivez l'évolution de la valeur de votre inventaire.",
       "tutorial.analytics.step3": "Analysez les mouvements pour optimiser votre gestion.",
       "tutorial.analytics.tip": "Exportez vos rapports en PDF ou Excel.",
       
       // Tutoriel Inventaire
       "tutorial.inventory.title": "Inventaire",
-      "tutorial.inventory.step1": "CrÃ©ez des sessions d'inventaire complet ou partiel.",
+      "tutorial.inventory.step1": "Créez des sessions d'inventaire complet ou partiel.",
       "tutorial.inventory.step2": "Utilisez le scanner pour compter plus rapidement.",
-      "tutorial.inventory.step3": "Comparez le stock thÃ©orique vs rÃ©el et validez les Ã©carts.",
-      "tutorial.inventory.tip": "Planifiez des inventaires rÃ©guliers pour une meilleure prÃ©cision.",
+      "tutorial.inventory.step3": "Comparez le stock théorique vs réel et validez les écarts.",
+      "tutorial.inventory.tip": "Planifiez des inventaires réguliers pour une meilleure précision.",
       
-      // Tutoriel ParamÃ¨tres
-      "tutorial.settings.title": "ParamÃ¨tres",
-      "tutorial.settings.step1": "Configurez la langue et les unitÃ©s de mesure.",
+      // Tutoriel Paramètres
+      "tutorial.settings.title": "Paramètres",
+      "tutorial.settings.step1": "Configurez la langue et les unités de mesure.",
       "tutorial.settings.step2": "Personnalisez vos seuils d'alerte de stock.",
-      "tutorial.settings.step3": "Adaptez l'interface Ã  vos prÃ©fÃ©rences.",
-      "tutorial.settings.tip": "Sauvegardez vos paramÃ¨tres pour les restaurer facilement.",
+      "tutorial.settings.step3": "Adaptez l'interface à vos préférences.",
+      "tutorial.settings.tip": "Sauvegardez vos paramètres pour les restaurer facilement.",
       
-      // ParamÃ¨tres - Aide
+      // Paramètres - Aide
       "settings.helpAndSupport": "Aide & Support",
       "settings.tutorials": "Tutoriels",
       "settings.viewTutorials": "Voir les tutoriels",
       "settings.shortcuts": "Raccourcis clavier",
       "settings.viewShortcuts": "Voir les raccourcis",
       "settings.resetTutorials": "Revoir les tutoriels",
-      "settings.resetTutorialsBtn": "RÃ©initialiser",
+      "settings.resetTutorialsBtn": "Réinitialiser",
       
       // Profils
       "profiles.whoIsConnecting": "Qui se connecte ?",
@@ -829,11 +829,11 @@ var I18N = {
       "profiles.myProfile": "Mon profil",
       "profiles.switchProfile": "Changer de profil",
       "profiles.createNew": "Nouveau profil",
-      "profiles.createProfile": "CrÃ©er un profil",
+      "profiles.createProfile": "Créer un profil",
       "profiles.name": "Nom",
       "profiles.namePlaceholder": "Ex: Marie, Pierre...",
       "profiles.nameRequired": "Le nom est requis",
-      "profiles.role": "RÃ´le",
+      "profiles.role": "Rôle",
       "profiles.roleUser": "Utilisateur",
       "profiles.roleManager": "Manager",
       "profiles.roleAdmin": "Administrateur",
@@ -1747,33 +1747,33 @@ var I18N = {
       "dashboard.recentMovements": "Letzte Bewegungen",
       "dashboard.noMovements": "Keine Bewegungen",
       "dashboard.quickActions": "Schnellaktionen",
-      "dashboard.quickRestock": "Schnelle AuffÃ¼llung",
+      "dashboard.quickRestock": "Schnelle AuffÃƒÂ¼llung",
       "dashboard.quickAdjust": "Anpassung",
       "dashboard.scanBarcode": "Scanner",
       "dashboard.alerts": "Warnungen",
-      "dashboard.outOfStock": "Produkt(e) nicht vorrÃ¤tig",
+      "dashboard.outOfStock": "Produkt(e) nicht vorrÃƒÂ¤tig",
       "dashboard.lowStockAlert": "Produkt(e) niedriger Bestand",
       "dashboard.lowStockProducts": "Produkte mit niedrigem Bestand",
-      "dashboard.outOfStockProducts": "Nicht vorrÃ¤tige Produkte",
+      "dashboard.outOfStockProducts": "Nicht vorrÃƒÂ¤tige Produkte",
       "dashboard.noLowStock": "Keine Produkte mit niedrigem Bestand",
       "dashboard.noOutOfStock": "Keine ausverkauften Produkte",
       "dashboard.remaining": "verbleibend",
       "dashboard.inventory": "Inventur",
-      "dashboard.activityLog": "Letzte AktivitÃ¤ten",
-      "dashboard.fullActivityLog": "AktivitÃ¤tsprotokoll",
-      "dashboard.noActivity": "Keine AktivitÃ¤t",
+      "dashboard.activityLog": "Letzte AktivitÃƒÂ¤ten",
+      "dashboard.fullActivityLog": "AktivitÃƒÂ¤tsprotokoll",
+      "dashboard.noActivity": "Keine AktivitÃƒÂ¤t",
       "dashboard.unknownUser": "Benutzer",
       
       // Activity
-      "activity.restocked": "hat aufgefÃ¼llt",
+      "activity.restocked": "hat aufgefÃƒÂ¼llt",
       "activity.sold": "hat verkauft",
       "activity.adjusted": "hat angepasst",
-      "activity.transferred": "hat Ã¼bertragen",
-      "activity.returned": "hat zurÃ¼ckgegeben",
+      "activity.transferred": "hat ÃƒÂ¼bertragen",
+      "activity.returned": "hat zurÃƒÂ¼ckgegeben",
       "activity.lost": "hat Verlust gemeldet bei",
       "activity.produced": "hat produziert",
-      "activity.counted": "hat gezÃ¤hlt",
-      "activity.modified": "hat geÃ¤ndert",
+      "activity.counted": "hat gezÃƒÂ¤hlt",
+      "activity.modified": "hat geÃƒÂ¤ndert",
       
       // Time
       "time.today": "Heute",
@@ -1844,18 +1844,18 @@ var I18N = {
       // Actions
       "action.save": "Speichern",
       "action.cancel": "Abbrechen",
-      "action.close": "SchlieÃŸen",
+      "action.close": "SchlieÃƒÅ¸en",
       "action.edit": "Bearbeiten",
-      "action.delete": "LÃ¶schen",
-      "action.add": "HinzufÃ¼gen",
+      "action.delete": "LÃƒÂ¶schen",
+      "action.add": "HinzufÃƒÂ¼gen",
       "action.sync": "Synchronisieren",
       "action.upgrade": "Auf PRO upgraden",
-      "action.selectProduct": "AuswÃ¤hlen...",
-      "action.restock": "AuffÃ¼llen",
-      "action.confirm": "BestÃ¤tigen",
+      "action.selectProduct": "AuswÃƒÂ¤hlen...",
+      "action.restock": "AuffÃƒÂ¼llen",
+      "action.confirm": "BestÃƒÂ¤tigen",
       "action.search": "Suchen",
       "action.create": "Erstellen",
-      "action.back": "ZurÃ¼ck",
+      "action.back": "ZurÃƒÂ¼ck",
       
       // Messages
       "msg.loading": "Laden...",
@@ -1883,8 +1883,8 @@ var I18N = {
       "tutorial.understood": "Verstanden!",
       
       // Reasons
-      "reason.count": "InventurzÃ¤hlung",
-      "reason.damage": "BeschÃ¤digtes Produkt",
+      "reason.count": "InventurzÃƒÂ¤hlung",
+      "reason.damage": "BeschÃƒÂ¤digtes Produkt",
       "reason.theft": "Diebstahl/Verlust",
       "reason.correction": "Fehlerkorrektur",
       
@@ -1895,15 +1895,15 @@ var I18N = {
       "settings.languageDesc": "Anzeige nach Ihrem Land anpassen",
       "settings.appLanguage": "App-Sprache",
       "settings.timezone": "Zeitzone",
-      "settings.currency": "WÃ¤hrung & Einheiten",
-      "settings.currencyDesc": "WÃ¤hrung und Gewichtseinheiten einstellen",
-      "settings.mainCurrency": "HauptwÃ¤hrung",
+      "settings.currency": "WÃƒÂ¤hrung & Einheiten",
+      "settings.currencyDesc": "WÃƒÂ¤hrung und Gewichtseinheiten einstellen",
+      "settings.mainCurrency": "HauptwÃƒÂ¤hrung",
       "settings.weightUnit": "Gewichtseinheit",
       "settings.saved": "Einstellung gespeichert",
       "settings.helpAndSupport": "Hilfe & Support",
       "settings.tutorials": "Tutorials",
       "settings.viewTutorials": "Tutorials anzeigen",
-      "settings.shortcuts": "TastaturkÃ¼rzel",
+      "settings.shortcuts": "TastaturkÃƒÂ¼rzel",
       
       // Plans
       "plan.free": "Kostenlos",
@@ -1911,18 +1911,18 @@ var I18N = {
       "plan.pro": "Pro",
       "plan.business": "Business",
       "plan.upgrade": "Upgraden",
-      "plan.daysLeft": "Tage Ã¼brig",
+      "plan.daysLeft": "Tage ÃƒÂ¼brig",
       "plan.products": "Produkte",
       "plan.unlimited": "Unbegrenzt",
-      "plans.choosePlan": "Plan wÃ¤hlen",
+      "plans.choosePlan": "Plan wÃƒÂ¤hlen",
       "plans.featureLocked": "Funktion gesperrt",
-      "plans.upgradeToUnlock": "Upgraden Sie auf einen hÃ¶heren Plan, um diese Funktion freizuschalten.",
+      "plans.upgradeToUnlock": "Upgraden Sie auf einen hÃƒÂ¶heren Plan, um diese Funktion freizuschalten.",
       "plans.upgrade": "Upgraden",
       "plans.popular": "BELIEBT",
       "plans.month": "Monat",
       "plans.products": "Produkte",
       "plans.current": "Aktuell",
-      "plans.choose": "WÃ¤hlen",
+      "plans.choose": "WÃƒÂ¤hlen",
       "plans.feat.categories": "Kategorien",
       "plans.feat.importShopify": "Shopify Import",
       "plans.feat.stockValue": "Bestandswert",
@@ -1940,22 +1940,22 @@ var I18N = {
       
       // Trial
       "trial.freeTrialStarter": "Kostenlose Starter-Testversion",
-      "trial.daysLeft": "Tag(e) Ã¼brig",
+      "trial.daysLeft": "Tag(e) ÃƒÂ¼brig",
       "trial.keepFeatures": "Funktionen behalten",
       "trial.expired": "Ihre Testversion ist abgelaufen. Upgraden Sie auf Starter.",
       
       // Actions extras
       "action.duplicate": "Duplizieren",
       "action.archive": "Archivieren",
-      "action.later": "SpÃ¤ter",
+      "action.later": "SpÃƒÂ¤ter",
       "action.reloadNow": "Jetzt neu laden",
-      "settings.languageChanged": "Sprache geÃ¤ndert. Neu laden, um vollstÃ¤ndig anzuwenden.",
+      "settings.languageChanged": "Sprache geÃƒÂ¤ndert. Neu laden, um vollstÃƒÂ¤ndig anzuwenden.",
       
       // Inventory extras
-      "inventory.sessionDeleted": "Sitzung gelÃ¶scht",
+      "inventory.sessionDeleted": "Sitzung gelÃƒÂ¶scht",
       "inventory.confirmArchive": "Diese Sitzung archivieren?",
-      "inventory.confirmDelete": "Diese Sitzung endgÃ¼ltig lÃ¶schen?",
-      "inventory.deletedBy": "Inventursitzung gelÃ¶scht",
+      "inventory.confirmDelete": "Diese Sitzung endgÃƒÂ¼ltig lÃƒÂ¶schen?",
+      "inventory.deletedBy": "Inventursitzung gelÃƒÂ¶scht",
       
       // Batches
       "batches.title": "Chargen & MHD",
@@ -1980,7 +1980,7 @@ var I18N = {
       
       // Orders
       "orders.title": "Bestellungen",
-      "orders.subtitle": "Kauf- und VerkaufsauftrÃ¤ge",
+      "orders.subtitle": "Kauf- und VerkaufsauftrÃƒÂ¤ge",
       "orders.newPO": "Neue Bestellung",
       "orders.noPO": "Keine Bestellungen",
       "orders.purchase": "Einkauf",
@@ -2029,13 +2029,13 @@ var I18N = {
       "forecast.urgentStatus": "Dringend",
       "forecast.watch": "Beobachten",
       "forecast.outOfStock": "Ausverkauft",
-      "forecast.overstock": "Ãœberbestand",
+      "forecast.overstock": "ÃƒÅ“berbestand",
       "forecast.noData": "Keine Daten",
       "forecast.noProducts": "Keine Produkte anzuzeigen.",
       "forecast.allCategories": "Alle Kategorien",
       "forecast.product": "Produkt",
       "forecast.stock": "Bestand",
-      "forecast.avgSales": "Durchschn. VerkÃ¤ufe",
+      "forecast.avgSales": "Durchschn. VerkÃƒÂ¤ufe",
       "forecast.coverage": "Deckung",
       "forecast.stockout": "Gesch. Ausverkauf",
       "forecast.reorder": "Zu bestellen",
@@ -2043,11 +2043,11 @@ var I18N = {
       
       // Analytics
       "analytics.title": "Analytics PRO",
-      "analytics.subtitle": "VerkÃ¤ufe, Margen und Leistung",
+      "analytics.subtitle": "VerkÃƒÂ¤ufe, Margen und Leistung",
       "analytics.last7days": "Letzte 7 Tage",
       "analytics.last30days": "Letzte 30 Tage",
       "analytics.last90days": "Letzte 90 Tage",
-      "analytics.sales": "VerkÃ¤ufe",
+      "analytics.sales": "VerkÃƒÂ¤ufe",
       "analytics.stock": "Bestand",
       "analytics.loading": "Analytics laden...",
       "analytics.revenue": "Umsatz",
@@ -2064,7 +2064,7 @@ var I18N = {
       "analytics.topMarginPct": "Top Marge %",
       "analytics.topVolume": "Top Volumen",
       "analytics.toOptimize": "Zu optimieren (niedrige Marge)",
-      "analytics.noSales": "Keine VerkÃ¤ufe",
+      "analytics.noSales": "Keine VerkÃƒÂ¤ufe",
       "analytics.notEnoughData": "Nicht genug Daten",
       "analytics.allGoodMargins": "Alle Produkte haben gute Margen!",
       "analytics.productPerformance": "Produktleistung",
@@ -2076,9 +2076,9 @@ var I18N = {
       "analytics.marginPct": "Marge %",
       "analytics.action": "Aktion",
       "analytics.optimize": "Optimieren",
-      "analytics.optimizeTip": "Preis erhÃ¶hen oder Kosten senken",
+      "analytics.optimizeTip": "Preis erhÃƒÂ¶hen oder Kosten senken",
       "analytics.moreProducts": "weitere Produkte...",
-      "analytics.noSalesThisPeriod": "Keine VerkÃ¤ufe in diesem Zeitraum",
+      "analytics.noSalesThisPeriod": "Keine VerkÃƒÂ¤ufe in diesem Zeitraum",
       "analytics.salesDetail": "Verkaufsdetails nach Produkt",
       
       // Inventory
@@ -2107,21 +2107,21 @@ var I18N = {
       "scanner.scanAgain": "Erneut scannen",
       
       // Shortcuts
-      "shortcuts.title": "TastaturkÃ¼rzel",
+      "shortcuts.title": "TastaturkÃƒÂ¼rzel",
       "shortcuts.search": "Suchen",
       "shortcuts.newProduct": "Neues Produkt",
       
       // Tutorials
       "tutorial.title": "Kurzanleitung",
-      "tutorial.dontShowAgain": "FÃ¼r diesen Tab nicht mehr anzeigen",
+      "tutorial.dontShowAgain": "FÃƒÂ¼r diesen Tab nicht mehr anzeigen",
       "tutorial.understood": "Verstanden!",
       "tutorial.allTutorials": "Alle Tutorials",
       "tutorial.dashboard.title": "Willkommen im Dashboard!",
       "tutorial.dashboard.step1": "Sehen Sie Ihre wichtigsten Statistiken.",
-      "tutorial.dashboard.tip": "Tipp: DrÃ¼cken Sie ? fÃ¼r alle KÃ¼rzel!",
+      "tutorial.dashboard.tip": "Tipp: DrÃƒÂ¼cken Sie ? fÃƒÂ¼r alle KÃƒÂ¼rzel!",
       "tutorial.products.title": "Produktverwaltung",
       "tutorial.products.step1": "Suchen Sie Produkte nach Name oder SKU.",
-      "tutorial.products.tip": "Tipp: N fÃ¼r neues Produkt!",
+      "tutorial.products.tip": "Tipp: N fÃƒÂ¼r neues Produkt!",
       
       // Profiles
       "profiles.title": "Profile",
@@ -2131,8 +2131,8 @@ var I18N = {
       "profiles.createNew": "Neues Profil",
       "profiles.created": "Profil erstellt",
       "profiles.switched": "Profil aktiviert",
-      "profiles.deleted": "Profil gelÃ¶scht",
-      "profiles.confirmDelete": "Dieses Profil lÃ¶schen?",
+      "profiles.deleted": "Profil gelÃƒÂ¶scht",
+      "profiles.confirmDelete": "Dieses Profil lÃƒÂ¶schen?",
       "profiles.noProfiles": "Keine Profile",
       "profiles.active": "Aktiv",
       "profiles.name": "Name",
@@ -2149,25 +2149,25 @@ var I18N = {
       "notifications.title": "Benachrichtigungen",
       "notifications.noAlerts": "Keine Warnungen",
       "notifications.allGood": "Alles in Ordnung!",
-      "notifications.lockedDesc": "Alarme sind mit dem Pro-Plan verfÃ¼gbar.",
+      "notifications.lockedDesc": "Alarme sind mit dem Pro-Plan verfÃƒÂ¼gbar.",
       "notifications.refresh": "Aktualisieren",
-      "notifications.checking": "Alarme prÃ¼fen...",
-      "notifications.checked": "Alarme geprÃ¼ft",
+      "notifications.checking": "Alarme prÃƒÂ¼fen...",
+      "notifications.checked": "Alarme geprÃƒÂ¼ft",
       "notifications.newAlerts": "neue",
       
       // Movements
-      "movement.restock": "AuffÃ¼llung",
+      "movement.restock": "AuffÃƒÂ¼llung",
       "movement.sale": "Verkauf",
       "movement.adjustment": "Anpassung",
       "movement.transfer": "Transfer",
-      "movement.return": "RÃ¼ckgabe",
+      "movement.return": "RÃƒÂ¼ckgabe",
       "movement.loss": "Verlust",
       "movement.production": "Produktion",
       "movement.inventory": "Inventur",
     },
     
     // =========================================
-    // ESPAÃƒâ€˜OL (ES)
+    // ESPAÃƒÆ’ââ‚¬ËœOL (ES)
     // =========================================
     es: {
       // Navigation
@@ -2397,10 +2397,10 @@ var I18N = {
       "inventory.sessionCreated": "Sesion creada",
       
       // Dashboard mejorado
-      "dashboard.quickActions": "Acciones rÃ¡pidas",
-      "dashboard.quickRestock": "ReposiciÃ³n rÃ¡pida",
+      "dashboard.quickActions": "Acciones rÃƒÂ¡pidas",
+      "dashboard.quickRestock": "ReposiciÃƒÂ³n rÃƒÂ¡pida",
       "dashboard.quickAdjust": "Ajuste",
-      "dashboard.scanBarcode": "EscÃ¡ner",
+      "dashboard.scanBarcode": "EscÃƒÂ¡ner",
       "dashboard.alerts": "Alertas",
       "dashboard.outOfStock": "producto(s) agotado(s)",
       "dashboard.lowStockAlert": "producto(s) stock bajo",
@@ -2415,9 +2415,9 @@ var I18N = {
       "action.confirm": "Confirmar",
       "action.search": "Buscar",
       
-      // EscÃ¡ner
-      "scanner.title": "EscÃ¡ner de cÃ³digo de barras",
-      "scanner.ready": "CÃ¡mara lista - Presente un cÃ³digo de barras",
+      // EscÃƒÂ¡ner
+      "scanner.title": "EscÃƒÂ¡ner de cÃƒÂ³digo de barras",
+      "scanner.ready": "CÃƒÂ¡mara lista - Presente un cÃƒÂ³digo de barras",
       "scanner.manualEntry": "O ingresar manualmente",
       "scanner.notFound": "Producto no encontrado",
       "scanner.scanAgain": "Escanear de nuevo",
@@ -2428,27 +2428,27 @@ var I18N = {
       "shortcuts.newProduct": "Nuevo producto",
       
       // Tutoriales
-      "tutorial.title": "GuÃ­a rÃ¡pida",
-      "tutorial.dontShowAgain": "No mostrar de nuevo para esta pestaÃ±a",
-      "tutorial.understood": "Â¡Entendido!",
+      "tutorial.title": "GuÃƒÂ­a rÃƒÂ¡pida",
+      "tutorial.dontShowAgain": "No mostrar de nuevo para esta pestaÃƒÂ±a",
+      "tutorial.understood": "Ã‚Â¡Entendido!",
       "tutorial.allTutorials": "Todos los tutoriales",
       
-      "tutorial.dashboard.title": "Â¡Bienvenido al Panel!",
-      "tutorial.dashboard.step1": "Vea sus estadÃ­sticas clave: nÃºmero de productos, stock total y valor.",
-      "tutorial.dashboard.tip": "Consejo: Â¡Presione ? para ver todos los atajos de teclado!",
+      "tutorial.dashboard.title": "Ã‚Â¡Bienvenido al Panel!",
+      "tutorial.dashboard.step1": "Vea sus estadÃƒÂ­sticas clave: nÃƒÂºmero de productos, stock total y valor.",
+      "tutorial.dashboard.tip": "Consejo: Ã‚Â¡Presione ? para ver todos los atajos de teclado!",
       
-      "tutorial.products.title": "GestiÃ³n de Productos",
-      "tutorial.products.step1": "Busque sus productos por nombre, SKU o cÃ³digo de barras.",
-      "tutorial.products.tip": "Consejo: Atajo N para nuevo producto, R para reposiciÃ³n rÃ¡pida!",
+      "tutorial.products.title": "GestiÃƒÂ³n de Productos",
+      "tutorial.products.step1": "Busque sus productos por nombre, SKU o cÃƒÂ³digo de barras.",
+      "tutorial.products.tip": "Consejo: Atajo N para nuevo producto, R para reposiciÃƒÂ³n rÃƒÂ¡pida!",
       
-      // ConfiguraciÃ³n - Ayuda
+      // ConfiguraciÃƒÂ³n - Ayuda
       "settings.helpAndSupport": "Ayuda y Soporte",
       "settings.tutorials": "Tutoriales",
       "settings.viewTutorials": "Ver tutoriales",
       "settings.shortcuts": "Atajos de teclado",
       
       // Perfiles
-      "profiles.whoIsConnecting": "Â¿QuiÃ©n se conecta?",
+      "profiles.whoIsConnecting": "Ã‚Â¿Quién se conecta?",
       "profiles.welcome": "Bienvenido",
       "profiles.myProfile": "Mi perfil",
       "profiles.createNew": "Nuevo perfil",
@@ -2998,11 +2998,11 @@ var I18N = {
   },
   
   // =========================================
-  // MÃ‰THODES
+  // MÉTHODES
   // =========================================
   
   init: function(lang) {
-    // Restaurer depuis localStorage ou utiliser la langue passÃ©e
+    // Restaurer depuis localStorage ou utiliser la langue passée
     var savedLang = null;
     try {
       savedLang = localStorage.getItem("stockmanager_lang");
