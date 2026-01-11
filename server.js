@@ -3106,40 +3106,38 @@ router.post("/api/sync/shopify", async (req, res) => {
       let updated = 0;
       
       for (const shopifyProduct of products) {
-        const existingProduct = stock.getProductById(shop, shopifyProduct.id.toString());
+        const productId = shopifyProduct.id.toString();
+        const existingProduct = stock.getProductSnapshot(shop, productId);
+        
+        // Préparer les variantes au format attendu par stockManager
+        const variantsObj = {};
+        if (shopifyProduct.variants && shopifyProduct.variants.length > 0) {
+          shopifyProduct.variants.forEach(v => {
+            variantsObj[v.id.toString()] = {
+              variantId: v.id.toString(),
+              title: v.title || "Default",
+              sku: v.sku || "",
+              barcode: v.barcode || "",
+              gramsPerUnit: parseFloat(v.grams) || 1,
+              price: parseFloat(v.price) || 0
+            };
+          });
+        }
+        
+        // Utiliser upsertImportedProductConfig qui existe dans stockManager
+        const productData = {
+          productId: productId,
+          name: shopifyProduct.title,
+          totalGrams: existingProduct ? existingProduct.totalGrams : 0,
+          variants: variantsObj,
+          categoryIds: existingProduct ? existingProduct.categoryIds : []
+        };
+        
+        stock.upsertImportedProductConfig(shop, productData);
         
         if (!existingProduct) {
-          // Créer le produit
-          const newProduct = {
-            productId: shopifyProduct.id.toString(),
-            name: shopifyProduct.title,
-            sku: shopifyProduct.variants?.[0]?.sku || "",
-            barcode: shopifyProduct.variants?.[0]?.barcode || "",
-            shopifyId: shopifyProduct.id.toString(),
-            vendor: shopifyProduct.vendor || "",
-            productType: shopifyProduct.product_type || "",
-            totalGrams: 0,
-            averageCostPerGram: 0,
-            variants: shopifyProduct.variants?.map(v => ({
-              variantId: v.id.toString(),
-              title: v.title,
-              sku: v.sku,
-              barcode: v.barcode,
-              gramsPerUnit: parseFloat(v.grams) || 0,
-              price: parseFloat(v.price) || 0
-            })) || [],
-            createdAt: new Date().toISOString(),
-            source: "shopify_sync"
-          };
-          
-          stock.upsertProduct(shop, newProduct);
           imported++;
         } else {
-          // Mettre à jour les infos de base
-          existingProduct.name = shopifyProduct.title;
-          existingProduct.vendor = shopifyProduct.vendor || existingProduct.vendor;
-          existingProduct.productType = shopifyProduct.product_type || existingProduct.productType;
-          stock.upsertProduct(shop, existingProduct);
           updated++;
         }
       }
