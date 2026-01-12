@@ -1,7 +1,7 @@
-// server.js — PREFIX-SAFE (/apps/<slug>/...), STATIC FIX, JSON API SAFE, Multi-shop safe, Express 5 safe
-// ✅ ENRICHI avec CMP, Valeur stock, Stats categories, Suppression mouvements (stub)
-// ✅ + OAuth Shopify (Partner) : /api/auth/start + /api/auth/callback
-// ✅ + SECURE /api/* (App Store) via Shopify Session Token (JWT HS256)
+// server.js aEURÃƒÂ¢Ã¢â€šÂ¬Ã‚Â PREFIX-SAFE (/apps/<slug>/...), STATIC FIX, JSON API SAFE, Multi-shop safe, Express 5 safe
+// aÃƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ ENRICHI avec CMP, Valeur stock, Stats categories, Suppression mouvements (stub)
+// aÃƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ + OAuth Shopify (Partner) : /api/auth/start + /api/auth/callback
+// aÃƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ + SECURE /api/* (App Store) via Shopify Session Token (JWT HS256)
 
 if (process.env.NODE_ENV !== "production") {
   require("dotenv").config();
@@ -12,7 +12,7 @@ const path = require("path");
 const crypto = require("crypto");
 const fs = require("fs");
 
-// ✅ OAuth token store (Render disk)
+// aÃƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ OAuth token store (Render disk)
 const tokenStore = require("./utils/tokenStore");
 
 // --- logger (compat : ./utils/logger OU ./logger)
@@ -26,7 +26,7 @@ try {
   } catch {}
 }
 
-// --- Shopify client (✅ par shop)
+// --- Shopify client (aÃƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ par shop)
 const {
   getShopifyClient,
   normalizeShopDomain,
@@ -76,7 +76,7 @@ try {
   console.warn("SalesOrderStore non disponible:", e.message);
 }
 
-// --- Analytics (multi-shop) ✅ NOUVEAU
+// --- Analytics (multi-shop) aÃƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ NOUVEAU
 let analyticsStore = null;
 let analyticsManager = null;
 try {
@@ -86,7 +86,7 @@ try {
   console.warn("Analytics modules non disponibles:", e.message);
 }
 
-// --- Plan Manager (Free/Standard/Premium) ✅ NOUVEAU
+// --- Plan Manager (Free/Standard/Premium) aÃƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ NOUVEAU
 let planManager = null;
 try {
   planManager = require("./planManager");
@@ -94,7 +94,7 @@ try {
   console.warn("PlanManager non disponible:", e.message);
 }
 
-// --- Settings Manager (parametres avances) ✅ NOUVEAU
+// --- Settings Manager (parametres avances) aÃƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ NOUVEAU
 let settingsManager = null;
 try {
   settingsManager = require("./settingsManager");
@@ -143,23 +143,13 @@ try {
   console.warn("UserProfileStore non disponible:", e.message);
 }
 
-// ✅ Notifications & Alertes
-let notificationStore = null;
-let alertChecker = null;
-try {
-  notificationStore = require("./notificationStore");
-  alertChecker = require("./alertChecker");
-} catch (e) {
-  console.warn("NotificationStore/AlertChecker non disponible:", e.message);
-}
 
-
-// ✅ OAuth config
+// aÃƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ OAuth config
 const SHOPIFY_API_KEY = String(process.env.SHOPIFY_API_KEY || "").trim();
 const SHOPIFY_API_SECRET = String(process.env.SHOPIFY_API_SECRET || "").trim();
 const OAUTH_SCOPES = String(process.env.SHOPIFY_SCOPES || "").trim();
 
-// ✅ API auth switch (en prod => ON par defaut)
+// aÃƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ API auth switch (en prod => ON par defaut)
 const API_AUTH_REQUIRED =
   String(process.env.API_AUTH_REQUIRED || "").trim() === ""
     ? process.env.NODE_ENV === "production"
@@ -209,7 +199,7 @@ function shopFromHostParam(hostParam) {
 }
 
 function getShop(req) {
-  // ✅ priorite: shop determine par middleware auth (session token)
+  // aÃƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ priorite: shop determine par middleware auth (session token)
   const fromAuth = String(req.shopDomain || "").trim();
   if (fromAuth) return normalizeShopDomain(fromAuth);
 
@@ -240,7 +230,7 @@ function apiError(res, code, message, extra) {
   return res.status(code).json({ error: message, ...(extra ? { extra } : {}) });
 }
 
-// ✅ OAuth helpers
+// aÃƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ OAuth helpers
 function verifyOAuthHmac(query) {
   const { hmac, ...rest } = query || {};
   if (!hmac || !SHOPIFY_API_SECRET) return false;
@@ -273,7 +263,7 @@ function requireOAuthEnv(res) {
 }
 
 // ===============================
-// ✅ Shopify Session Token (JWT)
+// aÃƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Shopify Session Token (JWT)
 // ===============================
 function base64UrlToBuffer(str) {
   const s = String(str || "")
@@ -362,10 +352,10 @@ function requireApiAuth(req, res, next) {
   // Laisse passer l'OAuth install/callback
   if (req.path === "/auth/start" || req.path === "/auth/callback") return next();
 
-  // ✅ config publique (front App Bridge)
+  // ÃƒÂ¢Ã…â€œÃ¢â‚¬Â¦ config publique (front App Bridge)
   if (req.path === "/public/config") return next();
 
-  // ✅ returnUrl Shopify Billing (apres acceptation abonnement)
+  // ÃƒÂ¢Ã…â€œÃ¢â‚¬Â¦ returnUrl Shopify Billing (apres acceptation abonnement)
   if (req.path === "/billing/return" || req.path === "/api/billing/return") return next();
 
   const token = extractBearerToken(req);
@@ -411,7 +401,7 @@ function safeJson(req, res, fn) {
     const status = Number(info?.statusCode || 0);
     if (status !== 401) return false;
 
-    // ✅ Token invalide/revoque => purge + renvoi URL de reauth
+    // ÃƒÂ¢Ã…â€œÃ¢â‚¬Â¦ Token invalide/revoque => purge + renvoi URL de reauth
     if (resolvedShop) {
       try {
         tokenStore?.removeToken?.(resolvedShop);
@@ -489,7 +479,7 @@ async function getLocationIdForShop(shop) {
     }
   }
 
-  // 2) ENV locationId (⚠️ uniquement si la boutique == SHOP_NAME)
+  // 2) ENV locationId (aÃƒâ€¦Ã‚Â¡Ãƒâ€šÃ‚Â iÃƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â uniquement si la boutique == SHOP_NAME)
   const envShop = resolveShopFallback(); // SHOP_NAME normalise
   const envLoc = process.env.SHOPIFY_LOCATION_ID || process.env.LOCATION_ID;
 
@@ -545,7 +535,7 @@ function findGramsPerUnitByInventoryItemId(productView, inventoryItemId) {
 }
 
 // =====================================================
-// ✅ DURCISSEMENT #1 : Anti-spoof multi-shop (API)
+// aÃƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ DURCISSEMENT #1 : Anti-spoof multi-shop (API)
 // =====================================================
 function getShopRequestedByClient(req) {
   const q = String(req.query?.shop || "").trim();
@@ -578,7 +568,7 @@ function enforceAuthShopMatch(req, res, next) {
 }
 
 // =====================================================
-// ✅ DURCISSEMENT #2 : Webhooks shop + HMAC strict
+// aÃƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ DURCISSEMENT #2 : Webhooks shop + HMAC strict
 // =====================================================
 function getShopFromWebhook(req, payloadObj) {
   const headerShop = String(req.get("X-Shopify-Shop-Domain") || "").trim();
@@ -623,7 +613,7 @@ router.use((req, res, next) => {
   next();
 });
 
-// ✅ Public config (sans session token)
+// aÃƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Public config (sans session token)
 router.get("/api/public/config", (req, res) => {
   res.json({
     apiKey: SHOPIFY_API_KEY || "",
@@ -631,13 +621,13 @@ router.get("/api/public/config", (req, res) => {
   });
 });
 
-// ✅ SECURE toutes les routes /api/*
+// aÃƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ SECURE toutes les routes /api/*
 router.use("/api", requireApiAuth);
 
-// ✅ DURCISSEMENT #1 (suite) : anti-spoof APRES auth
+// aÃƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ DURCISSEMENT #1 (suite) : anti-spoof APRES auth
 router.use("/api", enforceAuthShopMatch);
 
-// ✅ Resout le shop une fois pour toutes (utile pour auto-reauth)
+// aÃƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Resout le shop une fois pour toutes (utile pour auto-reauth)
 router.use("/api", (req, _res, next) => {
   req.resolvedShop = getShop(req);
   next();
@@ -837,13 +827,13 @@ router.get("/api/stock", (req, res) => {
   });
 });
 
-// ✅ Valeur totale du stock - STANDARD+ ONLY
+// aÃƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Valeur totale du stock - STANDARD+ ONLY
 router.get("/api/stock/value", (req, res) => {
   safeJson(req, res, () => {
     const shop = getShop(req);
     if (!shop) return apiError(res, 400, "Shop introuvable");
 
-    // ✅ Verifier le plan
+    // aÃƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Verifier le plan
     if (planManager) {
       const check = planManager.checkLimit(shop, "view_stock_value");
       if (!check.allowed) {
@@ -865,13 +855,13 @@ router.get("/api/stock/value", (req, res) => {
   });
 });
 
-// ✅ Stats par categorie - STANDARD+ ONLY
+// aÃƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Stats par categorie - STANDARD+ ONLY
 router.get("/api/stats/categories", (req, res) => {
   safeJson(req, res, () => {
     const shop = getShop(req);
     if (!shop) return apiError(res, 400, "Shop introuvable");
 
-    // ✅ Verifier le plan
+    // aÃƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Verifier le plan
     if (planManager) {
       const check = planManager.checkLimit(shop, "view_categories");
       if (!check.allowed) {
@@ -922,7 +912,7 @@ router.get("/api/categories", (req, res) => {
     const shop = getShop(req);
     if (!shop) return apiError(res, 400, "Shop introuvable");
 
-    // ✅ Verifier le plan (categories = Standard+)
+    // aÃƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Verifier le plan (categories = Standard+)
     if (planManager) {
       const check = planManager.checkLimit(shop, "view_categories");
       if (!check.allowed) {
@@ -946,7 +936,7 @@ router.post("/api/categories", (req, res) => {
     const shop = getShop(req);
     if (!shop) return apiError(res, 400, "Shop introuvable");
 
-    // ✅ Verifier le plan
+    // aÃƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Verifier le plan
     if (planManager) {
       const check = planManager.checkLimit(shop, "manage_categories");
       if (!check.allowed) {
@@ -1016,7 +1006,7 @@ router.get("/api/movements", (req, res) => {
     const limit = Math.min(Number(req.query.limit || 200), 2000);
     let days = Math.min(Math.max(Number(req.query.days || 7), 1), 365);
 
-    // ✅ Appliquer la limite de jours selon le plan
+    // aÃƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Appliquer la limite de jours selon le plan
     let daysLimited = false;
     if (planManager) {
       const maxDays = planManager.applyMovementDaysLimit(shop, days);
@@ -1042,7 +1032,7 @@ router.get("/api/movements.csv", (req, res) => {
     const shop = getShop(req);
     if (!shop) return apiError(res, 400, "Shop introuvable");
 
-    // ✅ Verifier le plan pour export avance
+    // aÃƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Verifier le plan pour export avance
     if (planManager) {
       const check = planManager.checkLimit(shop, "advanced_export");
       if (!check.allowed) {
@@ -1100,7 +1090,7 @@ router.delete("/api/movements/:id", (req, res) => {
   });
 });
 
-// âÅ“â€¦ NOUVEAU : Détail produit avec variantes et stats
+// Ã¢Å“â€¦ NOUVEAU : DÃƒÂ©tail produit avec variantes et stats
 router.get("/api/products/:productId", (req, res) => {
   safeJson(req, res, () => {
     const shop = getShop(req);
@@ -1109,15 +1099,15 @@ router.get("/api/products/:productId", (req, res) => {
     const productId = String(req.params.productId || "");
     if (!productId) return apiError(res, 400, "productId manquant");
 
-    // Récupérer le snapshot du produit
+    // RÃƒÂ©cupÃƒÂ©rer le snapshot du produit
     const product = stock.getProductSnapshot ? stock.getProductSnapshot(shop, productId) : null;
     if (!product) return apiError(res, 404, "Produit introuvable");
 
-    // Récupérer les catégories
+    // RÃƒÂ©cupÃƒÂ©rer les catÃƒÂ©gories
     const allCategories = catalogStore.listCategories ? catalogStore.listCategories(shop) : [];
     const productCategories = allCategories.filter(c => (product.categoryIds || []).includes(c.id));
 
-    // Récupérer les variantes avec calcul des stats
+    // RÃƒÂ©cupÃƒÂ©rer les variantes avec calcul des stats
     const storeObj = stock.PRODUCT_CONFIG_BY_SHOP?.get(shop);
     const cfg = storeObj ? storeObj[productId] : null;
     const variants = cfg?.variants || {};
@@ -1144,7 +1134,7 @@ router.get("/api/products/:productId", (req, res) => {
       });
     }
 
-    // Calcul du pourcentage (basé sur les unités vendables)
+    // Calcul du pourcentage (basÃƒÂ© sur les unitÃƒÂ©s vendables)
     for (const vs of variantStats) {
       vs.shareByUnits = totalCanSell > 0 ? Math.round((vs.canSell / totalCanSell) * 100 * 100) / 100 : 0;
     }
@@ -1152,7 +1142,7 @@ router.get("/api/products/:productId", (req, res) => {
     // Trier par gramsPerUnit croissant
     variantStats.sort((a, b) => a.gramsPerUnit - b.gramsPerUnit);
 
-    // Déterminer le statut stock
+    // DÃƒÂ©terminer le statut stock
     let stockStatus = "good";
     let stockLabel = "OK";
     if (totalGrams <= 0) {
@@ -1216,7 +1206,7 @@ router.post("/api/products/:productId/adjust-total", (req, res) => {
     const gramsDelta = Number(req.body?.gramsDelta);
     const purchasePricePerGram = Number(req.body?.purchasePricePerGram || 0);
     
-    // Récupérer les infos du profil
+    // RÃ©cupÃ©rer les infos du profil
     const profileId = req.body?.profileId || null;
     const profileName = req.body?.profileName || "User";
     const profileColor = req.body?.profileColor || "#6366f1";
@@ -1339,6 +1329,11 @@ router.post("/api/products/:productId/categories", (req, res) => {
 
     const productId = String(req.params.productId);
     const categoryIds = Array.isArray(req.body?.categoryIds) ? req.body.categoryIds.map(String) : [];
+    
+    // Récupérer les infos du profil
+    const profileId = req.body?.profileId || null;
+    const profileName = req.body?.profileName || "User";
+    const profileColor = req.body?.profileColor || "#6366f1";
 
     if (typeof stock.setProductCategories !== "function") {
       return apiError(res, 500, "stock.setProductCategories introuvable");
@@ -1349,7 +1344,7 @@ router.post("/api/products/:productId/categories", (req, res) => {
 
     if (movementStore.addMovement) {
       movementStore.addMovement(
-        { source: "product_set_categories", productId, gramsDelta: 0, meta: { categoryIds }, shop },
+        { source: "product_set_categories", productId, gramsDelta: 0, meta: { categoryIds }, profileId, profileName, profileColor, shop },
         shop
       );
     }
@@ -1358,7 +1353,7 @@ router.post("/api/products/:productId/categories", (req, res) => {
   });
 });
 
-// ✅ Creer un produit manuellement (sans import Shopify)
+// ÃƒÂ¢Ã…â€œÃ¢â‚¬Â¦ Creer un produit manuellement (sans import Shopify)
 router.post("/api/products", (req, res) => {
   safeJson(req, res, () => {
     const shop = getShop(req);
@@ -1371,7 +1366,7 @@ router.post("/api/products", (req, res) => {
 
     if (!name) return apiError(res, 400, "Nom du produit requis");
 
-    // ✅ Verifier le plan (limite de produits)
+    // ÃƒÂ¢Ã…â€œÃ¢â‚¬Â¦ Verifier le plan (limite de produits)
     if (planManager) {
       const snapshot = stock.getCatalogSnapshot ? stock.getCatalogSnapshot(shop) : { products: [] };
       const currentCount = Array.isArray(snapshot.products) ? snapshot.products.length : 0;
@@ -1478,7 +1473,7 @@ router.post("/api/import/product", (req, res) => {
     const shop = getShop(req);
     if (!shop) return apiError(res, 400, "Shop introuvable");
 
-    // ✅ Verifier le plan (import Shopify = Standard+)
+    // aÃƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Verifier le plan (import Shopify = Standard+)
     if (planManager) {
       const checkImport = planManager.checkLimit(shop, "import_shopify");
       if (!checkImport.allowed) {
@@ -1572,6 +1567,11 @@ router.post("/api/restock", (req, res) => {
     const productId = String(req.body?.productId || "").trim();
     const grams = Number(req.body?.grams);
     const purchasePricePerGram = Number(req.body?.purchasePricePerGram || 0);
+    
+    // Récupérer les infos du profil
+    const profileId = req.body?.profileId || null;
+    const profileName = req.body?.profileName || "User";
+    const profileColor = req.body?.profileColor || "#6366f1";
 
     if (!productId) return apiError(res, 400, "productId manquant");
     if (!Number.isFinite(grams) || grams <= 0) return apiError(res, 400, "grams invalide (ex: 50)");
@@ -1598,6 +1598,62 @@ router.post("/api/restock", (req, res) => {
           gramsDelta: Math.abs(grams),
           purchasePricePerGram: purchasePricePerGram > 0 ? purchasePricePerGram : undefined,
           totalAfter: updated.totalGrams,
+          profileId,
+          profileName,
+          profileColor,
+          shop,
+        },
+        shop
+      );
+    }
+
+    res.json({ success: true, product: updated, cmpUpdated: purchasePricePerGram > 0 });
+  });
+});
+
+// Alias route for /api/products/:productId/restock
+router.post("/api/products/:productId/restock", (req, res) => {
+  safeJson(req, res, async () => {
+    const shop = getShop(req);
+    if (!shop) return apiError(res, 400, "Shop introuvable");
+
+    const productId = String(req.params.productId || "").trim();
+    const grams = Number(req.body?.grams);
+    const purchasePricePerGram = Number(req.body?.purchasePricePerGram || 0);
+    
+    // Récupérer les infos du profil
+    const profileId = req.body?.profileId || null;
+    const profileName = req.body?.profileName || "User";
+    const profileColor = req.body?.profileColor || "#6366f1";
+
+    if (!productId) return apiError(res, 400, "productId manquant");
+    if (!Number.isFinite(grams) || grams <= 0) return apiError(res, 400, "grams invalide (ex: 50)");
+
+    if (typeof stock.restockProduct !== "function") {
+      return apiError(res, 500, "stock.restockProduct introuvable");
+    }
+
+    const updated = await stock.restockProduct(shop, productId, grams, purchasePricePerGram);
+    if (!updated) return apiError(res, 404, "Produit introuvable");
+
+    try {
+      await pushProductInventoryToShopify(shop, updated);
+    } catch (e) {
+      logEvent("inventory_push_error", { shop, productId, ...extractShopifyError(e) }, "error");
+    }
+
+    if (movementStore.addMovement) {
+      movementStore.addMovement(
+        {
+          source: "restock",
+          productId,
+          productName: updated.name,
+          gramsDelta: Math.abs(grams),
+          purchasePricePerGram: purchasePricePerGram > 0 ? purchasePricePerGram : undefined,
+          totalAfter: updated.totalGrams,
+          profileId,
+          profileName,
+          profileColor,
           shop,
         },
         shop
@@ -1763,19 +1819,85 @@ router.get("/api/auth/callback", (req, res) => {
 });
 
 // =====================================================
-// SETTINGS ROUTES ✅ NOUVEAU (Parametres avances)
+// SETTINGS ROUTES aÃƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ NOUVEAU (Parametres avances)
 // =====================================================
 
 // Recuperer tous les parametres
+// Route pour récupérer la locale Shopify de la boutique
+router.get("/api/shop-locale", (req, res) => {
+  safeJson(req, res, async () => {
+    const shop = getShop(req);
+    if (!shop) return apiError(res, 400, "Shop introuvable");
+
+    try {
+      const client = shopifyFor(shop);
+      const shopInfo = await client.shop.get();
+      
+      const primaryLocale = shopInfo?.primary_locale || "en";
+      const currency = shopInfo?.currency || "EUR";
+      const timezone = shopInfo?.iana_timezone || shopInfo?.timezone || "Europe/Paris";
+      
+      const localeMap = {
+        "fr": "fr", "fr-FR": "fr", "fr-CA": "fr",
+        "en": "en", "en-US": "en", "en-GB": "en",
+        "de": "de", "de-DE": "de", "de-AT": "de", "de-CH": "de",
+        "es": "es", "es-ES": "es", "es-MX": "es",
+        "it": "it", "it-IT": "it",
+      };
+      
+      const detectedLang = localeMap[primaryLocale] || localeMap[primaryLocale.split("-")[0]] || "en";
+      
+      res.json({
+        success: true,
+        shopLocale: primaryLocale,
+        detectedLanguage: detectedLang,
+        currency: currency,
+        timezone: timezone,
+      });
+    } catch (e) {
+      logEvent("shop_locale_error", { shop, error: e.message }, "error");
+      let fallbackLang = "en";
+      if (shop.includes(".fr") || shop.includes("-fr")) fallbackLang = "fr";
+      else if (shop.includes(".de") || shop.includes("-de")) fallbackLang = "de";
+      else if (shop.includes(".es") || shop.includes("-es")) fallbackLang = "es";
+      else if (shop.includes(".it") || shop.includes("-it")) fallbackLang = "it";
+      
+      res.json({ success: false, detectedLanguage: fallbackLang, fallback: true });
+    }
+  });
+});
+
 router.get("/api/settings", (req, res) => {
-  safeJson(req, res, () => {
+  safeJson(req, res, async () => {
     const shop = getShop(req);
     if (!shop) return apiError(res, 400, "Shop introuvable");
     if (!settingsManager) return apiError(res, 500, "SettingsManager non disponible");
 
     const settings = settingsManager.loadSettings(shop);
     const options = settingsManager.SETTING_OPTIONS;
-    res.json({ settings, options });
+    
+    // Si language est "auto", récupérer la locale Shopify
+    let shopLocale = null;
+    if (settings.general?.language === "auto") {
+      try {
+        const client = shopifyFor(shop);
+        const shopInfo = await client.shop.get();
+        const primaryLocale = shopInfo?.primary_locale || "en";
+        
+        const localeMap = {
+          "fr": "fr", "fr-FR": "fr", "fr-CA": "fr",
+          "en": "en", "en-US": "en", "en-GB": "en",
+          "de": "de", "de-DE": "de",
+          "es": "es", "es-ES": "es",
+          "it": "it", "it-IT": "it",
+        };
+        shopLocale = localeMap[primaryLocale] || localeMap[primaryLocale.split("-")[0]] || "en";
+      } catch (e) {
+        shopLocale = "fr";
+      }
+    }
+    
+    res.json({ settings, options, shopLocale });
   });
 });
 
@@ -1793,7 +1915,7 @@ router.get("/api/settings/:section", (req, res) => {
   });
 });
 
-// Mettre à jour une section
+// Mettre ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â  jour une section
 router.put("/api/settings/:section", (req, res) => {
   safeJson(req, res, () => {
     const shop = getShop(req);
@@ -1954,7 +2076,7 @@ router.get("/api/profiles/active", (req, res) => {
   });
 });
 
-// Créer un profil
+// CrÃ©er un profil
 router.post("/api/profiles", (req, res) => {
   safeJson(req, res, () => {
     const shop = getShop(req);
@@ -1969,7 +2091,7 @@ router.post("/api/profiles", (req, res) => {
   });
 });
 
-// Mettre à jour un profil
+// Mettre Ã  jour un profil
 router.put("/api/profiles/:id", (req, res) => {
   safeJson(req, res, () => {
     const shop = getShop(req);
@@ -2016,7 +2138,7 @@ router.post("/api/profiles/:id/activate", (req, res) => {
   });
 });
 
-// Mettre à jour les paramètres des profils
+// Mettre Ã  jour les paramÃ¨tres des profils
 router.put("/api/profiles/settings", (req, res) => {
   safeJson(req, res, () => {
     const shop = getShop(req);
@@ -2030,7 +2152,7 @@ router.put("/api/profiles/settings", (req, res) => {
 });
 
 // =====================================================
-// PLAN ROUTES ✅ Billing Shopify (AppSubscription)
+// PLAN ROUTES aÃƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Billing Shopify (AppSubscription)
 // =====================================================
 
 // Helper: map planId -> billing config
@@ -2113,7 +2235,7 @@ router.get("/api/plans", (req, res) => {
   });
 });
 
-// ✅ Retour Billing Shopify (apres acceptation abonnement)
+// aÃƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Retour Billing Shopify (apres acceptation abonnement)
 // IMPORTANT: cette route passe SANS session token (bypass dans requireApiAuth)
 router.get("/api/billing/return", (req, res) => {
   safeJson(req, res, async () => {
@@ -2256,11 +2378,11 @@ router.post("/api/plan/upgrade", (req, res) => {
 
     if (!planManager.PLANS[planId]) return apiError(res, 400, `Plan inconnu: ${planId}`);
     if (planId === "free") {
-      // Si l'utilisateur downgrade vers free => passe par cancel
+      // Si laEURÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢utilisateur downgrade vers free => passe par cancel
       return apiError(res, 400, "Pour revenir en Free, utilise /api/plan/cancel");
     }
 
-    // ✅ Bypass billing => on fixe direct sans Shopify
+    // aÃƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Bypass billing => on fixe direct sans Shopify
     const bypassPlan = planManager.getBypassPlan ? planManager.getBypassPlan(shop) : null;
     if (bypassPlan) {
       const result = planManager.setShopPlan(shop, bypassPlan, {
@@ -2273,12 +2395,12 @@ router.post("/api/plan/upgrade", (req, res) => {
       return res.json({ success: true, bypass: true, ...result });
     }
 
-    // ✅ Si dejà un abonnement actif Shopify => on evite doublon
+    // aÃƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Si dejÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â  un abonnement actif Shopify => on evite doublon
     const existingSubs = await getActiveAppSubscriptions(shop);
     if (Array.isArray(existingSubs) && existingSubs.length) {
       return res.status(409).json({
         error: "billing_already_active",
-        message: "Un abonnement Shopify est dejà actif pour cette boutique. Annule avant de recreer.",
+        message: "Un abonnement Shopify est dejÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â  actif pour cette boutique. Annule avant de recreer.",
         subscriptions: existingSubs.map((s) => ({ id: s.id, name: s.name, status: s.status })),
       });
     }
@@ -2305,7 +2427,7 @@ router.post("/api/plan/upgrade", (req, res) => {
     if (created.userErrors && created.userErrors.length) {
       return res.status(400).json({
         error: "billing_user_errors",
-        message: "Shopify a refuse la creation d'abonnement",
+        message: "Shopify a refuse la creation daEURÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢abonnement",
         userErrors: created.userErrors,
       });
     }
@@ -2331,14 +2453,14 @@ router.post("/api/plan/upgrade", (req, res) => {
   });
 });
 
-// ✅ Cancel: annule l'abonnement Shopify + downgrade local en Free
+// aÃƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Cancel: annule laEURÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢abonnement Shopify + downgrade local en Free
 router.post("/api/plan/cancel", (req, res) => {
   safeJson(req, res, async () => {
     const shop = getShop(req);
     if (!shop) return apiError(res, 400, "Shop introuvable");
     if (!planManager) return apiError(res, 500, "PlanManager non disponible");
 
-    // Bypass => on ne cancel pas Shopify (il n'y a rien), et ca restera bypass
+    // Bypass => on ne cancel pas Shopify (il naEURÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢y a rien), et ca restera bypass
     const bypassPlan = planManager.getBypassPlan ? planManager.getBypassPlan(shop) : null;
     if (bypassPlan) {
       const current = planManager.getShopPlan(shop);
@@ -2353,7 +2475,7 @@ router.post("/api/plan/cancel", (req, res) => {
     const subs = await getActiveAppSubscriptions(shop);
     const sub = Array.isArray(subs) && subs.length ? subs[0] : null;
 
-    // S'il n'y a rien cote Shopify, on downgrade quand meme localement
+    // SaEURÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢il naEURÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢y a rien cote Shopify, on downgrade quand meme localement
     if (!sub?.id) {
       const result = planManager.cancelSubscription(shop);
       logEvent("plan_cancelled_no_shopify_sub", { shop }, "warn");
@@ -2365,7 +2487,7 @@ router.post("/api/plan/cancel", (req, res) => {
     if (cancelled.userErrors && cancelled.userErrors.length) {
       return res.status(400).json({
         error: "billing_cancel_user_errors",
-        message: "Shopify a refuse l'annulation",
+        message: "Shopify a refuse laEURÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢annulation",
         userErrors: cancelled.userErrors,
       });
     }
@@ -2407,17 +2529,17 @@ router.get("/api/plan/check/:action", (req, res) => {
 });
 
 // =====================================================
-// ANALYTICS ROUTES ✅ NOUVEAU
+// ANALYTICS ROUTES aÃƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ NOUVEAU
 // =====================================================
 
-// Summary (KPIs globaux) - ✅ PREMIUM ONLY
+// Summary (KPIs globaux) - aÃƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ PREMIUM ONLY
 router.get("/api/analytics/summary", (req, res) => {
   safeJson(req, res, () => {
     const shop = getShop(req);
     if (!shop) return apiError(res, 400, "Shop introuvable");
     if (!analyticsManager) return apiError(res, 500, "Analytics non disponible");
 
-    // ✅ Verifier le plan
+    // aÃƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Verifier le plan
     if (planManager) {
       const check = planManager.checkLimit(shop, "view_analytics");
       if (!check.allowed) {
@@ -2438,14 +2560,14 @@ router.get("/api/analytics/summary", (req, res) => {
   });
 });
 
-// Timeseries (donnees graphiques) - ✅ PREMIUM ONLY
+// Timeseries (donnees graphiques) - aÃƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ PREMIUM ONLY
 router.get("/api/analytics/timeseries", (req, res) => {
   safeJson(req, res, () => {
     const shop = getShop(req);
     if (!shop) return apiError(res, 400, "Shop introuvable");
     if (!analyticsManager) return apiError(res, 500, "Analytics non disponible");
 
-    // ✅ Verifier le plan
+    // aÃƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Verifier le plan
     if (planManager) {
       const check = planManager.checkLimit(shop, "view_analytics");
       if (!check.allowed) {
@@ -2466,14 +2588,14 @@ router.get("/api/analytics/timeseries", (req, res) => {
   });
 });
 
-// Liste des commandes recentes - ✅ PREMIUM ONLY
+// Liste des commandes recentes - aÃƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ PREMIUM ONLY
 router.get("/api/analytics/orders", (req, res) => {
   safeJson(req, res, () => {
     const shop = getShop(req);
     if (!shop) return apiError(res, 400, "Shop introuvable");
     if (!analyticsManager) return apiError(res, 500, "Analytics non disponible");
 
-    // ✅ Verifier le plan
+    // aÃƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Verifier le plan
     if (planManager) {
       const check = planManager.checkLimit(shop, "view_analytics");
       if (!check.allowed) {
@@ -2494,14 +2616,14 @@ router.get("/api/analytics/orders", (req, res) => {
   });
 });
 
-// Top produits - ✅ PREMIUM ONLY
+// Top produits - aÃƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ PREMIUM ONLY
 router.get("/api/analytics/products/top", (req, res) => {
   safeJson(req, res, () => {
     const shop = getShop(req);
     if (!shop) return apiError(res, 400, "Shop introuvable");
     if (!analyticsManager) return apiError(res, 500, "Analytics non disponible");
 
-    // ✅ Verifier le plan
+    // aÃƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Verifier le plan
     if (planManager) {
       const check = planManager.checkLimit(shop, "view_analytics");
       if (!check.allowed) {
@@ -3081,240 +3203,6 @@ router.get("/api/analytics/sales", async (req, res) => {
     logEvent("analytics_sales_error", { error: e.message }, "error");
     return apiError(res, 500, "Erreur: " + e.message);
   }
-});
-
-// ============================================
-// SYNC SHOPIFY API
-// ============================================
-
-// Sync produits depuis Shopify
-router.post("/api/sync/shopify", async (req, res) => {
-  safeJson(req, res, async () => {
-    const shop = getShop(req);
-    if (!shop) return apiError(res, 400, "Shop introuvable");
-
-    try {
-      const client = getShopifyClient(shop);
-      if (!client) {
-        return apiError(res, 400, "Client Shopify non configuré");
-      }
-
-      // Récupérer les produits Shopify
-      const products = await client.product.list({ limit: 250 });
-      
-      let imported = 0;
-      let updated = 0;
-      let skipped = 0;
-      
-      for (const shopifyProduct of products) {
-        const productId = shopifyProduct.id.toString();
-        const existingProduct = stock.getProductSnapshot(shop, productId);
-        
-        // Préparer les variantes au format attendu par stockManager
-        // IMPORTANT: normalizeVariants exige inventoryItemId ET gramsPerUnit > 0
-        const variantsObj = {};
-        let hasValidVariant = false;
-        
-        if (shopifyProduct.variants && shopifyProduct.variants.length > 0) {
-          shopifyProduct.variants.forEach(v => {
-            // inventory_item_id est fourni par Shopify API
-            const inventoryItemId = v.inventory_item_id || v.inventoryItemId || 0;
-            // grams est le poids en grammes de Shopify, sinon on met 1 par défaut
-            const gramsPerUnit = parseFloat(v.grams) || 1;
-            
-            if (inventoryItemId && gramsPerUnit > 0) {
-              // Utiliser le titre de la variante comme clé (ex: "1.5", "3", "5g")
-              const label = v.title || v.id.toString();
-              variantsObj[label] = {
-                variantId: v.id.toString(),
-                inventoryItemId: inventoryItemId,
-                gramsPerUnit: gramsPerUnit,
-                sku: v.sku || "",
-                barcode: v.barcode || "",
-                price: parseFloat(v.price) || 0
-              };
-              hasValidVariant = true;
-            }
-          });
-        }
-        
-        // Si aucune variante valide, on skip ce produit
-        if (!hasValidVariant) {
-          skipped++;
-          continue;
-        }
-        
-        // Utiliser upsertImportedProductConfig qui existe dans stockManager
-        const productData = {
-          productId: productId,
-          name: shopifyProduct.title,
-          totalGrams: existingProduct ? existingProduct.totalGrams : 0,
-          variants: variantsObj,
-          categoryIds: existingProduct ? existingProduct.categoryIds : []
-        };
-        
-        try {
-          stock.upsertImportedProductConfig(shop, productData);
-          
-          if (!existingProduct) {
-            imported++;
-          } else {
-            updated++;
-          }
-        } catch (productError) {
-          // Log l'erreur mais continue avec les autres produits
-          logEvent("sync_product_error", { 
-            shop, 
-            productId, 
-            productName: shopifyProduct.title,
-            error: productError.message 
-          }, "warn");
-          skipped++;
-        }
-      }
-
-      logEvent("sync_shopify", { shop, imported, updated, skipped });
-      
-      res.json({
-        success: true,
-        imported,
-        updated,
-        skipped,
-        total: products.length,
-        message: `Sync terminé: ${imported} importés, ${updated} mis à jour, ${skipped} ignorés`
-      });
-
-    } catch (e) {
-      logEvent("sync_shopify_error", { shop, error: e.message }, "error");
-      return apiError(res, 500, "Erreur sync Shopify: " + e.message);
-    }
-  });
-});
-
-// ============================================
-// NOTIFICATIONS API
-// ============================================
-
-// Liste des notifications/alertes
-router.get("/api/notifications", (req, res) => {
-  safeJson(req, res, () => {
-    const shop = getShop(req);
-    if (!shop) return apiError(res, 400, "Shop introuvable");
-
-    // Vérifier le plan
-    if (planManager) {
-      const check = planManager.checkLimit(shop, "view_notifications");
-      if (!check.allowed) {
-        return res.status(403).json({ error: "plan_limit", message: check.reason, upgrade: check.upgrade });
-      }
-    }
-
-    if (!notificationStore) {
-      return res.json({ notifications: [], unreadCount: 0 });
-    }
-
-    const limit = parseInt(req.query.limit) || 20;
-    const data = notificationStore.loadNotifications(shop);
-    const alerts = data.alerts || [];
-    
-    // Trier par date décroissante
-    alerts.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-    
-    const unreadCount = alerts.filter(a => !a.read && !a.dismissed).length;
-    
-    res.json({
-      notifications: alerts.slice(0, limit),
-      unreadCount,
-      total: alerts.length,
-      settings: data.settings,
-      lastCheck: data.lastCheck
-    });
-  });
-});
-
-// Vérifier/générer les alertes
-router.post("/api/notifications/check", async (req, res) => {
-  safeJson(req, res, async () => {
-    const shop = getShop(req);
-    if (!shop) return apiError(res, 400, "Shop introuvable");
-
-    if (!alertChecker) {
-      return res.json({ newAlerts: 0, resolvedAlerts: 0, message: "AlertChecker non disponible" });
-    }
-
-    try {
-      const results = await alertChecker.checkAllAlerts(shop);
-      res.json(results);
-    } catch (e) {
-      logEvent("notifications_check_error", { shop, error: e.message }, "error");
-      return apiError(res, 500, "Erreur vérification alertes: " + e.message);
-    }
-  });
-});
-
-// Marquer une notification comme lue
-router.put("/api/notifications/:id/read", (req, res) => {
-  safeJson(req, res, () => {
-    const shop = getShop(req);
-    if (!shop) return apiError(res, 400, "Shop introuvable");
-
-    if (!notificationStore) {
-      return apiError(res, 500, "NotificationStore non disponible");
-    }
-
-    const alertId = req.params.id;
-    notificationStore.markAsRead(shop, alertId);
-    
-    res.json({ success: true });
-  });
-});
-
-// Ignorer/dismiss une notification
-router.put("/api/notifications/:id/dismiss", (req, res) => {
-  safeJson(req, res, () => {
-    const shop = getShop(req);
-    if (!shop) return apiError(res, 400, "Shop introuvable");
-
-    if (!notificationStore) {
-      return apiError(res, 500, "NotificationStore non disponible");
-    }
-
-    const alertId = req.params.id;
-    notificationStore.dismissAlert(shop, alertId);
-    
-    res.json({ success: true });
-  });
-});
-
-// Paramètres des notifications
-router.get("/api/notifications/settings", (req, res) => {
-  safeJson(req, res, () => {
-    const shop = getShop(req);
-    if (!shop) return apiError(res, 400, "Shop introuvable");
-
-    if (!notificationStore) {
-      return res.json({ settings: {} });
-    }
-
-    const data = notificationStore.loadNotifications(shop);
-    res.json({ settings: data.settings || {} });
-  });
-});
-
-router.put("/api/notifications/settings", (req, res) => {
-  safeJson(req, res, () => {
-    const shop = getShop(req);
-    if (!shop) return apiError(res, 400, "Shop introuvable");
-
-    if (!notificationStore) {
-      return apiError(res, 500, "NotificationStore non disponible");
-    }
-
-    const newSettings = req.body;
-    notificationStore.updateSettings(shop, newSettings);
-    
-    res.json({ success: true });
-  });
 });
 
 // ============================================
@@ -4210,7 +4098,7 @@ router.get("/api/kits", (req, res) => {
     const shop = getShop(req);
     if (!shop) return apiError(res, 400, "Shop introuvable");
 
-    // Vérifier le plan
+    // VÃƒÂ©rifier le plan
     if (planManager) {
       const check = planManager.checkLimit(shop, "view_kits");
       if (!check.allowed) {
@@ -4226,7 +4114,7 @@ router.get("/api/kits", (req, res) => {
       includeArchived: includeArchived === "true" 
     });
 
-    // Enrichir avec calcul coût/marge
+    // Enrichir avec calcul coÃƒÂ»t/marge
     const snapshot = stock.getCatalogSnapshot ? stock.getCatalogSnapshot(shop) : { products: [] };
     const productCosts = {};
     (snapshot.products || []).forEach(p => {
@@ -4256,7 +4144,7 @@ router.get("/api/kits", (req, res) => {
   });
 });
 
-// Détail d'un kit
+// DÃƒÂ©tail d'un kit
 router.get("/api/kits/:id", (req, res) => {
   safeJson(req, res, () => {
     const shop = getShop(req);
@@ -4264,9 +4152,9 @@ router.get("/api/kits/:id", (req, res) => {
     if (!kitStore) return apiError(res, 500, "Module kits non disponible");
 
     const kit = kitStore.getKit(shop, req.params.id);
-    if (!kit) return apiError(res, 404, "Kit non trouvé");
+    if (!kit) return apiError(res, 404, "Kit non trouvÃƒÂ©");
 
-    // Enrichir avec calcul coût/marge
+    // Enrichir avec calcul coÃƒÂ»t/marge
     const snapshot = stock.getCatalogSnapshot ? stock.getCatalogSnapshot(shop) : { products: [] };
     const productCosts = {};
     (snapshot.products || []).forEach(p => {
@@ -4289,13 +4177,13 @@ router.get("/api/kits/:id", (req, res) => {
   });
 });
 
-// Créer un kit
+// CrÃƒÂ©er un kit
 router.post("/api/kits", (req, res) => {
   safeJson(req, res, () => {
     const shop = getShop(req);
     if (!shop) return apiError(res, 400, "Shop introuvable");
 
-    // Vérifier le plan
+    // VÃƒÂ©rifier le plan
     if (planManager) {
       const check = planManager.checkLimit(shop, "manage_kits");
       if (!check.allowed) {
@@ -4399,7 +4287,7 @@ router.delete("/api/kits/:id/items/:itemId", (req, res) => {
   });
 });
 
-// Mapper un kit à Shopify
+// Mapper un kit ÃƒÂ  Shopify
 router.post("/api/kits/:id/map-shopify", (req, res) => {
   safeJson(req, res, () => {
     const shop = getShop(req);
@@ -4446,7 +4334,7 @@ router.post("/api/kits/:id/simulate", (req, res) => {
     if (!kitStore) return apiError(res, 500, "Module kits non disponible");
 
     try {
-      // Récupérer les coûts produits
+      // RÃƒÂ©cupÃƒÂ©rer les coÃƒÂ»ts produits
       const snapshot = stock.getCatalogSnapshot ? stock.getCatalogSnapshot(shop) : { products: [] };
       const productCosts = {};
       (snapshot.products || []).forEach(p => {
@@ -4483,13 +4371,13 @@ router.get("/api/kits-stats", (req, res) => {
 // FORECAST / PREVISIONS API (Business)
 // ============================================
 
-// Liste des prévisions
+// Liste des prÃƒÂ©visions
 router.get("/api/forecast", (req, res) => {
   safeJson(req, res, () => {
     const shop = getShop(req);
     if (!shop) return apiError(res, 400, "Shop introuvable");
 
-    // Vérifier le plan
+    // VÃƒÂ©rifier le plan
     if (planManager) {
       const check = planManager.checkLimit(shop, "view_forecast");
       if (!check.allowed) {
@@ -4502,16 +4390,16 @@ router.get("/api/forecast", (req, res) => {
     const windowDays = parseInt(req.query.windowDays) || 30;
     const categoryId = req.query.categoryId || null;
 
-    // Récupérer les produits
+    // RÃƒÂ©cupÃƒÂ©rer les produits
     const snapshot = stock.getCatalogSnapshot ? stock.getCatalogSnapshot(shop) : { products: [] };
     let products = snapshot.products || [];
 
-    // Filtrer par catégorie
+    // Filtrer par catÃƒÂ©gorie
     if (categoryId) {
       products = products.filter(p => p.categoryIds && p.categoryIds.includes(categoryId));
     }
 
-    // Récupérer les données de ventes (depuis analyticsStore si disponible)
+    // RÃƒÂ©cupÃƒÂ©rer les donnÃƒÂ©es de ventes (depuis analyticsStore si disponible)
     let salesData = [];
     if (analyticsStore && typeof analyticsStore.listSales === "function") {
       const fromDate = new Date();
@@ -4535,7 +4423,7 @@ router.get("/api/forecast", (req, res) => {
   });
 });
 
-// Détail prévision d'un produit
+// DÃƒÂ©tail prÃƒÂ©vision d'un produit
 router.get("/api/forecast/:productId", (req, res) => {
   safeJson(req, res, () => {
     const shop = getShop(req);
@@ -4544,13 +4432,13 @@ router.get("/api/forecast/:productId", (req, res) => {
 
     const windowDays = parseInt(req.query.windowDays) || 30;
 
-    // Récupérer le produit
+    // RÃƒÂ©cupÃƒÂ©rer le produit
     const snapshot = stock.getCatalogSnapshot ? stock.getCatalogSnapshot(shop) : { products: [] };
     const product = (snapshot.products || []).find(p => p.productId === req.params.productId);
     
-    if (!product) return apiError(res, 404, "Produit non trouvé");
+    if (!product) return apiError(res, 404, "Produit non trouvÃƒÂ©");
 
-    // Récupérer les ventes
+    // RÃƒÂ©cupÃƒÂ©rer les ventes
     let salesData = [];
     if (analyticsStore && typeof analyticsStore.listSales === "function") {
       const fromDate = new Date();
@@ -4581,11 +4469,11 @@ router.get("/api/forecast/recommendations", (req, res) => {
 
     const windowDays = parseInt(req.query.windowDays) || 30;
 
-    // Récupérer les produits
+    // RÃƒÂ©cupÃƒÂ©rer les produits
     const snapshot = stock.getCatalogSnapshot ? stock.getCatalogSnapshot(shop) : { products: [] };
     const products = snapshot.products || [];
 
-    // Récupérer les ventes
+    // RÃƒÂ©cupÃƒÂ©rer les ventes
     let salesData = [];
     if (analyticsStore && typeof analyticsStore.listSales === "function") {
       const fromDate = new Date();
@@ -4594,7 +4482,7 @@ router.get("/api/forecast/recommendations", (req, res) => {
         .map(s => ({ date: s.orderDate, productId: s.productId, qty: s.totalGrams || 0 }));
     }
 
-    // Récupérer les fournisseurs
+    // RÃƒÂ©cupÃƒÂ©rer les fournisseurs
     let suppliersData = [];
     if (supplierStore && typeof supplierStore.loadSuppliers === "function") {
       suppliersData = supplierStore.loadSuppliers(shop);
@@ -4644,7 +4532,7 @@ router.get("/api/inventory/sessions", (req, res) => {
     const shop = getShop(req);
     if (!shop) return apiError(res, 400, "Shop introuvable");
 
-    // Vérifier le plan
+    // VÃƒÂ©rifier le plan
     if (planManager) {
       const check = planManager.checkLimit(shop, "view_inventory");
       if (!check.allowed) {
@@ -4664,7 +4552,7 @@ router.get("/api/inventory/sessions", (req, res) => {
   });
 });
 
-// Créer une session
+// CrÃƒÂ©er une session
 router.post("/api/inventory/sessions", (req, res) => {
   safeJson(req, res, () => {
     const shop = getShop(req);
@@ -4688,7 +4576,7 @@ router.post("/api/inventory/sessions", (req, res) => {
   });
 });
 
-// Détail d'une session
+// DÃƒÂ©tail d'une session
 router.get("/api/inventory/sessions/:id", (req, res) => {
   safeJson(req, res, () => {
     const shop = getShop(req);
@@ -4696,7 +4584,7 @@ router.get("/api/inventory/sessions/:id", (req, res) => {
     if (!inventoryCountStore) return apiError(res, 500, "Module inventaire non disponible");
 
     const session = inventoryCountStore.getSession(shop, req.params.id);
-    if (!session) return apiError(res, 404, "Session non trouvée");
+    if (!session) return apiError(res, 404, "Session non trouvÃƒÂ©e");
 
     const items = inventoryCountStore.getSessionItems(shop, session.id);
     res.json({ session, items });
@@ -4719,7 +4607,7 @@ router.put("/api/inventory/sessions/:id", (req, res) => {
   });
 });
 
-// Démarrer une session (créer les items)
+// DÃƒÂ©marrer une session (crÃƒÂ©er les items)
 router.post("/api/inventory/sessions/:id/start", (req, res) => {
   safeJson(req, res, () => {
     const shop = getShop(req);
@@ -4727,7 +4615,7 @@ router.post("/api/inventory/sessions/:id/start", (req, res) => {
     if (!inventoryCountStore) return apiError(res, 500, "Module inventaire non disponible");
 
     try {
-      // Récupérer les produits du catalogue
+      // RÃƒÂ©cupÃƒÂ©rer les produits du catalogue
       const snapshot = stock.getCatalogSnapshot ? stock.getCatalogSnapshot(shop) : { products: [] };
       const products = snapshot.products || [];
 
@@ -4758,7 +4646,7 @@ router.get("/api/inventory/sessions/:id/items", (req, res) => {
   });
 });
 
-// Mettre à jour un item
+// Mettre ÃƒÂ  jour un item
 router.put("/api/inventory/sessions/:id/items/:itemId", (req, res) => {
   safeJson(req, res, () => {
     const shop = getShop(req);
@@ -4774,7 +4662,7 @@ router.put("/api/inventory/sessions/:id/items/:itemId", (req, res) => {
   });
 });
 
-// Mise à jour en masse (autosave)
+// Mise ÃƒÂ  jour en masse (autosave)
 router.post("/api/inventory/sessions/:id/items/bulk-upsert", (req, res) => {
   safeJson(req, res, () => {
     const shop = getShop(req);
@@ -4858,7 +4746,7 @@ router.post("/api/inventory/sessions/:id/duplicate", (req, res) => {
   });
 });
 
-// Événements d'audit
+// Ãƒâ€°vÃƒÂ©nements d'audit
 router.get("/api/inventory/events", (req, res) => {
   safeJson(req, res, () => {
     const shop = getShop(req);
@@ -4919,7 +4807,7 @@ router.get(/^\/(?!api\/|webhooks\/|health|css\/|js\/).*/, (req, res) => res.send
 // WEBHOOKS
 // =====================================================
 
-// ✅ DURCISSEMENT #3 : purge complete + cache (et hooks optionnels stock/catalog)
+// aÃƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ DURCISSEMENT #3 : purge complete + cache (et hooks optionnels stock/catalog)
 async function purgeShopData(shop) {
   const s = normalizeShopDomain(String(shop || "").trim());
   if (!s) return;
@@ -5025,7 +4913,7 @@ app.post("/webhooks/shop/redact", express.raw({ type: "application/json" }), asy
   }
 });
 
-// ✅ Webhook pour les mises à jour d'abonnement (Shopify Billing)
+// ÃƒÂ¢Ã…â€œÃ¢â‚¬Â¦ Webhook pour les mises ÃƒÆ’Ã‚Â  jour d'abonnement (Shopify Billing)
 app.post("/webhooks/app_subscriptions/update", express.raw({ type: "application/json" }), async (req, res) => {
   try {
     if (!requireVerifiedWebhook(req, res)) return res.sendStatus(401);
@@ -5054,7 +4942,7 @@ app.post("/webhooks/app_subscriptions/update", express.raw({ type: "application/
 
     // Si l'abonnement est actif (apres trial ou renouvellement)
     if (status === "active") {
-      // On pourrait mettre à jour le statut local si necessaire
+      // On pourrait mettre ÃƒÆ’Ã‚Â  jour le statut local si necessaire
       logEvent("subscription_confirmed_active", { shop }, "info");
     }
 
@@ -5126,7 +5014,7 @@ app.post("/webhooks/orders/create", express.raw({ type: "application/json" }), a
       }
     }
 
-    // ✅ ANALYTICS : Enregistrer la vente complete
+    // aÃƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ ANALYTICS : Enregistrer la vente complete
     try {
       if (analyticsManager && typeof analyticsManager.recordSaleFromOrder === "function") {
         await analyticsManager.recordSaleFromOrder(shop, payload);
@@ -5150,5 +5038,5 @@ app.use("/apps/:appSlug", router);
 
 app.listen(PORT, "0.0.0.0", () => {
   logEvent("server_started", { port: PORT, indexHtml: INDEX_HTML, apiAuthRequired: API_AUTH_REQUIRED });
-  console.log("✅ Server running on port", PORT);
+  console.log("aÃƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Server running on port", PORT);
 });

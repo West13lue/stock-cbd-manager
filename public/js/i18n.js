@@ -5,7 +5,7 @@ var I18N = {
   
   translations: {
     // =========================================
-    // FRANÃƒÆ’ââ‚¬Â¡AIS (FR) - Langue par dÃƒÆ’Ã‚Â©faut
+    // FRANÃƒÆ’Ã¢â‚¬Â¡AIS (FR) - Langue par dÃƒÆ’Ã‚Â©faut
     // =========================================
     fr: {
       // Navigation
@@ -625,9 +625,9 @@ var I18N = {
       "inventory.scopeCategory": "Categorie",
       "inventory.scopeSelection": "Selection",
       
-      // Dashboard amélioré
+      // Dashboard amÃƒÂ©liorÃƒÂ©
       "dashboard.quickActions": "Actions rapides",
-      "dashboard.quickRestock": "Réappro rapide",
+      "dashboard.quickRestock": "RÃƒÂ©appro rapide",
       "dashboard.quickAdjust": "Ajustement",
       "dashboard.scanBarcode": "Scanner",
       "dashboard.alerts": "Alertes",
@@ -644,7 +644,7 @@ var I18N = {
       "dashboard.noActivity": "Aucune activite",
       "dashboard.unknownUser": "Utilisateur",
       
-      // Verbes d'activité
+      // Verbes d'activitÃƒÂ©
       "activity.restocked": "a reapprovisionne",
       "activity.sold": "a vendu",
       "activity.adjusted": "a ajuste",
@@ -660,13 +660,13 @@ var I18N = {
       "time.yesterday": "Hier",
       
       // Actions
-      "action.selectProduct": "Sélectionner...",
-      "action.restock": "Réappro",
+      "action.selectProduct": "SÃƒÂ©lectionner...",
+      "action.restock": "RÃƒÂ©appro",
       "action.confirm": "Valider",
       "action.search": "Rechercher",
-      "action.create": "Créer",
+      "action.create": "CrÃƒÂ©er",
       "action.back": "Retour",
-      "action.retry": "Réessayer",
+      "action.retry": "RÃƒÂ©essayer",
       "action.reload": "Recharger",
       
       // Produits
@@ -682,146 +682,146 @@ var I18N = {
       
       // Raisons ajustement
       "reason.count": "Comptage inventaire",
-      "reason.damage": "Produit endommagé",
+      "reason.damage": "Produit endommagÃƒÂ©",
       "reason.theft": "Vol/Perte",
       "reason.correction": "Correction erreur",
       
       // Messages
-      "msg.selectProduct": "Sélectionnez un produit",
-      "msg.invalidQty": "Quantité invalide",
-      "msg.restockSuccess": "Réappro effectuée",
-      "msg.adjustSuccess": "Ajustement effectué",
+      "msg.selectProduct": "SÃƒÂ©lectionnez un produit",
+      "msg.invalidQty": "QuantitÃƒÂ© invalide",
+      "msg.restockSuccess": "RÃƒÂ©appro effectuÃƒÂ©e",
+      "msg.adjustSuccess": "Ajustement effectuÃƒÂ©",
       
       // Scanner
       "scanner.title": "Scanner code-barres",
-      "scanner.initializing": "Initialisation caméra...",
-      "scanner.notSupported": "Caméra non supportée sur ce navigateur",
-      "scanner.ready": "Caméra prête - Présentez un code-barres",
+      "scanner.initializing": "Initialisation camÃƒÂ©ra...",
+      "scanner.notSupported": "CamÃƒÂ©ra non supportÃƒÂ©e sur ce navigateur",
+      "scanner.ready": "CamÃƒÂ©ra prÃƒÂªte - PrÃƒÂ©sentez un code-barres",
       "scanner.manualEntry": "Ou saisir manuellement",
       "scanner.barcodePlaceholder": "Code-barres...",
       "scanner.enterBarcode": "Entrez un code-barres",
-      "scanner.notFound": "Produit non trouvé",
-      "scanner.notFoundMsg": "Aucun produit trouvé avec le code",
-      "scanner.notFoundHint": "Vérifiez que le code-barres est configuré sur le produit dans Shopify.",
-      "scanner.scanAgain": "Scanner à nouveau",
-      "scanner.manualOnly": "Détection auto non supportée - utilisez la saisie manuelle",
-      "scanner.cameraError": "Erreur caméra",
-      "scanner.startCamera": "Démarrer la caméra",
-      "scanner.requesting": "Demande d'accès à la caméra...",
-      "scanner.httpsRequired": "HTTPS requis pour accéder à la caméra",
-      "scanner.permissionDenied": "Accès caméra refusé. Autorisez l'accès dans les paramètres.",
-      "scanner.noCameraFound": "Aucune caméra détectée sur cet appareil.",
-      "scanner.cameraInUse": "La caméra est utilisée par une autre application.",
-      "scanner.tapToStart": "Touchez la vidéo pour démarrer",
-      "scanner.productFound": "Produit trouvé!",
-      "scanner.iframeBlocked": "La caméra est bloquée par le navigateur.",
-      "scanner.securityError": "Accès caméra bloqué par les paramètres de sécurité.",
-      "scanner.howToEnable": "Comment activer la caméra :",
-      "scanner.step1": "Cliquez sur l'icône caméra/cadenas dans la barre d'adresse",
-      "scanner.step2": "Autorisez l'accès à la caméra pour ce site",
-      "scanner.step3": "Rechargez la page si nécessaire",
+      "scanner.notFound": "Produit non trouvÃƒÂ©",
+      "scanner.notFoundMsg": "Aucun produit trouvÃƒÂ© avec le code",
+      "scanner.notFoundHint": "VÃƒÂ©rifiez que le code-barres est configurÃƒÂ© sur le produit dans Shopify.",
+      "scanner.scanAgain": "Scanner ÃƒÂ  nouveau",
+      "scanner.manualOnly": "DÃƒÂ©tection auto non supportÃƒÂ©e - utilisez la saisie manuelle",
+      "scanner.cameraError": "Erreur camÃƒÂ©ra",
+      "scanner.startCamera": "DÃƒÂ©marrer la camÃƒÂ©ra",
+      "scanner.requesting": "Demande d'accÃƒÂ¨s ÃƒÂ  la camÃƒÂ©ra...",
+      "scanner.httpsRequired": "HTTPS requis pour accÃƒÂ©der ÃƒÂ  la camÃƒÂ©ra",
+      "scanner.permissionDenied": "AccÃƒÂ¨s camÃƒÂ©ra refusÃƒÂ©. Autorisez l'accÃƒÂ¨s dans les paramÃƒÂ¨tres.",
+      "scanner.noCameraFound": "Aucune camÃƒÂ©ra dÃƒÂ©tectÃƒÂ©e sur cet appareil.",
+      "scanner.cameraInUse": "La camÃƒÂ©ra est utilisÃƒÂ©e par une autre application.",
+      "scanner.tapToStart": "Touchez la vidÃƒÂ©o pour dÃƒÂ©marrer",
+      "scanner.productFound": "Produit trouvÃƒÂ©!",
+      "scanner.iframeBlocked": "La camÃƒÂ©ra est bloquÃƒÂ©e par le navigateur.",
+      "scanner.securityError": "AccÃƒÂ¨s camÃƒÂ©ra bloquÃƒÂ© par les paramÃƒÂ¨tres de sÃƒÂ©curitÃƒÂ©.",
+      "scanner.howToEnable": "Comment activer la camÃƒÂ©ra :",
+      "scanner.step1": "Cliquez sur l'icÃƒÂ´ne camÃƒÂ©ra/cadenas dans la barre d'adresse",
+      "scanner.step2": "Autorisez l'accÃƒÂ¨s ÃƒÂ  la camÃƒÂ©ra pour ce site",
+      "scanner.step3": "Rechargez la page si nÃƒÂ©cessaire",
       
       // Raccourcis clavier
       "shortcuts.title": "Raccourcis clavier",
       "shortcuts.search": "Rechercher",
       "shortcuts.newProduct": "Nouveau produit",
-      "shortcuts.quickRestock": "Réappro rapide",
+      "shortcuts.quickRestock": "RÃƒÂ©appro rapide",
       "shortcuts.scanner": "Scanner code-barres",
       "shortcuts.dashboard": "Dashboard",
       "shortcuts.products": "Produits",
-      "shortcuts.closeModal": "Fermer fenêtre",
+      "shortcuts.closeModal": "Fermer fenÃƒÂªtre",
       "shortcuts.help": "Afficher cette aide",
       
       // Tutoriels
       "tutorial.title": "Guide rapide",
       "tutorial.dontShowAgain": "Ne plus afficher pour cet onglet",
       "tutorial.understood": "Compris !",
-      "tutorial.reset": "Tutoriels réinitialisés",
+      "tutorial.reset": "Tutoriels rÃƒÂ©initialisÃƒÂ©s",
       "tutorial.allTutorials": "Tous les tutoriels",
-      "tutorial.resetAll": "Réinitialiser tout",
+      "tutorial.resetAll": "RÃƒÂ©initialiser tout",
       "tutorial.seen": "Vu",
       "tutorial.notSeen": "Non vu",
       
       // Tutoriel Dashboard
       "tutorial.dashboard.title": "Bienvenue sur le Dashboard !",
-      "tutorial.dashboard.step1": "Visualisez vos statistiques clés : nombre de produits, stock total et valeur.",
+      "tutorial.dashboard.step1": "Visualisez vos statistiques clÃƒÂ©s : nombre de produits, stock total et valeur.",
       "tutorial.dashboard.step2": "Les alertes vous signalent les produits en stock bas ou en rupture.",
-      "tutorial.dashboard.step3": "Utilisez les actions rapides pour réappro, scanner ou ajuster le stock.",
-      "tutorial.dashboard.step4": "Les mouvements récents montrent l'activité de votre stock.",
+      "tutorial.dashboard.step3": "Utilisez les actions rapides pour rÃƒÂ©appro, scanner ou ajuster le stock.",
+      "tutorial.dashboard.step4": "Les mouvements rÃƒÂ©cents montrent l'activitÃƒÂ© de votre stock.",
       "tutorial.dashboard.tip": "Astuce : Appuyez sur ? pour voir tous les raccourcis clavier !",
       
       // Tutoriel Produits
       "tutorial.products.title": "Gestion des Produits",
       "tutorial.products.step1": "Recherchez vos produits par nom, SKU ou code-barres.",
-      "tutorial.products.step2": "Filtrez par catégorie et triez selon vos besoins.",
+      "tutorial.products.step2": "Filtrez par catÃƒÂ©gorie et triez selon vos besoins.",
       "tutorial.products.step3": "Utilisez le scanner pour trouver un produit rapidement.",
-      "tutorial.products.step4": "Cliquez sur un produit pour voir ses détails et ajuster le stock.",
-      "tutorial.products.tip": "Astuce : Raccourci N pour ajouter un produit, R pour réappro rapide !",
+      "tutorial.products.step4": "Cliquez sur un produit pour voir ses dÃƒÂ©tails et ajuster le stock.",
+      "tutorial.products.tip": "Astuce : Raccourci N pour ajouter un produit, R pour rÃƒÂ©appro rapide !",
       
       // Tutoriel Lots
       "tutorial.batches.title": "Lots et DLC",
-      "tutorial.batches.step1": "Gérez les dates de péremption de vos produits.",
-      "tutorial.batches.step2": "Recevez des alertes pour les lots qui arrivent à expiration.",
-      "tutorial.batches.step3": "Suivez la traçabilité de chaque lot entrant.",
-      "tutorial.batches.tip": "Les lots expirés sont automatiquement signalés en rouge.",
+      "tutorial.batches.step1": "GÃƒÂ©rez les dates de pÃƒÂ©remption de vos produits.",
+      "tutorial.batches.step2": "Recevez des alertes pour les lots qui arrivent ÃƒÂ  expiration.",
+      "tutorial.batches.step3": "Suivez la traÃƒÂ§abilitÃƒÂ© de chaque lot entrant.",
+      "tutorial.batches.tip": "Les lots expirÃƒÂ©s sont automatiquement signalÃƒÂ©s en rouge.",
       
       // Tutoriel Fournisseurs
       "tutorial.suppliers.title": "Gestion Fournisseurs",
       "tutorial.suppliers.step1": "Centralisez les informations de vos fournisseurs.",
-      "tutorial.suppliers.step2": "Gardez leurs contacts et conditions à portée de main.",
-      "tutorial.suppliers.step3": "Associez les produits à leurs fournisseurs pour un suivi optimal.",
-      "tutorial.suppliers.tip": "Ajoutez les délais de livraison pour anticiper vos commandes.",
+      "tutorial.suppliers.step2": "Gardez leurs contacts et conditions ÃƒÂ  portÃƒÂ©e de main.",
+      "tutorial.suppliers.step3": "Associez les produits ÃƒÂ  leurs fournisseurs pour un suivi optimal.",
+      "tutorial.suppliers.tip": "Ajoutez les dÃƒÂ©lais de livraison pour anticiper vos commandes.",
       
       // Tutoriel Commandes
       "tutorial.orders.title": "Commandes",
-      "tutorial.orders.step1": "Créez des bons de commande vers vos fournisseurs.",
-      "tutorial.orders.step2": "Suivez l'état de vos commandes en cours.",
-      "tutorial.orders.step3": "Réceptionnez les commandes pour mettre à jour le stock automatiquement.",
+      "tutorial.orders.step1": "CrÃƒÂ©ez des bons de commande vers vos fournisseurs.",
+      "tutorial.orders.step2": "Suivez l'ÃƒÂ©tat de vos commandes en cours.",
+      "tutorial.orders.step3": "RÃƒÂ©ceptionnez les commandes pour mettre ÃƒÂ  jour le stock automatiquement.",
       "tutorial.orders.tip": "Importez vos commandes Shopify pour un suivi complet.",
       
-      // Tutoriel Prévisions
-      "tutorial.forecast.title": "Prévisions",
+      // Tutoriel PrÃƒÂ©visions
+      "tutorial.forecast.title": "PrÃƒÂ©visions",
       "tutorial.forecast.step1": "Analysez les tendances de ventes de vos produits.",
-      "tutorial.forecast.step2": "Anticipez les ruptures grâce aux prévisions.",
-      "tutorial.forecast.step3": "Recevez des suggestions de réapprovisionnement.",
-      "tutorial.forecast.tip": "Plus vous avez d'historique, plus les prévisions sont précises.",
+      "tutorial.forecast.step2": "Anticipez les ruptures grÃƒÂ¢ce aux prÃƒÂ©visions.",
+      "tutorial.forecast.step3": "Recevez des suggestions de rÃƒÂ©approvisionnement.",
+      "tutorial.forecast.tip": "Plus vous avez d'historique, plus les prÃƒÂ©visions sont prÃƒÂ©cises.",
       
       // Tutoriel Kits
       "tutorial.kits.title": "Kits et Bundles",
-      "tutorial.kits.step1": "Créez des kits composés de plusieurs produits.",
-      "tutorial.kits.step2": "Le stock des composants est automatiquement déduit.",
+      "tutorial.kits.step1": "CrÃƒÂ©ez des kits composÃƒÂ©s de plusieurs produits.",
+      "tutorial.kits.step2": "Le stock des composants est automatiquement dÃƒÂ©duit.",
       "tutorial.kits.step3": "Simulez l'assemblage avant de valider.",
       "tutorial.kits.tip": "Utilisez les kits pour vos coffrets cadeaux ou packs promo.",
       
       // Tutoriel Analytics
       "tutorial.analytics.title": "Analytics",
-      "tutorial.analytics.step1": "Visualisez la répartition de votre stock par catégorie.",
-      "tutorial.analytics.step2": "Suivez l'évolution de la valeur de votre inventaire.",
+      "tutorial.analytics.step1": "Visualisez la rÃƒÂ©partition de votre stock par catÃƒÂ©gorie.",
+      "tutorial.analytics.step2": "Suivez l'ÃƒÂ©volution de la valeur de votre inventaire.",
       "tutorial.analytics.step3": "Analysez les mouvements pour optimiser votre gestion.",
       "tutorial.analytics.tip": "Exportez vos rapports en PDF ou Excel.",
       
       // Tutoriel Inventaire
       "tutorial.inventory.title": "Inventaire",
-      "tutorial.inventory.step1": "Créez des sessions d'inventaire complet ou partiel.",
+      "tutorial.inventory.step1": "CrÃƒÂ©ez des sessions d'inventaire complet ou partiel.",
       "tutorial.inventory.step2": "Utilisez le scanner pour compter plus rapidement.",
-      "tutorial.inventory.step3": "Comparez le stock théorique vs réel et validez les écarts.",
-      "tutorial.inventory.tip": "Planifiez des inventaires réguliers pour une meilleure précision.",
+      "tutorial.inventory.step3": "Comparez le stock thÃƒÂ©orique vs rÃƒÂ©el et validez les ÃƒÂ©carts.",
+      "tutorial.inventory.tip": "Planifiez des inventaires rÃƒÂ©guliers pour une meilleure prÃƒÂ©cision.",
       
-      // Tutoriel Paramètres
-      "tutorial.settings.title": "Paramètres",
-      "tutorial.settings.step1": "Configurez la langue et les unités de mesure.",
+      // Tutoriel ParamÃƒÂ¨tres
+      "tutorial.settings.title": "ParamÃƒÂ¨tres",
+      "tutorial.settings.step1": "Configurez la langue et les unitÃƒÂ©s de mesure.",
       "tutorial.settings.step2": "Personnalisez vos seuils d'alerte de stock.",
-      "tutorial.settings.step3": "Adaptez l'interface à vos préférences.",
-      "tutorial.settings.tip": "Sauvegardez vos paramètres pour les restaurer facilement.",
+      "tutorial.settings.step3": "Adaptez l'interface ÃƒÂ  vos prÃƒÂ©fÃƒÂ©rences.",
+      "tutorial.settings.tip": "Sauvegardez vos paramÃƒÂ¨tres pour les restaurer facilement.",
       
-      // Paramètres - Aide
+      // ParamÃƒÂ¨tres - Aide
       "settings.helpAndSupport": "Aide & Support",
       "settings.tutorials": "Tutoriels",
       "settings.viewTutorials": "Voir les tutoriels",
       "settings.shortcuts": "Raccourcis clavier",
       "settings.viewShortcuts": "Voir les raccourcis",
       "settings.resetTutorials": "Revoir les tutoriels",
-      "settings.resetTutorialsBtn": "Réinitialiser",
+      "settings.resetTutorialsBtn": "RÃƒÂ©initialiser",
       
       // Profils
       "profiles.whoIsConnecting": "Qui se connecte ?",
@@ -829,11 +829,11 @@ var I18N = {
       "profiles.myProfile": "Mon profil",
       "profiles.switchProfile": "Changer de profil",
       "profiles.createNew": "Nouveau profil",
-      "profiles.createProfile": "Créer un profil",
+      "profiles.createProfile": "CrÃƒÂ©er un profil",
       "profiles.name": "Nom",
       "profiles.namePlaceholder": "Ex: Marie, Pierre...",
       "profiles.nameRequired": "Le nom est requis",
-      "profiles.role": "Rôle",
+      "profiles.role": "RÃƒÂ´le",
       "profiles.roleUser": "Utilisateur",
       "profiles.roleManager": "Manager",
       "profiles.roleAdmin": "Administrateur",
@@ -2167,7 +2167,7 @@ var I18N = {
     },
     
     // =========================================
-    // ESPAÃƒÆ’ââ‚¬ËœOL (ES)
+    // ESPAÃƒÆ’Ã¢â‚¬ËœOL (ES)
     // =========================================
     es: {
       // Navigation
@@ -2448,7 +2448,7 @@ var I18N = {
       "settings.shortcuts": "Atajos de teclado",
       
       // Perfiles
-      "profiles.whoIsConnecting": "Ã‚Â¿Quién se conecta?",
+      "profiles.whoIsConnecting": "Ã‚Â¿QuiÃƒÂ©n se conecta?",
       "profiles.welcome": "Bienvenido",
       "profiles.myProfile": "Mi perfil",
       "profiles.createNew": "Nuevo perfil",
@@ -2998,7 +2998,7 @@ var I18N = {
   },
   
   // =========================================
-  // MÉTHODES
+  // MÃƒâ€°THODES
   // =========================================
   
   init: function(lang) {
@@ -3009,6 +3009,14 @@ var I18N = {
     } catch (e) {}
     
     var targetLang = savedLang || lang || "fr";
+    
+    // Si "auto", détecter depuis le navigateur
+    if (targetLang === "auto") {
+      var browserLang = (navigator.language || "en").substring(0, 2);
+      var supportedLangs = Object.keys(this.translations);
+      targetLang = supportedLangs.includes(browserLang) ? browserLang : "en";
+      console.log("[i18n] Auto-detected from browser:", targetLang);
+    }
     
     if (this.translations[targetLang]) {
       this.currentLang = targetLang;
