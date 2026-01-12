@@ -444,15 +444,62 @@ function safeJson(req, res, fn) {
 }
 
 function parseGramsFromVariant(v) {
-  const candidates = [v?.option1, v?.option2, v?.option3, v?.title, v?.sku].filter(Boolean);
-  for (const c of candidates) {
-    const m = String(c).match(/([\d.,]+)/);
-    if (!m) continue;
-    const g = parseFloat(m[1].replace(",", "."));
-    if (Number.isFinite(g) && g > 0) return g;
+  // 1) Priorité: utiliser le champ "grams" de Shopify (toujours en grammes)
+  if (v?.grams && Number.isFinite(Number(v.grams)) && Number(v.grams) > 0) {
+    return Number(v.grams);
   }
+  
+  // 2) Sinon: parser depuis option1/option2/option3/title/sku avec détection de l'unité
+  const candidates = [v?.option1, v?.option2, v?.option3, v?.title, v?.sku].filter(Boolean);
+  
+  // Facteurs de conversion vers grammes
+  const unitFactors = {
+    'g': 1,
+    'gr': 1,
+    'gram': 1,
+    'grams': 1,
+    'gramme': 1,
+    'grammes': 1,
+    'kg': 1000,
+    'kilo': 1000,
+    'kilos': 1000,
+    'kilogram': 1000,
+    'kilograms': 1000,
+    'kilogramme': 1000,
+    'kilogrammes': 1000,
+    'oz': 28.3495,
+    'ounce': 28.3495,
+    'ounces': 28.3495,
+    'lb': 453.592,
+    'lbs': 453.592,
+    'pound': 453.592,
+    'pounds': 453.592,
+    'livre': 453.592,
+    'livres': 453.592,
+  };
+  
+  for (const c of candidates) {
+    const str = String(c).toLowerCase().trim();
+    
+    // Pattern: nombre + unité (ex: "0.5kg", "100g", "1 kg", "250 gr")
+    const match = str.match(/([\d.,]+)\s*(g|gr|gram|grams|gramme|grammes|kg|kilo|kilos|kilogram|kilograms|kilogramme|kilogrammes|oz|ounce|ounces|lb|lbs|pound|pounds|livre|livres)?/i);
+    
+    if (match) {
+      const value = parseFloat(match[1].replace(",", "."));
+      if (!Number.isFinite(value) || value <= 0) continue;
+      
+      // Détecter l'unité (défaut: grammes si pas d'unité spécifiée)
+      const unit = (match[2] || 'g').toLowerCase();
+      const factor = unitFactors[unit] || 1;
+      
+      const grams = value * factor;
+      if (grams > 0) return grams;
+    }
+  }
+  
   return null;
 }
+
 
 function shopifyFor(shop) {
   return getShopifyClient(shop);
@@ -1556,6 +1603,124 @@ router.post("/api/import/product", (req, res) => {
     }
 
     res.json({ success: true, product: imported });
+  });
+});
+
+// ============================================
+// SYNC SHOPIFY - Synchronisation en masse
+// ============================================
+router.post("/api/sync/shopify", async (req, res) => {
+  safeJson(req, res, async () => {
+    const shop = getShop(req);
+    if (!shop) return apiError(res, 400, "Shop introuvable");
+
+    try {
+      const client = getShopifyClient(shop);
+      if (!client) {
+        return apiError(res, 400, "Client Shopify non configuré");
+      }
+
+      // Récupérer les produits Shopify
+      const products = await client.product.list({ limit: 250 });
+      
+      let imported = 0;
+      let updated = 0;
+      let skipped = 0;
+      
+      for (const shopifyProduct of products) {
+        const productId = shopifyProduct.id.toString();
+        const existingProduct = stock.getProductSnapshot ? stock.getProductSnapshot(shop, productId) : null;
+        
+        // Préparer les variantes au format attendu par stockManager
+        // IMPORTANT: normalizeVariants exige inventoryItemId ET gramsPerUnit > 0
+        const variantsObj = {};
+        let hasValidVariant = false;
+        
+        if (shopifyProduct.variants && shopifyProduct.variants.length > 0) {
+          for (const v of shopifyProduct.variants) {
+            // inventory_item_id est fourni par Shopify API
+            const inventoryItemId = v.inventory_item_id || v.inventoryItemId || 0;
+            
+            // Utiliser parseGramsFromVariant qui gère les unités (kg, g, oz, lb)
+            // Priorité: grams de Shopify > parsing du titre/option
+            let gramsPerUnit = parseGramsFromVariant(v);
+            
+            // Fallback: utiliser le champ grams de Shopify directement
+            if (!gramsPerUnit && v.grams && Number(v.grams) > 0) {
+              gramsPerUnit = Number(v.grams);
+            }
+            
+            // Dernier fallback: 1g
+            if (!gramsPerUnit || gramsPerUnit <= 0) {
+              gramsPerUnit = 1;
+            }
+            
+            if (inventoryItemId && gramsPerUnit > 0) {
+              // Utiliser le titre de la variante comme clé (ex: "0.5kg", "100g", "1kg")
+              const label = v.title || v.id.toString();
+              variantsObj[label] = {
+                variantId: v.id.toString(),
+                inventoryItemId: inventoryItemId,
+                gramsPerUnit: gramsPerUnit,
+                sku: v.sku || "",
+                barcode: v.barcode || "",
+                price: parseFloat(v.price) || 0
+              };
+              hasValidVariant = true;
+            }
+          }
+        }
+        
+        // Si aucune variante valide, on skip ce produit
+        if (!hasValidVariant) {
+          skipped++;
+          continue;
+        }
+        
+        // Utiliser upsertImportedProductConfig qui existe dans stockManager
+        const productData = {
+          productId: productId,
+          name: shopifyProduct.title,
+          totalGrams: existingProduct ? existingProduct.totalGrams : 0,
+          variants: variantsObj,
+          categoryIds: existingProduct ? existingProduct.categoryIds : []
+        };
+        
+        try {
+          stock.upsertImportedProductConfig(shop, productData);
+          
+          if (!existingProduct) {
+            imported++;
+          } else {
+            updated++;
+          }
+        } catch (productError) {
+          // Log l'erreur mais continue avec les autres produits
+          logEvent("sync_product_error", { 
+            shop, 
+            productId, 
+            productName: shopifyProduct.title,
+            error: productError.message 
+          }, "warn");
+          skipped++;
+        }
+      }
+
+      logEvent("sync_shopify", { shop, imported, updated, skipped });
+      
+      res.json({
+        success: true,
+        imported,
+        updated,
+        skipped,
+        total: products.length,
+        message: `Sync terminé: ${imported} importés, ${updated} mis à jour, ${skipped} ignorés`
+      });
+
+    } catch (e) {
+      logEvent("sync_shopify_error", { shop, error: e.message }, "error");
+      return apiError(res, 500, "Erreur sync Shopify: " + e.message);
+    }
   });
 });
 
