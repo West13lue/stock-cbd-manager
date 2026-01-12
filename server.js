@@ -799,10 +799,18 @@ router.get("/api/stock", (req, res) => {
     const shop = getShop(req);
     if (!shop) return apiError(res, 400, "Shop introuvable");
 
-    const { sort = "alpha", category = "", q = "" } = req.query;
+    const { sort = "alpha", category = "", categories = "", q = "" } = req.query;
+    
+    // Support multi-catégories (priorité) ou catégorie unique (rétro-compatibilité)
+    let selectedCategories = [];
+    if (categories && categories.trim()) {
+      selectedCategories = categories.split(",").map(c => c.trim()).filter(Boolean);
+    } else if (category) {
+      selectedCategories = [category];
+    }
 
     const snapshot = stock.getCatalogSnapshot ? stock.getCatalogSnapshot(shop) : { products: [], categories: [] };
-    const categories = catalogStore.listCategories ? catalogStore.listCategories(shop) : [];
+    const categoriesList = catalogStore.listCategories ? catalogStore.listCategories(shop) : [];
     let products = Array.isArray(snapshot.products) ? snapshot.products.slice() : [];
 
     // Filtre par recherche (nom produit)
@@ -813,13 +821,17 @@ router.get("/api/stock", (req, res) => {
       );
     }
 
-    // Filtre par categorie
-    if (category === "uncategorized") {
-      // Produits sans categorie
-      products = products.filter((p) => !Array.isArray(p.categoryIds) || p.categoryIds.length === 0);
-    } else if (category) {
-      // Produits dans une categorie specifique
-      products = products.filter((p) => Array.isArray(p.categoryIds) && p.categoryIds.includes(String(category)));
+    // Filtre par catégorie(s)
+    if (selectedCategories.length > 0) {
+      products = products.filter((p) => {
+        // Vérifier si au moins une catégorie sélectionnée correspond
+        return selectedCategories.some(catId => {
+          if (catId === "uncategorized") {
+            return !Array.isArray(p.categoryIds) || p.categoryIds.length === 0;
+          }
+          return Array.isArray(p.categoryIds) && p.categoryIds.includes(String(catId));
+        });
+      });
     }
 
     // Tri
@@ -846,7 +858,7 @@ router.get("/api/stock", (req, res) => {
     }
 
     // Ajouter compteur produits par categorie
-    const categoriesWithCount = categories.map((cat) => {
+    const categoriesWithCount = categoriesList.map((cat) => {
       const allProducts = snapshot.products || [];
       const count = allProducts.filter((p) => 
         Array.isArray(p.categoryIds) && p.categoryIds.includes(cat.id)

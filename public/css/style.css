@@ -636,6 +636,91 @@ input, select, textarea {
   color: #dc2626;
 }
 
+/* ============================================
+   DROPDOWN FILTER MULTI-SELECTION
+   ============================================ */
+.dropdown-filter {
+  position: relative;
+  display: inline-block;
+}
+
+.dropdown-filter-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 180px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.dropdown-filter-btn .dropdown-filter-icon {
+  width: 16px;
+  height: 16px;
+  transition: transform 0.2s ease;
+  flex-shrink: 0;
+}
+
+.dropdown-filter.open .dropdown-filter-btn .dropdown-filter-icon {
+  transform: rotate(180deg);
+}
+
+.dropdown-filter-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dropdown-filter-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 220px;
+  max-height: 300px;
+  overflow-y: auto;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  z-index: 100;
+  display: none;
+  padding: 8px 0;
+}
+
+.dropdown-filter.open .dropdown-filter-menu {
+  display: block;
+}
+
+.category-filter-item {
+  padding: 6px 12px;
+}
+
+.category-filter-item:hover {
+  background: var(--bg-tertiary);
+}
+
+.category-filter-item .checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.category-filter-item .checkbox-label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent-primary);
+  cursor: pointer;
+}
+
+.category-filter-divider {
+  height: 1px;
+  background: var(--border-color);
+  margin: 6px 0;
+}
+
 .btn-success {
   background: var(--success);
   color: white;

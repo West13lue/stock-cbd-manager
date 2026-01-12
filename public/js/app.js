@@ -259,7 +259,7 @@
     // Filtres produits
     filters: {
       search: "",
-      category: "",
+      categories: [], // Tableau pour multi-sélection
       sort: "alpha"
     }
   };
@@ -2071,12 +2071,30 @@
   }
 
   function renderProducts(c) {
-    // Options categories pour le select
-    var catOptions = '<option value="">Toutes les categories</option>';
-    catOptions += '<option value="uncategorized"' + (state.filters.category === "uncategorized" ? " selected" : "") + '>Sans categorie</option>';
+    // Construire le label du filtre catégorie
+    var selectedCats = state.filters.categories || [];
+    var catFilterLabel = t("products.allCategories", "Toutes les categories");
+    if (selectedCats.length === 1) {
+      if (selectedCats[0] === "uncategorized") {
+        catFilterLabel = t("products.noCategory", "Sans categorie");
+      } else {
+        var foundCat = state.categories.find(function(c) { return c.id === selectedCats[0]; });
+        catFilterLabel = foundCat ? foundCat.name : selectedCats[0];
+      }
+    } else if (selectedCats.length > 1) {
+      catFilterLabel = selectedCats.length + " " + t("products.categoriesSelected", "categories");
+    }
+
+    // Options categories pour le dropdown
+    var catCheckboxes = '<div class="category-filter-item">' +
+      '<label class="checkbox-label"><input type="checkbox" class="cat-filter-cb" value="" ' + (selectedCats.length === 0 ? 'checked' : '') + ' onchange="app.onCategoryFilterChange(this)"> ' + t("products.allCategories", "Toutes les categories") + '</label></div>';
+    catCheckboxes += '<div class="category-filter-item">' +
+      '<label class="checkbox-label"><input type="checkbox" class="cat-filter-cb" value="uncategorized" ' + (selectedCats.includes("uncategorized") ? 'checked' : '') + ' onchange="app.onCategoryFilterChange(this)"> ' + t("products.noCategory", "Sans categorie") + '</label></div>';
+    catCheckboxes += '<div class="category-filter-divider"></div>';
     state.categories.forEach(function(cat) {
       var count = cat.productCount || 0;
-      catOptions += '<option value="' + esc(cat.id) + '"' + (state.filters.category === cat.id ? " selected" : "") + '>' + esc(cat.name) + ' (' + count + ')</option>';
+      catCheckboxes += '<div class="category-filter-item">' +
+        '<label class="checkbox-label"><input type="checkbox" class="cat-filter-cb" value="' + esc(cat.id) + '" ' + (selectedCats.includes(cat.id) ? 'checked' : '') + ' onchange="app.onCategoryFilterChange(this)"> ' + esc(cat.name) + ' <span class="text-secondary">(' + count + ')</span></label></div>';
     });
 
     // Options tri
@@ -2107,7 +2125,13 @@
       '<input type="text" class="form-input" id="searchInput" placeholder="' + t("products.searchPlaceholder", "Rechercher... (Ctrl+K)") + '" value="' + esc(state.filters.search) + '" onkeyup="app.onSearchChange(event)">' +
       '</div>' +
       '<div class="filter-group">' +
-      '<select class="form-select" id="categoryFilter" onchange="app.onCategoryChange(this.value)">' + catOptions + '</select>' +
+      '<div class="dropdown-filter" id="categoryFilterDropdown">' +
+      '<button class="form-select dropdown-filter-btn" onclick="app.toggleCategoryFilter()">' +
+      '<span class="dropdown-filter-label">' + esc(catFilterLabel) + '</span>' +
+      '<i data-lucide="chevron-down" class="dropdown-filter-icon"></i>' +
+      '</button>' +
+      '<div class="dropdown-filter-menu" id="categoryFilterMenu">' + catCheckboxes + '</div>' +
+      '</div>' +
       '</div>' +
       '<div class="filter-group">' +
       '<select class="form-select" id="sortFilter" onchange="app.onSortChange(this.value)">' + sortOptionsHtml + '</select>' +
@@ -5620,6 +5644,11 @@
       if (useFilters) {
         var params = [];
         if (state.filters.search) params.push("q=" + encodeURIComponent(state.filters.search));
+        // Support multi-catégories
+        if (state.filters.categories && state.filters.categories.length > 0) {
+          params.push("categories=" + encodeURIComponent(state.filters.categories.join(",")));
+        }
+        // Rétro-compatibilité
         if (state.filters.category) params.push("category=" + encodeURIComponent(state.filters.category));
         if (state.filters.sort) params.push("sort=" + encodeURIComponent(state.filters.sort));
         if (params.length) url += "?" + params.join("&");
@@ -7119,8 +7148,95 @@
   }
   
   function onCategoryChange(value) {
-    state.filters.category = value;
+    // Compatibilité ancienne - convertir en tableau
+    state.filters.categories = value ? [value] : [];
     applyFilters();
+  }
+  
+  function toggleCategoryFilter() {
+    var menu = document.getElementById("categoryFilterMenu");
+    var dropdown = document.getElementById("categoryFilterDropdown");
+    if (menu && dropdown) {
+      var isOpen = dropdown.classList.contains("open");
+      // Fermer tous les autres dropdowns
+      document.querySelectorAll(".dropdown-filter.open").forEach(function(d) {
+        d.classList.remove("open");
+      });
+      if (!isOpen) {
+        dropdown.classList.add("open");
+        // Fermer au clic extérieur
+        setTimeout(function() {
+          document.addEventListener("click", closeCategoryFilterOnClickOutside);
+        }, 10);
+      }
+    }
+  }
+  
+  function closeCategoryFilterOnClickOutside(e) {
+    var dropdown = document.getElementById("categoryFilterDropdown");
+    if (dropdown && !dropdown.contains(e.target)) {
+      dropdown.classList.remove("open");
+      document.removeEventListener("click", closeCategoryFilterOnClickOutside);
+    }
+  }
+  
+  function onCategoryFilterChange(checkbox) {
+    var value = checkbox.value;
+    var checked = checkbox.checked;
+    
+    if (value === "") {
+      // "Toutes les catégories" sélectionné
+      if (checked) {
+        state.filters.categories = [];
+        // Décocher toutes les autres
+        document.querySelectorAll(".cat-filter-cb").forEach(function(cb) {
+          if (cb.value !== "") cb.checked = false;
+        });
+      }
+    } else {
+      // Une catégorie spécifique
+      // Décocher "Toutes les catégories"
+      var allCb = document.querySelector('.cat-filter-cb[value=""]');
+      if (allCb) allCb.checked = false;
+      
+      if (checked) {
+        if (!state.filters.categories.includes(value)) {
+          state.filters.categories.push(value);
+        }
+      } else {
+        state.filters.categories = state.filters.categories.filter(function(c) { return c !== value; });
+      }
+      
+      // Si plus rien de sélectionné, recocher "Toutes"
+      if (state.filters.categories.length === 0 && allCb) {
+        allCb.checked = true;
+      }
+    }
+    
+    // Mettre à jour le label
+    updateCategoryFilterLabel();
+    applyFilters();
+  }
+  
+  function updateCategoryFilterLabel() {
+    var labelEl = document.querySelector(".dropdown-filter-label");
+    if (!labelEl) return;
+    
+    var selectedCats = state.filters.categories || [];
+    var label = t("products.allCategories", "Toutes les categories");
+    
+    if (selectedCats.length === 1) {
+      if (selectedCats[0] === "uncategorized") {
+        label = t("products.noCategory", "Sans categorie");
+      } else {
+        var foundCat = state.categories.find(function(c) { return c.id === selectedCats[0]; });
+        label = foundCat ? foundCat.name : selectedCats[0];
+      }
+    } else if (selectedCats.length > 1) {
+      label = selectedCats.length + " " + t("products.categoriesSelected", "categories");
+    }
+    
+    labelEl.textContent = label;
   }
   
   function onSortChange(value) {
@@ -7394,6 +7510,8 @@
     // Filtres
     onSearchChange: onSearchChange,
     onCategoryChange: onCategoryChange,
+    toggleCategoryFilter: toggleCategoryFilter,
+    onCategoryFilterChange: onCategoryFilterChange,
     onSortChange: onSortChange,
     // Categories
     showCategoriesModal: showCategoriesModal,
