@@ -620,6 +620,22 @@ input, select, textarea {
   background: #dc2626;
 }
 
+/* Bouton ghost qui devient danger au hover */
+.btn-danger-hover:hover {
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--danger);
+}
+
+/* Bouton ghost avec texte danger */
+.btn-danger-text {
+  color: var(--danger);
+}
+
+.btn-danger-text:hover {
+  background: rgba(239, 68, 68, 0.15);
+  color: #dc2626;
+}
+
 .btn-success {
   background: var(--success);
   color: white;

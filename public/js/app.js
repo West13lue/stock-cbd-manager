@@ -3877,7 +3877,8 @@
           '<td class="cell-actions" onclick="event.stopPropagation()">' +
           '<button class="btn btn-ghost btn-xs" onclick="app.showRestockModal(\'' + p.productId + '\')">+</button>' +
           '<button class="btn btn-ghost btn-xs" onclick="app.showAdjustModal(\'' + p.productId + '\')">' + t("action.edit", "Edit") + '</button>' +
-          '<button class="btn btn-ghost btn-xs" onclick="app.openProductDetails(\'' + p.productId + '\')">' + t("action.details", "Details") + '</button></td></tr>'
+          '<button class="btn btn-ghost btn-xs" onclick="app.openProductDetails(\'' + p.productId + '\')">' + t("action.details", "Details") + '</button>' +
+          '<button class="btn btn-ghost btn-xs btn-danger-hover" onclick="app.confirmDeleteProduct(\'' + p.productId + '\',\'' + esc(p.name || p.title || "").replace(/'/g, "\\'") + '\')" title="' + t("action.delete", "Supprimer") + '"><i data-lucide="trash-2"></i></button></td></tr>'
         );
       })
       .join("");
@@ -6502,6 +6503,7 @@
       '<button class="btn btn-secondary btn-sm" onclick="app.closeModal();app.showAdjustModal(\'' + p.productId + '\')"><i data-lucide="sliders"></i> ' + t("action.adjust", "Ajuster") + '</button>' +
       '<button class="btn btn-ghost btn-sm" onclick="app.showEditCMPModal(\'' + p.productId + '\',' + p.averageCostPerGram + ')"><i data-lucide="coins"></i> ' + t("action.editCMP", "Modifier CMP") + '</button>' +
       (hasFeature("hasBatchTracking") ? '<button class="btn btn-ghost btn-sm" onclick="app.closeModal();app.showAddBatchForProduct(\'' + p.productId + '\',\'' + esc(p.name).replace(/'/g, "\\'") + '\')"><i data-lucide="layers"></i> + ' + t("batches.addBatch", "Lot") + '</button>' : '') +
+      '<button class="btn btn-ghost btn-sm btn-danger-text" onclick="app.closeModal();app.confirmDeleteProduct(\'' + p.productId + '\',\'' + esc(p.name).replace(/'/g, "\\'") + '\')"><i data-lucide="trash-2"></i> ' + t("action.delete", "Supprimer") + '</button>' +
       '</div>' +
 
       // Section Lots (si PRO)
@@ -7309,7 +7311,60 @@
     }
   }
 
-  // DÃ©finir toutes les vraies fonctions
+  // ============================================
+  // SUPPRESSION DE PRODUIT
+  // ============================================
+  
+  function confirmDeleteProduct(productId, productName) {
+    showModal({
+      title: '<i data-lucide="alert-triangle" style="color:var(--danger)"></i> ' + t("products.confirmDelete", "Supprimer le produit"),
+      size: "sm",
+      content: 
+        '<div class="text-center py-md">' +
+        '<p>' + t("products.deleteWarning", "Etes-vous sur de vouloir supprimer ce produit ?") + '</p>' +
+        '<p class="text-lg font-semibold mt-sm">' + esc(productName || "Produit") + '</p>' +
+        '<p class="text-secondary text-sm mt-md">' + t("products.deleteNote", "Cette action est irreversible. Le stock sera perdu.") + '</p>' +
+        '</div>',
+      footer: 
+        '<button class="btn btn-secondary" onclick="app.closeModal()">' + t("action.cancel", "Annuler") + '</button> ' +
+        '<button class="btn btn-danger" onclick="app.deleteProduct(\'' + esc(productId) + '\')">' + t("action.delete", "Supprimer") + '</button>'
+    });
+    if (typeof lucide !== "undefined") lucide.createIcons();
+  }
+
+  async function deleteProduct(productId) {
+    // Préparer les query params avec le profil
+    var params = new URLSearchParams();
+    if (activeProfile) {
+      params.append("profileId", activeProfile.id);
+      params.append("profileName", activeProfile.name);
+      params.append("profileColor", activeProfile.color);
+    }
+    
+    var url = apiUrl("/products/" + encodeURIComponent(productId));
+    if (params.toString()) {
+      url += "?" + params.toString();
+    }
+    
+    try {
+      var res = await authFetch(url, { method: "DELETE" });
+      
+      if (res.ok) {
+        var data = await res.json();
+        showToast(t("products.deleted", "Produit supprime") + (data.productName ? ": " + data.productName : ""), "success");
+        closeModal();
+        await loadProducts(true);
+        renderTab(state.currentTab);
+      } else {
+        var e = await res.json();
+        showToast(e.error || t("msg.error", "Erreur"), "error");
+      }
+    } catch (e) {
+      showToast(t("msg.error", "Erreur") + ": " + e.message, "error");
+    }
+  }
+
+  // Définir toutes les vraies fonctions
   var realFunctions = {
     init: init,
     navigateTo: navigateTo,
@@ -7348,6 +7403,9 @@
     deleteCategory: deleteCategory,
     showAssignCategoriesModal: showAssignCategoriesModal,
     saveProductCategories: saveProductCategories,
+    // Suppression produit
+    confirmDeleteProduct: confirmDeleteProduct,
+    deleteProduct: deleteProduct,
     // Analytics
     changeAnalyticsPeriod: changeAnalyticsPeriod,
     toggleSection: toggleSection,

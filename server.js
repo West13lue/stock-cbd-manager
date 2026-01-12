@@ -1476,19 +1476,41 @@ router.delete("/api/products/:productId", (req, res) => {
     if (!shop) return apiError(res, 400, "Shop introuvable");
 
     const productId = String(req.params.productId);
+    
+    // Récupérer les infos du profil depuis query params (DELETE n'a pas de body standard)
+    const profileId = req.query?.profileId || null;
+    const profileName = req.query?.profileName || "User";
+    const profileColor = req.query?.profileColor || "#6366f1";
 
     if (typeof stock.removeProduct !== "function") {
       return apiError(res, 500, "stock.removeProduct introuvable");
     }
 
+    // Récupérer le nom du produit avant suppression pour le mouvement
+    const productSnapshot = stock.getProductSnapshot ? stock.getProductSnapshot(shop, productId) : null;
+    const productName = productSnapshot?.name || productSnapshot?.title || "Produit inconnu";
+    const totalGrams = productSnapshot?.totalGrams || 0;
+
     const ok = stock.removeProduct(shop, productId);
     if (!ok) return apiError(res, 404, "Produit introuvable");
 
     if (movementStore.addMovement) {
-      movementStore.addMovement({ source: "product_deleted", productId, gramsDelta: 0, shop }, shop);
+      movementStore.addMovement({ 
+        source: "product_deleted", 
+        productId, 
+        productName,
+        gramsDelta: -totalGrams, // Stock perdu
+        totalAfter: 0,
+        profileId,
+        profileName,
+        profileColor,
+        shop 
+      }, shop);
     }
 
-    res.json({ success: true });
+    logEvent("product_deleted", { shop, productId, productName }, "info");
+
+    res.json({ success: true, productId, productName });
   });
 });
 

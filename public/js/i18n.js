@@ -58,6 +58,10 @@ var I18N = {
       "products.addOrImport": "Ajoutez ou importez des produits.",
       "products.add": "Ajouter un produit",
       "products.added": "Produit ajoute",
+      "products.deleted": "Produit supprime",
+      "products.confirmDelete": "Supprimer le produit",
+      "products.deleteWarning": "Etes-vous sur de vouloir supprimer ce produit ?",
+      "products.deleteNote": "Cette action est irreversible. Le stock sera perdu.",
       "products.adjustStock": "Ajuster le stock",
       "products.details": "Fiche produit",
       "products.editCMP": "Modifier le cout moyen (CMP)",
@@ -911,6 +915,10 @@ var I18N = {
       "products.addOrImport": "Add or import products.",
       "products.add": "Add product",
       "products.added": "Product added",
+      "products.deleted": "Product deleted",
+      "products.confirmDelete": "Delete product",
+      "products.deleteWarning": "Are you sure you want to delete this product?",
+      "products.deleteNote": "This action is irreversible. Stock will be lost.",
       "products.adjustStock": "Adjust stock",
       "products.details": "Product details",
       "products.editCMP": "Edit average cost",
@@ -3084,4 +3092,4 @@ var I18N = {
 // Helper global function
 function t(key, fallback) {
   return I18N.t(key, fallback);
-}cd
+}
