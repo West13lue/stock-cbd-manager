@@ -1680,14 +1680,29 @@ router.post("/api/sync/shopify", async (req, res) => {
             // Priorité: grams de Shopify > parsing du titre/option
             let gramsPerUnit = parseGramsFromVariant(v);
             
-            // Fallback: utiliser le champ grams de Shopify directement
+            // Fallback 1: utiliser le champ grams de Shopify directement
             if (!gramsPerUnit && v.grams && Number(v.grams) > 0) {
               gramsPerUnit = Number(v.grams);
             }
             
-            // Dernier fallback: 1g
+            // Fallback 2: utiliser weight de Shopify (converti en grammes selon weight_unit)
+            if (!gramsPerUnit && v.weight && Number(v.weight) > 0) {
+              const weight = Number(v.weight);
+              const weightUnit = (v.weight_unit || 'g').toLowerCase();
+              if (weightUnit === 'kg') {
+                gramsPerUnit = weight * 1000;
+              } else if (weightUnit === 'lb') {
+                gramsPerUnit = weight * 453.592;
+              } else if (weightUnit === 'oz') {
+                gramsPerUnit = weight * 28.3495;
+              } else {
+                gramsPerUnit = weight; // Assume grammes
+              }
+            }
+            
+            // Dernier fallback: 1000g (1kg) - plus raisonnable que 1g
             if (!gramsPerUnit || gramsPerUnit <= 0) {
-              gramsPerUnit = 1;
+              gramsPerUnit = 1000; // 1kg par défaut
             }
             
             if (inventoryItemId && gramsPerUnit > 0) {
@@ -3303,9 +3318,22 @@ router.get("/api/analytics/sales", async (req, res) => {
           const fullProduct = products.find(p => p.productId === productId);
           if (fullProduct && Array.isArray(fullProduct.variants)) {
             const variant = fullProduct.variants.find(v => String(v.variantId) === variantId);
-            gramsPerUnit = variant?.gramsPerUnit || 1;
-          } else {
-            gramsPerUnit = 1; // Fallback
+            gramsPerUnit = variant?.gramsPerUnit || 0;
+            
+            // Si pas de gramsPerUnit sur la variante, essayer le poids moyen du produit
+            if (!gramsPerUnit || gramsPerUnit <= 0) {
+              const allGrams = Object.values(fullProduct.variants)
+                .map(v => v.gramsPerUnit || 0)
+                .filter(g => g > 0);
+              if (allGrams.length > 0) {
+                gramsPerUnit = allGrams.reduce((a, b) => a + b, 0) / allGrams.length;
+              }
+            }
+          }
+          
+          // Dernier fallback: 1000g (1kg) - plus raisonnable que 1g
+          if (!gramsPerUnit || gramsPerUnit <= 0) {
+            gramsPerUnit = 1000;
           }
           
           const gramsSold = gramsPerUnit * quantity;
@@ -4705,6 +4733,18 @@ router.post("/api/kits/:id/assemble", (req, res) => {
 
     try {
       const { quantity, allowNegative, notes } = req.body;
+      
+      // Vérifier que le kit existe
+      const kit = kitStore.getKit(shop, req.params.id);
+      if (!kit) {
+        return apiError(res, 404, "Kit non trouve");
+      }
+      
+      // Vérifier que le kit a des composants
+      if (!kit.items || kit.items.length === 0) {
+        return apiError(res, 400, "Le kit n'a pas de composants. Ajoutez des composants avant d'assembler.");
+      }
+      
       const result = kitStore.assembleKits(shop, req.params.id, quantity || 1, {
         stockManager: stock,
         batchStore,
@@ -4713,7 +4753,8 @@ router.post("/api/kits/:id/assemble", (req, res) => {
       });
       res.json(result);
     } catch (e) {
-      return apiError(res, 400, e.message);
+      logEvent("kit_assemble_error", { error: e.message, stack: e.stack }, "error");
+      return apiError(res, 400, e.message || "Erreur lors de l'assemblage");
     }
   });
 });

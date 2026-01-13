@@ -4635,13 +4635,13 @@
       var data = await res.json();
       container.innerHTML =
         '<div class="stats-grid stats-grid-3">' +
-        '<div class="stat-card"><div class="stat-value">' + formatCurrency(data.totalRevenue || 0) + '</div><div class="stat-label">CA total</div></div>' +
-        '<div class="stat-card"><div class="stat-value">' + formatCurrency(data.totalCost || 0) + '</div><div class="stat-label">Cout total</div></div>' +
-        '<div class="stat-card"><div class="stat-value">' + formatCurrency(data.totalMargin || 0) + '</div><div class="stat-label">Marge totale</div></div></div>' +
-        (data.hasShortage ? '<div class="alert alert-warning mt-md">Stock insuffisant pour certains composants</div>' : '') +
-        '<p class="text-secondary mt-md">Capacite max de production: <strong>' + (data.maxProducible || 0) + '</strong> kits</p>';
+        '<div class="stat-card"><div class="stat-value">' + formatCurrency(data.totalRevenue || 0) + '</div><div class="stat-label">' + t("kits.totalRevenue", "CA total") + '</div></div>' +
+        '<div class="stat-card"><div class="stat-value">' + formatCurrency(data.totalCost || 0) + '</div><div class="stat-label">' + t("kits.totalCost", "Cout total") + '</div></div>' +
+        '<div class="stat-card"><div class="stat-value">' + formatCurrency(data.totalMargin || 0) + '</div><div class="stat-label">' + t("kits.totalMargin", "Marge totale") + '</div></div></div>' +
+        (data.hasShortage ? '<div class="alert alert-warning mt-md">' + t("kits.stockShortage", "Stock insuffisant pour certains composants") + '</div>' : '') +
+        '<p class="text-secondary mt-md">' + t("kits.maxProduction", "Capacite max de production") + ': <strong>' + (data.maxProducible || 0) + '</strong> kits</p>';
       if (typeof lucide !== "undefined") lucide.createIcons();
-    } catch (e) { container.innerHTML = '<p class="text-danger">" + t("msg.error", "Erreur") + ": ' + e.message + '</p>'; }
+    } catch (e) { container.innerHTML = '<p class="text-danger">' + t("msg.error", "Erreur") + ': ' + e.message + '</p>'; }
   }
 
   // ============================================
