@@ -1717,9 +1717,9 @@
     }
   }
 
-  async function loadDashboardMovements() {
+    async function loadDashboardMovements() {
     try {
-      var res = await authFetch(apiUrl("/movements?limit=20"));
+      var res = await authFetch(apiUrl("/movements?limit=50"));
       var container = document.getElementById("dashboardMovements");
       if (!container) return;
       
@@ -1731,14 +1731,98 @@
       var data = await res.json();
       var movements = data.movements || [];
       
+      // Filtrer uniquement les mouvements de stock (pas les product_deleted, etc.)
+      var stockMovementTypes = ['restock', 'sale', 'adjustment', 'import', 'manual', 'order', 'kit_assembly', 'transfer', 'batch_add', 'batch_consume'];
+      movements = movements.filter(function(m) {
+        var mType = m.type || m.source || '';
+        // Exclure explicitement les evenements non-stock
+        var excludeTypes = ['product_deleted', 'product_created', 'settings_changed', 'sync'];
+        if (excludeTypes.indexOf(mType) !== -1) return false;
+        // Inclure si c'est un type de mouvement stock connu OU si delta != 0
+        return stockMovementTypes.indexOf(mType) !== -1 || (m.gramsDelta && m.gramsDelta !== 0);
+      });
+      
       if (movements.length === 0) {
         container.innerHTML = '<div class="empty-state-small"><div class="empty-icon"><i data-lucide="activity"></i></div><p class="text-secondary">' + t("dashboard.noMovements", "Aucun mouvement") + '</p></div>';
         if (typeof lucide !== "undefined") lucide.createIcons();
         return;
       }
       
-      // Container scrollable limitÃ© Ã  5 Ã©lÃ©ments (~250px)
-      var html = '<div class="movements-list" style="max-height:250px;overflow-y:auto">';
+      // Limiter a 5 elements pour le dashboard
+      var displayMovements = movements.slice(0, 5);
+      
+      var html = '<div class="movements-list">';
+      displayMovements.forEach(function(m) {
+        var mType = m.type || m.source || 'adjustment';
+        var typeIcon = getMovementIcon(mType);
+        var typeClass = getMovementClass(mType);
+        var typeLabel = getMovementLabel(mType);
+        var delta = m.delta || m.gramsDelta || 0;
+        var deltaStr = delta >= 0 ? '+' + formatWeight(delta) : formatWeight(delta);
+        var dateStr = formatRelativeDate(m.createdAt || m.date || m.ts);
+        
+        html += '<div class="movement-item">' +
+          '<div class="movement-icon ' + typeClass + '"><i data-lucide="' + typeIcon + '"></i></div>' +
+          '<div class="movement-info">' +
+          '<div class="movement-product">' + esc(m.productName || m.product || 'Produit') + '</div>' +
+          '<div class="movement-meta"><span class="movement-type">' + typeLabel + '</span><span class="movement-date">' + dateStr + '</span></div>' +
+          '</div>' +
+          '<div class="movement-delta ' + typeClass + '">' + deltaStr + '</div>' +
+          '</div>';
+      });
+      html += '</div>';
+      
+      // Ajouter bouton "Voir tout" si plus de mouvements
+      if (movements.length > 5) {
+        html += '<div class="text-center mt-sm"><button class="btn btn-ghost btn-sm" onclick="app.showAllMovementsModal()">' + t("dashboard.viewAll", "Voir tout") + ' (' + movements.length + ')</button></div>';
+      }
+      
+      container.innerHTML = html;
+      if (typeof lucide !== "undefined") lucide.createIcons();
+      
+    } catch (e) {
+      var container = document.getElementById("dashboardMovements");
+      if (container) {
+        container.innerHTML = '<p class="text-secondary text-center">' + t("msg.error", "Erreur") + '</p>';
+      }
+    }
+  }
+
+  // Modal pour voir tous les mouvements de stock
+  async function showAllMovementsModal() {
+    showModal({
+      title: '<i data-lucide="activity"></i> ' + t("movements.allMovements", "Tous les mouvements"),
+      size: "lg",
+      content: '<div class="text-center py-lg"><div class="spinner"></div></div>',
+      footer: '<button class="btn btn-secondary" onclick="app.closeModal()">' + t("action.close", "Fermer") + '</button>'
+    });
+    if (typeof lucide !== "undefined") lucide.createIcons();
+    
+    try {
+      var res = await authFetch(apiUrl("/movements?limit=100"));
+      if (!res.ok) throw new Error("Erreur");
+      
+      var data = await res.json();
+      var movements = data.movements || [];
+      
+      // Filtrer les mouvements de stock uniquement
+      var stockMovementTypes = ['restock', 'sale', 'adjustment', 'import', 'manual', 'order', 'kit_assembly', 'transfer', 'batch_add', 'batch_consume'];
+      movements = movements.filter(function(m) {
+        var mType = m.type || m.source || '';
+        var excludeTypes = ['product_deleted', 'product_created', 'settings_changed', 'sync'];
+        if (excludeTypes.indexOf(mType) !== -1) return false;
+        return stockMovementTypes.indexOf(mType) !== -1 || (m.gramsDelta && m.gramsDelta !== 0);
+      });
+      
+      var modalContent = document.querySelector('.modal-content .modal-body');
+      if (!modalContent) return;
+      
+      if (movements.length === 0) {
+        modalContent.innerHTML = '<div class="empty-state-small"><p class="text-secondary">' + t("dashboard.noMovements", "Aucun mouvement") + '</p></div>';
+        return;
+      }
+      
+      var html = '<div class="movements-list" style="max-height:60vh;overflow-y:auto">';
       movements.forEach(function(m) {
         var mType = m.type || m.source || 'adjustment';
         var typeIcon = getMovementIcon(mType);
@@ -1759,18 +1843,18 @@
       });
       html += '</div>';
       
-      container.innerHTML = html;
+      modalContent.innerHTML = html;
       if (typeof lucide !== "undefined") lucide.createIcons();
       
     } catch (e) {
-      var container = document.getElementById("dashboardMovements");
-      if (container) {
-        container.innerHTML = '<p class="text-secondary text-center">' + t("msg.error", "Erreur") + '</p>';
+      var modalContent = document.querySelector('.modal-content .modal-body');
+      if (modalContent) {
+        modalContent.innerHTML = '<p class="text-danger text-center">' + t("msg.error", "Erreur") + '</p>';
       }
     }
   }
 
-  // ActivitÃ© rÃ©cente avec profils
+  // Activite recente avec profils
   async function loadDashboardActivity() {
     try {
       var res = await authFetch(apiUrl("/movements?limit=20"));
@@ -4150,7 +4234,8 @@
       var data = await res.json();
 
       var statusBadge = getForecastStatusBadge(data.status);
-      var daysDisplay = data.daysOfStock === Infinity ? "Illimitee" : (data.daysOfStock?.toFixed(0) || 0) + " jours";
+      var daysUnit = t("common.days", "jours");
+      var daysDisplay = data.daysOfStock === Infinity ? t("forecast.unlimited", "Illimitee") : (data.daysOfStock?.toFixed(0) || 0) + " " + daysUnit;
 
       // Sparkline simple
       var sparklineHtml = '';
@@ -4163,16 +4248,16 @@
         sparklineHtml = '<div class="sparkline-container">' + bars + '</div>';
       }
 
-      // ScÃƒÂ©narios
+      // Scenarios
       var scenariosHtml = '';
       if (data.scenarios) {
         scenariosHtml = '<div class="scenarios-grid">' +
-          '<div class="scenario pessimistic"><div class="scenario-label">Pessimiste</div><div class="scenario-value">' + 
-          (data.scenarios.pessimistic.daysOfStock === Infinity ? "Ã¢Ë†Å¾" : data.scenarios.pessimistic.daysOfStock.toFixed(0) + "j") + '</div></div>' +
-          '<div class="scenario normal"><div class="scenario-label">Normal</div><div class="scenario-value">' + 
-          (data.scenarios.normal.daysOfStock === Infinity ? "Ã¢Ë†Å¾" : data.scenarios.normal.daysOfStock.toFixed(0) + "j") + '</div></div>' +
-          '<div class="scenario optimistic"><div class="scenario-label">Optimiste</div><div class="scenario-value">' + 
-          (data.scenarios.optimistic.daysOfStock === Infinity ? "Ã¢Ë†Å¾" : data.scenarios.optimistic.daysOfStock.toFixed(0) + "j") + '</div></div>' +
+          '<div class="scenario pessimistic"><div class="scenario-label">' + t("forecast.pessimistic", "Pessimiste") + '</div><div class="scenario-value">' + 
+          (data.scenarios.pessimistic.daysOfStock === Infinity ? "∞" : data.scenarios.pessimistic.daysOfStock.toFixed(0) + "j") + '</div></div>' +
+          '<div class="scenario normal"><div class="scenario-label">' + t("forecast.normal", "Normal") + '</div><div class="scenario-value">' + 
+          (data.scenarios.normal.daysOfStock === Infinity ? "∞" : data.scenarios.normal.daysOfStock.toFixed(0) + "j") + '</div></div>' +
+          '<div class="scenario optimistic"><div class="scenario-label">' + t("forecast.optimistic", "Optimiste") + '</div><div class="scenario-value">' + 
+          (data.scenarios.optimistic.daysOfStock === Infinity ? "∞" : data.scenarios.optimistic.daysOfStock.toFixed(0) + "j") + '</div></div>' +
           '</div>';
       }
 
@@ -4180,7 +4265,7 @@
       var explanationHtml = '';
       if (data.explanation && data.explanation.length > 0) {
         explanationHtml = '<div class="explanation-box mt-md">' +
-          '<h4><i data-lucide="info"></i> Comment ce calcul est fait</h4>' +
+          '<h4><i data-lucide="info"></i> ' + t("forecast.howCalculated", "Comment ce calcul est fait") + '</h4>' +
           '<ul>' + data.explanation.map(function(e) { return '<li>' + esc(e) + '</li>'; }).join("") + '</ul>' +
           '</div>';
       }
@@ -4191,18 +4276,18 @@
         content:
           '<div class="forecast-detail-header">' + statusBadge + '</div>' +
           '<div class="stats-grid stats-grid-3 mt-md">' +
-          '<div class="stat-card"><div class="stat-value">' + formatWeight(data.currentStock) + '</div><div class="stat-label">Stock actuel</div></div>' +
-          '<div class="stat-card"><div class="stat-value">' + (data.dailyRate?.toFixed(1) || 0) + '/j</div><div class="stat-label">Ventes moy.</div></div>' +
-          '<div class="stat-card"><div class="stat-value">' + daysDisplay + '</div><div class="stat-label">Couverture</div></div>' +
+          '<div class="stat-card"><div class="stat-value">' + formatWeight(data.currentStock) + '</div><div class="stat-label">' + t("forecast.currentStock", "Stock actuel") + '</div></div>' +
+          '<div class="stat-card"><div class="stat-value">' + (data.dailyRate?.toFixed(1) || 0) + '/j</div><div class="stat-label">' + t("forecast.avgSalesShort", "Ventes moy.") + '</div></div>' +
+          '<div class="stat-card"><div class="stat-value">' + daysDisplay + '</div><div class="stat-label">' + t("forecast.coverageLabel", "Couverture") + '</div></div>' +
           '</div>' +
-          (data.stockoutDate ? '<div class="alert alert-warning mt-md"><i data-lucide="calendar"></i> Rupture estimee le <strong>' + data.stockoutDate + '</strong></div>' : '') +
-          (data.reorderQty > 0 ? '<div class="alert alert-info mt-md"><i data-lucide="shopping-cart"></i> Recommandation: commander <strong>' + formatWeight(data.reorderQty) + '</strong> pour couvrir ' + data.targetCoverageDays + ' jours</div>' : '') +
-          '<div class="section-header mt-lg"><h3>Historique des ventes (30j)</h3></div>' +
+          (data.stockoutDate ? '<div class="alert alert-warning mt-md"><i data-lucide="calendar"></i> ' + t("forecast.stockoutEstimated", "Rupture estimee le") + ' <strong>' + data.stockoutDate + '</strong></div>' : '') +
+          (data.reorderQty > 0 ? '<div class="alert alert-info mt-md"><i data-lucide="shopping-cart"></i> ' + t("forecast.recommendation", "Recommandation: commander") + ' <strong>' + formatWeight(data.reorderQty) + '</strong> ' + t("forecast.toCover", "pour couvrir") + ' ' + data.targetCoverageDays + ' ' + daysUnit + '</div>' : '') +
+          '<div class="section-header mt-lg"><h3>' + t("forecast.salesHistory", "Historique des ventes") + ' (30j)</h3></div>' +
           sparklineHtml +
-          '<div class="section-header mt-lg"><h3>Scenarios</h3></div>' +
+          '<div class="section-header mt-lg"><h3>' + t("forecast.scenarios", "Scenarios") + '</h3></div>' +
           scenariosHtml +
           explanationHtml,
-        footer: '<button class="btn btn-secondary" onclick="app.closeModal()">Fermer</button>'
+        footer: '<button class="btn btn-secondary" onclick="app.closeModal()">' + t("action.close", "Fermer") + '</button>'
       });
       if (typeof lucide !== "undefined") lucide.createIcons();
     } catch (e) {
@@ -5251,7 +5336,7 @@
         
         // Si c'est la langue, mettre a jour i18n
         if (section === "general" && key === "language" && typeof I18N !== "undefined") {
-          I18N.setLang(value);
+          I18N.setLanguage(value);
         }
         
         // Pour les parametres d'affichage importants, proposer un reload
@@ -7670,6 +7755,7 @@
     resetAllSettings: resetAllSettings,
     // Dashboard amÃ©liorÃ©
     showLowStockModal: showLowStockModal,
+    showAllMovementsModal: showAllMovementsModal,
     showOutOfStockModal: showOutOfStockModal,
     showQuickRestockModal: showQuickRestockModal,
     doQuickRestock: doQuickRestock,
