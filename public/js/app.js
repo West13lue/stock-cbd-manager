@@ -2,11 +2,11 @@
 (function () {
   "use strict";
 
-  // Queue pour stocker les appels avant que les fonctions soient prÃªtes
+  // Queue pour stocker les appels avant que les fonctions soient pretes
   var pendingCalls = [];
   var appReady = false;
   
-  // CrÃ©er un proxy qui queue les appels si l'app n'est pas prÃªte
+  // Creer un proxy qui queue les appels si l'app n'est pas prete
   function createProxy(fnName) {
     return function() {
       var args = Array.prototype.slice.call(arguments);
@@ -18,7 +18,7 @@
     };
   }
   
-  // Liste des fonctions qui seront exposÃ©es
+  // Liste des fonctions qui seront exposees
   var fnNames = [
     'init', 'navigateTo', 'toggleSidebar', 'toggleNotifications', 'toggleUserMenu',
     'showModal', 'closeModal', 'showAddProductModal', 'showImportModal', 'doImport',
@@ -46,13 +46,13 @@
     'showFullActivityLog'
   ];
   
-  // CrÃ©er window.app avec des proxies pour toutes les fonctions
+  // Creer window.app avec des proxies pour toutes les fonctions
   window.app = {};
   fnNames.forEach(function(name) {
     window.app[name] = createProxy(name);
   });
   
-  // Fonction pour marquer l'app comme prÃªte et exÃ©cuter les appels en attente
+  // Fonction pour marquer l'app comme prete et executer les appels en attente
   function markAppReady() {
     appReady = true;
     pendingCalls.forEach(function(call) {
@@ -104,7 +104,7 @@
     console.log("[Shop]", CURRENT_SHOP);
   }
 
-  // ÃƒÂ¢Ã…â€œÃ¢â‚¬Â¦ IMPORTANT: API calls should NOT include ?shop=... in an embedded app.
+  // aÃ…"aâ‚¬¦ IMPORTANT: API calls should NOT include ?shop=... in an embedded app.
   // The server should resolve shop from the Session Token (JWT) for security + Shopify review.
   function apiUrl(endpoint) {
     return API_BASE + endpoint;
@@ -123,12 +123,12 @@
   async function initAppBridge() {
     var host = getHostFromUrl();
     
-    // App Bridge v4 - shopify global est auto-initialisÃ© par le CDN
+    // App Bridge v4 - shopify global est auto-initialise par le CDN
     if (typeof shopify !== "undefined") {
       appBridgeApp = shopify;
       console.log("[AppBridge v4] OK - shopify global disponible");
       
-      // Attendre que App Bridge soit prÃªt
+      // Attendre que App Bridge soit pret
       try {
         if (typeof shopify.ready === "function") {
           await shopify.ready();
@@ -141,10 +141,10 @@
       return true;
     }
     
-    // Si shopify global n'existe pas, on est peut-Ãªtre en dehors de l'admin Shopify
+    // Si shopify global n'existe pas, on est peut-etre en dehors de l'admin Shopify
     console.warn("[AppBridge] shopify global non disponible - app non embedded?");
     
-    // Fallback : essayer App Bridge v3 si chargÃ©
+    // Fallback : essayer App Bridge v3 si charge
     if (!host) {
       console.warn("[AppBridge] host manquant");
       return false;
@@ -168,7 +168,7 @@
   }
 
   async function getSessionToken() {
-    // Ne pas cacher le token trop longtemps - App Bridge v4 gÃ¨re le refresh
+    // Ne pas cacher le token trop longtemps - App Bridge v4 gere le refresh
     
     // App Bridge v4 - utilise shopify.idToken()
     if (typeof shopify !== "undefined" && typeof shopify.idToken === "function") {
@@ -202,7 +202,7 @@
     sessionToken = null;
   }
 
-  // ÃƒÂ¢Ã…â€œÃ¢â‚¬Â¦ authFetch correctly closed + sends Session Token
+  // aÃ…"aâ‚¬¦ authFetch correctly closed + sends Session Token
   async function authFetch(url, options) {
     options = options || {};
     var token = await getSessionToken();
@@ -225,7 +225,7 @@
       res = await doFetch();
     }
 
-    // ÃƒÂ°Ã…Â¸Ã¢â‚¬ÂÃ‚Â OAuth AUTO if token missing/revoked
+    // Ãƒ°Ã…¸aâ‚¬ OAuth AUTO if token missing/revoked
     if (res.status === 401) {
       var data = null;
       try {
@@ -301,7 +301,7 @@
     try {
       var token = await getSessionToken();
       if (!token) {
-        console.warn("[OAuth] Aucun session token ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ redirection");
+        console.warn("[OAuth] Aucun session token aaâ‚¬ aâ‚¬â„¢ redirection");
         var shop = CURRENT_SHOP;
         if (!shop) throw new Error("Shop manquant");
         var url = "/api/auth/start?shop=" + encodeURIComponent(shop);
@@ -311,7 +311,7 @@
       }
       return true;
     } catch (e) {
-      console.warn("[OAuth] Erreur session ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ redirection", e);
+      console.warn("[OAuth] Erreur session aaâ‚¬ aâ‚¬â„¢ redirection", e);
       var shop2 = CURRENT_SHOP;
       if (shop2) {
         var url2 = "/api/auth/start?shop=" + encodeURIComponent(shop2);
@@ -378,7 +378,7 @@
     document.addEventListener('keydown', function(e) {
       // Ignorer si on tape dans un input
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') {
-        // Escape ferme les modals mÃªme dans un input
+        // Escape ferme les modals meme dans un input
         if (e.key === 'Escape') {
           closeModal();
         }
@@ -398,7 +398,7 @@
         showAddProductModal();
       }
       
-      // R = RÃ©appro rapide
+      // R = Reappro rapide
       if (e.key === 'r' && !e.ctrlKey && !e.metaKey) {
         e.preventDefault();
         showQuickRestockModal();
@@ -606,7 +606,7 @@
     globalSearchResults.forEach(function(g) { allItems = allItems.concat(g.items); });
     if (allItems.length === 0) return;
     
-    // Retirer la sÃ©lection actuelle
+    // Retirer la selection actuelle
     var items = document.querySelectorAll(".search-result-item");
     items.forEach(function(el) { el.classList.remove("selected"); });
     
@@ -615,7 +615,7 @@
     if (selectedSearchIndex < 0) selectedSearchIndex = allItems.length - 1;
     if (selectedSearchIndex >= allItems.length) selectedSearchIndex = 0;
     
-    // Appliquer la nouvelle sÃ©lection
+    // Appliquer la nouvelle selection
     var selected = document.querySelector('.search-result-item[data-index="' + selectedSearchIndex + '"]');
     if (selected) {
       selected.classList.add("selected");
@@ -654,11 +654,11 @@
       content: '<div class="shortcuts-list">' +
         '<div class="shortcut-item"><kbd>/</kbd> ou <kbd>Ctrl+K</kbd><span>' + t("shortcuts.search", "Rechercher") + '</span></div>' +
         '<div class="shortcut-item"><kbd>N</kbd><span>' + t("shortcuts.newProduct", "Nouveau produit") + '</span></div>' +
-        '<div class="shortcut-item"><kbd>R</kbd><span>' + t("shortcuts.quickRestock", "RÃ©appro rapide") + '</span></div>' +
+        '<div class="shortcut-item"><kbd>R</kbd><span>' + t("shortcuts.quickRestock", "Reappro rapide") + '</span></div>' +
         '<div class="shortcut-item"><kbd>S</kbd><span>' + t("shortcuts.scanner", "Scanner code-barres") + '</span></div>' +
         '<div class="shortcut-item"><kbd>D</kbd><span>' + t("shortcuts.dashboard", "Dashboard") + '</span></div>' +
         '<div class="shortcut-item"><kbd>P</kbd><span>' + t("shortcuts.products", "Produits") + '</span></div>' +
-        '<div class="shortcut-item"><kbd>Esc</kbd><span>' + t("shortcuts.closeModal", "Fermer fenÃªtre") + '</span></div>' +
+        '<div class="shortcut-item"><kbd>Esc</kbd><span>' + t("shortcuts.closeModal", "Fermer fenetre") + '</span></div>' +
         '<div class="shortcut-item"><kbd>?</kbd><span>' + t("shortcuts.help", "Afficher cette aide") + '</span></div>' +
         '</div>',
       footer: '<button class="btn btn-secondary" onclick="app.closeModal()">' + t("action.close", "Fermer") + '</button>'
@@ -900,7 +900,7 @@
     // Refresh Lucide icons after rendering
     if (typeof lucide !== "undefined") lucide.createIcons();
     
-    // Afficher tutoriel si premiÃ¨re visite de cet onglet
+    // Afficher tutoriel si premiere visite de cet onglet
     setTimeout(function() { showTabTutorialIfNeeded(tab); }, 500);
   }
 
@@ -931,20 +931,20 @@
   function resetAllTutorials() {
     tutorialsSeen = {};
     saveTutorialState();
-    showToast(t("tutorial.reset", "Tutoriels rÃ©initialisÃ©s"), "success");
+    showToast(t("tutorial.reset", "Tutoriels reinitialises"), "success");
   }
 
-  // DÃ©finition des tutoriels par onglet (fonction pour Ã©viter appel t() au chargement)
+  // Definition des tutoriels par onglet (fonction pour eviter appel t() au chargement)
   function getTabTutorial(tab) {
     var tutorials = {
       dashboard: {
         title: t("tutorial.dashboard.title", "Bienvenue sur le Dashboard !"),
         icon: "layout-dashboard",
         steps: [
-          { icon: "boxes", text: t("tutorial.dashboard.step1", "Visualisez vos statistiques clÃ©s : nombre de produits, stock total et valeur.") },
+          { icon: "boxes", text: t("tutorial.dashboard.step1", "Visualisez vos statistiques cles : nombre de produits, stock total et valeur.") },
           { icon: "alert-triangle", text: t("tutorial.dashboard.step2", "Les alertes vous signalent les produits en stock bas ou en rupture.") },
-          { icon: "zap", text: t("tutorial.dashboard.step3", "Utilisez les actions rapides pour rÃ©appro, scanner ou ajuster le stock.") },
-          { icon: "activity", text: t("tutorial.dashboard.step4", "Les mouvements rÃ©cents montrent l'activitÃ© de votre stock.") }
+          { icon: "zap", text: t("tutorial.dashboard.step3", "Utilisez les actions rapides pour reappro, scanner ou ajuster le stock.") },
+          { icon: "activity", text: t("tutorial.dashboard.step4", "Les mouvements recents montrent l'activite de votre stock.") }
         ],
         tip: t("tutorial.dashboard.tip", "Astuce : Appuyez sur ? pour voir tous les raccourcis clavier !")
       },
@@ -953,58 +953,58 @@
         icon: "boxes",
         steps: [
           { icon: "search", text: t("tutorial.products.step1", "Recherchez vos produits par nom, SKU ou code-barres.") },
-          { icon: "filter", text: t("tutorial.products.step2", "Filtrez par catÃ©gorie et triez selon vos besoins.") },
+          { icon: "filter", text: t("tutorial.products.step2", "Filtrez par categorie et triez selon vos besoins.") },
           { icon: "scan-barcode", text: t("tutorial.products.step3", "Utilisez le scanner pour trouver un produit rapidement.") },
-          { icon: "mouse-pointer-click", text: t("tutorial.products.step4", "Cliquez sur un produit pour voir ses dÃ©tails et ajuster le stock.") }
+          { icon: "mouse-pointer-click", text: t("tutorial.products.step4", "Cliquez sur un produit pour voir ses details et ajuster le stock.") }
         ],
-        tip: t("tutorial.products.tip", "Astuce : Raccourci N pour ajouter un produit, R pour rÃ©appro rapide !")
+        tip: t("tutorial.products.tip", "Astuce : Raccourci N pour ajouter un produit, R pour reappro rapide !")
       },
       batches: {
         title: t("tutorial.batches.title", "Lots et DLC"),
         icon: "tags",
         steps: [
-          { icon: "calendar", text: t("tutorial.batches.step1", "GÃ©rez les dates de pÃ©remption de vos produits.") },
+          { icon: "calendar", text: t("tutorial.batches.step1", "Gerez les dates de peremption de vos produits.") },
           { icon: "alert-circle", text: t("tutorial.batches.step2", "Recevez des alertes pour les lots qui arrivent Ã  expiration.") },
-          { icon: "package", text: t("tutorial.batches.step3", "Suivez la traÃ§abilitÃ© de chaque lot entrant.") }
+          { icon: "package", text: t("tutorial.batches.step3", "Suivez la tracabilite de chaque lot entrant.") }
         ],
-        tip: t("tutorial.batches.tip", "Astuce : Les lots expirÃ©s sont automatiquement signalÃ©s en rouge.")
+        tip: t("tutorial.batches.tip", "Astuce : Les lots expires sont automatiquement signales en rouge.")
       },
       suppliers: {
         title: t("tutorial.suppliers.title", "Gestion Fournisseurs"),
         icon: "factory",
         steps: [
           { icon: "users", text: t("tutorial.suppliers.step1", "Centralisez les informations de vos fournisseurs.") },
-          { icon: "phone", text: t("tutorial.suppliers.step2", "Gardez leurs contacts et conditions Ã  portÃ©e de main.") },
+          { icon: "phone", text: t("tutorial.suppliers.step2", "Gardez leurs contacts et conditions Ã  portee de main.") },
           { icon: "link", text: t("tutorial.suppliers.step3", "Associez les produits Ã  leurs fournisseurs pour un suivi optimal.") }
         ],
-        tip: t("tutorial.suppliers.tip", "Astuce : Ajoutez les dÃ©lais de livraison pour anticiper vos commandes.")
+        tip: t("tutorial.suppliers.tip", "Astuce : Ajoutez les delais de livraison pour anticiper vos commandes.")
       },
       orders: {
         title: t("tutorial.orders.title", "Commandes"),
         icon: "clipboard-list",
         steps: [
-          { icon: "shopping-cart", text: t("tutorial.orders.step1", "CrÃ©ez des bons de commande vers vos fournisseurs.") },
-          { icon: "truck", text: t("tutorial.orders.step2", "Suivez l'Ã©tat de vos commandes en cours.") },
-          { icon: "check-circle", text: t("tutorial.orders.step3", "RÃ©ceptionnez les commandes pour mettre Ã  jour le stock automatiquement.") }
+          { icon: "shopping-cart", text: t("tutorial.orders.step1", "Creez des bons de commande vers vos fournisseurs.") },
+          { icon: "truck", text: t("tutorial.orders.step2", "Suivez l'etat de vos commandes en cours.") },
+          { icon: "check-circle", text: t("tutorial.orders.step3", "Receptionnez les commandes pour mettre Ã  jour le stock automatiquement.") }
         ],
         tip: t("tutorial.orders.tip", "Astuce : Importez vos commandes Shopify pour un suivi complet.")
       },
       forecast: {
-        title: t("tutorial.forecast.title", "PrÃ©visions"),
+        title: t("tutorial.forecast.title", "Previsions"),
         icon: "trending-up",
         steps: [
           { icon: "bar-chart", text: t("tutorial.forecast.step1", "Analysez les tendances de ventes de vos produits.") },
-          { icon: "calendar", text: t("tutorial.forecast.step2", "Anticipez les ruptures grÃ¢ce aux prÃ©visions.") },
-          { icon: "shopping-bag", text: t("tutorial.forecast.step3", "Recevez des suggestions de rÃ©approvisionnement.") }
+          { icon: "calendar", text: t("tutorial.forecast.step2", "Anticipez les ruptures grace aux previsions.") },
+          { icon: "shopping-bag", text: t("tutorial.forecast.step3", "Recevez des suggestions de reapprovisionnement.") }
         ],
-        tip: t("tutorial.forecast.tip", "Astuce : Plus vous avez d'historique, plus les prÃ©visions sont prÃ©cises.")
+        tip: t("tutorial.forecast.tip", "Astuce : Plus vous avez d'historique, plus les previsions sont precises.")
       },
       kits: {
         title: t("tutorial.kits.title", "Kits et Bundles"),
         icon: "puzzle",
         steps: [
-          { icon: "package", text: t("tutorial.kits.step1", "CrÃ©ez des kits composÃ©s de plusieurs produits.") },
-          { icon: "layers", text: t("tutorial.kits.step2", "Le stock des composants est automatiquement dÃ©duit.") },
+          { icon: "package", text: t("tutorial.kits.step1", "Creez des kits composes de plusieurs produits.") },
+          { icon: "layers", text: t("tutorial.kits.step2", "Le stock des composants est automatiquement deduit.") },
           { icon: "calculator", text: t("tutorial.kits.step3", "Simulez l'assemblage avant de valider.") }
         ],
         tip: t("tutorial.kits.tip", "Astuce : Utilisez les kits pour vos coffrets cadeaux ou packs promo.")
@@ -1013,8 +1013,8 @@
         title: t("tutorial.analytics.title", "Analytics"),
         icon: "bar-chart-3",
         steps: [
-          { icon: "pie-chart", text: t("tutorial.analytics.step1", "Visualisez la rÃ©partition de votre stock par catÃ©gorie.") },
-          { icon: "trending-up", text: t("tutorial.analytics.step2", "Suivez l'Ã©volution de la valeur de votre inventaire.") },
+          { icon: "pie-chart", text: t("tutorial.analytics.step1", "Visualisez la repartition de votre stock par categorie.") },
+          { icon: "trending-up", text: t("tutorial.analytics.step2", "Suivez l'evolution de la valeur de votre inventaire.") },
           { icon: "activity", text: t("tutorial.analytics.step3", "Analysez les mouvements pour optimiser votre gestion.") }
         ],
         tip: t("tutorial.analytics.tip", "Astuce : Exportez vos rapports en PDF ou Excel.")
@@ -1023,21 +1023,21 @@
         title: t("tutorial.inventory.title", "Inventaire"),
         icon: "clipboard-check",
         steps: [
-          { icon: "list-checks", text: t("tutorial.inventory.step1", "CrÃ©ez des sessions d'inventaire complet ou partiel.") },
+          { icon: "list-checks", text: t("tutorial.inventory.step1", "Creez des sessions d'inventaire complet ou partiel.") },
           { icon: "scan-barcode", text: t("tutorial.inventory.step2", "Utilisez le scanner pour compter plus rapidement.") },
-          { icon: "git-compare", text: t("tutorial.inventory.step3", "Comparez le stock thÃ©orique vs rÃ©el et validez les Ã©carts.") }
+          { icon: "git-compare", text: t("tutorial.inventory.step3", "Comparez le stock theorique vs reel et validez les ecarts.") }
         ],
-        tip: t("tutorial.inventory.tip", "Astuce : Planifiez des inventaires rÃ©guliers pour une meilleure prÃ©cision.")
+        tip: t("tutorial.inventory.tip", "Astuce : Planifiez des inventaires reguliers pour une meilleure precision.")
       },
       settings: {
-        title: t("tutorial.settings.title", "ParamÃ¨tres"),
+        title: t("tutorial.settings.title", "Parametres"),
         icon: "settings",
         steps: [
-          { icon: "globe", text: t("tutorial.settings.step1", "Configurez la langue et les unitÃ©s de mesure.") },
+          { icon: "globe", text: t("tutorial.settings.step1", "Configurez la langue et les unites de mesure.") },
           { icon: "bell", text: t("tutorial.settings.step2", "Personnalisez vos seuils d'alerte de stock.") },
-          { icon: "palette", text: t("tutorial.settings.step3", "Adaptez l'interface Ã  vos prÃ©fÃ©rences.") }
+          { icon: "palette", text: t("tutorial.settings.step3", "Adaptez l'interface Ã  vos preferences.") }
         ],
-        tip: t("tutorial.settings.tip", "Astuce : Sauvegardez vos paramÃ¨tres pour les restaurer facilement.")
+        tip: t("tutorial.settings.tip", "Astuce : Sauvegardez vos parametres pour les restaurer facilement.")
       }
     };
     return tutorials[tab] || null;
@@ -1050,10 +1050,10 @@
   function showTabTutorialIfNeeded(tab) {
     loadTutorialState();
     
-    // Ne pas afficher si dÃ©jÃ  vu
+    // Ne pas afficher si dejÃ  vu
     if (tutorialsSeen[tab]) return;
     
-    // Ne pas afficher si pas de tutoriel dÃ©fini
+    // Ne pas afficher si pas de tutoriel defini
     var tutorial = getTabTutorial(tab);
     if (!tutorial) return;
     
@@ -1135,7 +1135,7 @@
       title: '<i data-lucide="book-open"></i> ' + t("tutorial.allTutorials", "Tous les tutoriels"),
       size: "md",
       content: '<div class="tutorial-list">' + listHtml + '</div>',
-      footer: '<button class="btn btn-ghost" onclick="app.resetAllTutorials();app.closeModal()">' + t("tutorial.resetAll", "RÃ©initialiser tout") + '</button>' +
+      footer: '<button class="btn btn-ghost" onclick="app.resetAllTutorials();app.closeModal()">' + t("tutorial.resetAll", "Reinitialiser tout") + '</button>' +
         '<button class="btn btn-secondary" onclick="app.closeModal()">' + t("action.close", "Fermer") + '</button>'
     });
     
@@ -1222,7 +1222,7 @@
       '<div class="quick-actions-bar">' +
       '<div class="quick-actions-title"><i data-lucide="zap"></i> ' + t("dashboard.quickActions", "Actions rapides") + '</div>' +
       '<div class="quick-actions-buttons">' +
-      '<button class="btn btn-ghost btn-sm" onclick="app.showQuickRestockModal()"><i data-lucide="package-plus"></i> ' + t("dashboard.quickRestock", "RÃ©appro rapide") + '</button>' +
+      '<button class="btn btn-ghost btn-sm" onclick="app.showQuickRestockModal()"><i data-lucide="package-plus"></i> ' + t("dashboard.quickRestock", "Reappro rapide") + '</button>' +
       '<button class="btn btn-ghost btn-sm" onclick="app.showScannerModal()"><i data-lucide="scan-barcode"></i> ' + t("dashboard.scanBarcode", "Scanner") + '</button>' +
       '<button class="btn btn-ghost btn-sm" onclick="app.showQuickAdjustModal()"><i data-lucide="sliders"></i> ' + t("dashboard.quickAdjust", "Ajustement") + '</button>' +
       (hasFeature("hasInventoryCount") ? '<button class="btn btn-ghost btn-sm" onclick="app.navigateTo(\'inventory\')"><i data-lucide="clipboard-check"></i> ' + t("dashboard.inventory", "Inventaire") + '</button>' : '') +
@@ -1239,7 +1239,7 @@
         (lowStockProducts.length > 0 ? '<div class="alert-item alert-warning" onclick="app.showLowStockModal()"><span class="alert-icon"><i data-lucide="alert-triangle"></i></span><span class="alert-text">' + lowStockProducts.length + ' ' + t("dashboard.lowStockAlert", "produit(s) stock bas") + '</span><span class="alert-action"><i data-lucide="chevron-right"></i></span></div>' : '') +
         '</div></div>' : '') +
       
-      // ActivitÃ© rÃ©cente (nouveau!)
+      // Activite recente (nouveau!)
       '<div class="card card-activity">' +
       '<div class="card-header"><h3 class="card-title"><i data-lucide="history"></i> ' + t("dashboard.activityLog", "Activite recente") + '</h3>' +
       '<button class="btn btn-ghost btn-sm" onclick="app.showFullActivityLog()">' + t("dashboard.viewAll", "Voir tout") + '</button></div>' +
@@ -1252,7 +1252,7 @@
       (state.products.length ? renderTable(state.products.slice(0, 5)) : renderEmpty()) +
       "</div></div>" +
       
-      // Mouvements rÃ©cents
+      // Mouvements recents
       '<div class="card"><div class="card-header"><h3 class="card-title"><i data-lucide="activity"></i> ' + t("dashboard.recentMovements", "Mouvements recents") + '</h3>' +
       '</div>' +
       '<div class="card-body" id="dashboardMovements"><div class="text-center py-lg"><div class="spinner"></div></div></div></div>' +
@@ -1281,7 +1281,7 @@
         '<div class="low-stock-name">' + esc(p.title || p.name) + '</div>' +
         '<div class="low-stock-stock">' + formatWeight(p.totalGrams || 0) + ' ' + t("dashboard.remaining", "restant") + '</div>' +
         '</div>' +
-        '<button class="btn btn-primary btn-sm" onclick="app.showRestockModal(\'' + p.id + '\')">' + t("action.restock", "RÃ©appro") + '</button>' +
+        '<button class="btn btn-primary btn-sm" onclick="app.showRestockModal(\'' + p.id + '\')">' + t("action.restock", "Reappro") + '</button>' +
         '</div>';
     }).join('') + '</div>';
     
@@ -1311,7 +1311,7 @@
         '<div class="low-stock-name">' + esc(p.title || p.name) + '</div>' +
         '<div class="low-stock-stock text-danger">' + t("status.outOfStock", "Rupture de stock") + '</div>' +
         '</div>' +
-        '<button class="btn btn-primary btn-sm" onclick="app.showRestockModal(\'' + p.id + '\')">' + t("action.restock", "RÃ©appro") + '</button>' +
+        '<button class="btn btn-primary btn-sm" onclick="app.showRestockModal(\'' + p.id + '\')">' + t("action.restock", "Reappro") + '</button>' +
         '</div>';
     }).join('') + '</div>';
     
@@ -1324,7 +1324,7 @@
     if (typeof lucide !== "undefined") lucide.createIcons();
   }
 
-  // RÃ©appro rapide (sÃ©lection produit)
+  // Reappro rapide (selection produit)
   function showQuickRestockModal() {
     var productOptions = state.products.map(function(p) {
       return '<option value="' + p.id + '" data-cmp="' + (p.averageCostPerGram || 0) + '">' + esc(p.title || p.name) + ' (' + formatWeight(p.totalGrams || 0) + ')</option>';
@@ -1334,20 +1334,20 @@
     var weightUnit = getWeightUnit();
     
     showModal({
-      title: '<i data-lucide="package-plus"></i> ' + t("dashboard.quickRestock", "RÃ©appro rapide"),
+      title: '<i data-lucide="package-plus"></i> ' + t("dashboard.quickRestock", "Reappro rapide"),
       size: "sm",
       content: '<div class="form-group"><label>' + t("products.product", "Produit") + '</label>' +
         '<select id="quickRestockProduct" class="form-select" onchange="app.updateQuickRestockCMP()">' +
-        '<option value="">' + t("action.selectProduct", "SÃ©lectionner...") + '</option>' + productOptions + '</select></div>' +
+        '<option value="">' + t("action.selectProduct", "Selectionner...") + '</option>' + productOptions + '</select></div>' +
         '<div class="form-row" style="display:flex;gap:12px">' +
-        '<div class="form-group" style="flex:1"><label>' + t("products.quantity", "QuantitÃ©") + ' (' + weightUnit + ')</label>' +
+        '<div class="form-group" style="flex:1"><label>' + t("products.quantity", "Quantite") + ' (' + weightUnit + ')</label>' +
         '<input type="number" id="quickRestockQty" class="form-input" placeholder="0" min="0" step="0.1" onchange="app.updateQuickRestockTotal()"></div>' +
         '<div class="form-group" style="flex:1"><label>' + t("products.purchasePrice", "Prix d\'achat") + ' (' + currencySymbol + '/' + weightUnit + ')</label>' +
         '<input type="number" id="quickRestockPrice" class="form-input" placeholder="0.00" min="0" step="0.01" onchange="app.updateQuickRestockTotal()"></div>' +
         '</div>' +
         '<div class="form-group" id="quickRestockTotalContainer" style="display:none">' +
         '<div class="quick-restock-summary" style="background:var(--bg-tertiary);padding:12px;border-radius:var(--radius-md)">' +
-        '<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span class="text-secondary">' + t("products.totalCost", "CoÃ»t total") + '</span><span id="quickRestockTotalCost" style="font-weight:600">0.00 ' + currencySymbol + '</span></div>' +
+        '<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span class="text-secondary">' + t("products.totalCost", "Cout total") + '</span><span id="quickRestockTotalCost" style="font-weight:600">0.00 ' + currencySymbol + '</span></div>' +
         '<div style="display:flex;justify-content:space-between"><span class="text-secondary">' + t("products.currentCMP", "CMP actuel") + '</span><span id="quickRestockCurrentCMP">-</span></div>' +
         '</div></div>' +
         '<div class="form-group"><label>' + t("products.note", "Note") + ' (' + t("products.optional", "optionnel") + ')</label>' +
@@ -1368,7 +1368,7 @@
     if (cmpDisplay) {
       cmpDisplay.textContent = cmp > 0 ? formatPricePerUnit(cmp) : '-';
     }
-    // PrÃ©-remplir avec le CMP actuel si pas de prix saisi
+    // Pre-remplir avec le CMP actuel si pas de prix saisi
     if (priceInput && !priceInput.value && cmp > 0) {
       priceInput.value = cmp.toFixed(2);
     }
@@ -1396,19 +1396,19 @@
     var price = parseFloat(document.getElementById('quickRestockPrice').value) || 0;
     var note = document.getElementById('quickRestockNote').value || '';
     
-    if (!productId) { showToast(t("msg.selectProduct", "SÃ©lectionnez un produit"), "error"); return; }
-    if (qty <= 0) { showToast(t("msg.invalidQty", "QuantitÃ© invalide"), "error"); return; }
+    if (!productId) { showToast(t("msg.selectProduct", "Selectionnez un produit"), "error"); return; }
+    if (qty <= 0) { showToast(t("msg.invalidQty", "Quantite invalide"), "error"); return; }
     
-    // Convertir en grammes si nÃ©cessaire
+    // Convertir en grammes si necessaire
     var qtyInGrams = toGrams(qty);
     
-    // PrÃ©parer les donnÃ©es avec le profil actif
+    // Preparer les donnees avec le profil actif
     var data = { 
       grams: qtyInGrams, 
       note: note 
     };
     
-    // Ajouter le prix d'achat si spÃ©cifiÃ©
+    // Ajouter le prix d'achat si specifie
     if (price > 0) {
       data.purchasePricePerGram = price;
     }
@@ -1425,7 +1425,7 @@
       body: JSON.stringify(data)
     }).then(function(res) {
       if (res.ok) {
-        showToast(t("msg.restockSuccess", "RÃ©appro effectuÃ©e"), "success");
+        showToast(t("msg.restockSuccess", "Reappro effectuee"), "success");
         closeModal();
         loadProducts(true).then(function() { renderTab(state.currentTab); });
       } else {
@@ -1444,13 +1444,13 @@
       title: '<i data-lucide="sliders"></i> ' + t("dashboard.quickAdjust", "Ajustement rapide"),
       size: "sm",
       content: '<div class="form-group"><label>' + t("products.product", "Produit") + '</label>' +
-        '<select id="quickAdjustProduct" class="form-select"><option value="">' + t("action.selectProduct", "SÃ©lectionner...") + '</option>' + productOptions + '</select></div>' +
+        '<select id="quickAdjustProduct" class="form-select"><option value="">' + t("action.selectProduct", "Selectionner...") + '</option>' + productOptions + '</select></div>' +
         '<div class="form-group"><label>' + t("products.newStock", "Nouveau stock") + ' (g)</label>' +
         '<input type="number" id="quickAdjustQty" class="form-input" placeholder="0" min="0" step="0.1"></div>' +
         '<div class="form-group"><label>' + t("products.reason", "Raison") + '</label>' +
         '<select id="quickAdjustReason" class="form-select">' +
         '<option value="count">' + t("reason.count", "Comptage inventaire") + '</option>' +
-        '<option value="damage">' + t("reason.damage", "Produit endommagÃ©") + '</option>' +
+        '<option value="damage">' + t("reason.damage", "Produit endommage") + '</option>' +
         '<option value="theft">' + t("reason.theft", "Vol/Perte") + '</option>' +
         '<option value="correction">' + t("reason.correction", "Correction erreur") + '</option>' +
         '</select></div>',
@@ -1465,15 +1465,15 @@
     var qty = parseFloat(document.getElementById('quickAdjustQty').value);
     var reason = document.getElementById('quickAdjustReason').value || 'count';
     
-    if (!productId) { showToast(t("msg.selectProduct", "SÃ©lectionnez un produit"), "error"); return; }
-    if (isNaN(qty) || qty < 0) { showToast(t("msg.invalidQty", "QuantitÃ© invalide"), "error"); return; }
+    if (!productId) { showToast(t("msg.selectProduct", "Selectionnez un produit"), "error"); return; }
+    if (isNaN(qty) || qty < 0) { showToast(t("msg.invalidQty", "Quantite invalide"), "error"); return; }
     
     authFetch(apiUrl("/products/" + productId + "/adjust"), {
       method: "POST",
       body: JSON.stringify({ newGrams: qty, reason: reason })
     }).then(function(res) {
       if (res.ok) {
-        showToast(t("msg.adjustSuccess", "Ajustement effectuÃ©"), "success");
+        showToast(t("msg.adjustSuccess", "Ajustement effectue"), "success");
         closeModal();
         loadProducts(true).then(function() { renderTab(state.currentTab); });
       } else {
@@ -1505,7 +1505,7 @@
     });
     if (typeof lucide !== "undefined") lucide.createIcons();
     
-    // Sur desktop, dÃ©marrer automatiquement
+    // Sur desktop, demarrer automatiquement
     if (window.innerWidth > 768) {
       setTimeout(function() { startCamera(); }, 300);
     }
@@ -1521,7 +1521,7 @@
     
     if (!video || !status) return;
     
-    // VÃ©rifier si dans une iframe (Shopify Admin)
+    // Verifier si dans une iframe (Shopify Admin)
     var inIframe = false;
     try {
       inIframe = window.self !== window.top;
@@ -1529,26 +1529,26 @@
       inIframe = true;
     }
     
-    // VÃ©rifier si HTTPS ou localhost
+    // Verifier si HTTPS ou localhost
     var isSecure = location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1';
     if (!isSecure) {
       status.innerHTML = '<span class="text-warning"><i data-lucide="alert-triangle"></i> ' + 
-        t("scanner.httpsRequired", "HTTPS requis pour accÃ©der Ã  la camÃ©ra") + '</span>';
+        t("scanner.httpsRequired", "HTTPS requis pour acceder Ã  la camera") + '</span>';
       if (typeof lucide !== "undefined") lucide.createIcons();
       return;
     }
     
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       status.innerHTML = '<span class="text-warning"><i data-lucide="alert-triangle"></i> ' + 
-        t("scanner.notSupported", "CamÃ©ra non supportÃ©e sur ce navigateur") + '</span>';
+        t("scanner.notSupported", "Camera non supportee sur ce navigateur") + '</span>';
       if (typeof lucide !== "undefined") lucide.createIcons();
       return;
     }
     
     // Afficher loading
-    status.innerHTML = '<div class="spinner"></div> ' + t("scanner.requesting", "Demande d\'accÃ¨s Ã  la camÃ©ra...");
+    status.innerHTML = '<div class="spinner"></div> ' + t("scanner.requesting", "Demande d\'acces Ã  la camera...");
     
-    // Contraintes optimisÃ©es pour mobile
+    // Contraintes optimisees pour mobile
     var constraints = {
       video: {
         facingMode: { ideal: "environment" },
@@ -1573,16 +1573,16 @@
         if (playPromise !== undefined) {
           playPromise.then(function() {
             status.innerHTML = '<span class="text-success"><i data-lucide="check-circle"></i> ' + 
-              t("scanner.ready", "CamÃ©ra prÃªte - PrÃ©sentez un code-barres") + '</span>';
+              t("scanner.ready", "Camera prete - Presentez un code-barres") + '</span>';
             if (typeof lucide !== "undefined") lucide.createIcons();
             startBarcodeDetection(video, status);
           }).catch(function(err) {
             console.warn("[Scanner] Play error:", err);
-            status.innerHTML = '<span class="text-warning">' + t("scanner.tapToStart", "Touchez la vidÃ©o pour dÃ©marrer") + '</span>';
+            status.innerHTML = '<span class="text-warning">' + t("scanner.tapToStart", "Touchez la video pour demarrer") + '</span>';
             video.onclick = function() {
               video.play();
               video.onclick = null;
-              status.innerHTML = '<span class="text-success"><i data-lucide="check-circle"></i> ' + t("scanner.ready", "CamÃ©ra prÃªte") + '</span>';
+              status.innerHTML = '<span class="text-success"><i data-lucide="check-circle"></i> ' + t("scanner.ready", "Camera prete") + '</span>';
               if (typeof lucide !== "undefined") lucide.createIcons();
               startBarcodeDetection(video, status);
             };
@@ -1591,23 +1591,23 @@
       })
       .catch(function(err) {
         console.error("[Scanner] Camera error:", err.name, err.message);
-        var errorMsg = t("scanner.cameraError", "Erreur camÃ©ra");
+        var errorMsg = t("scanner.cameraError", "Erreur camera");
         var showHelp = false;
         
         if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-          // VÃ©rifier si c'est un problÃ¨me d'iframe/permissions
+          // Verifier si c'est un probleme d'iframe/permissions
           if (err.message.includes('not allowed by the user agent') || err.message.includes('platform') || err.message.includes('Permissions')) {
-            errorMsg = t("scanner.iframeBlocked", "La camÃ©ra est bloquÃ©e par le navigateur.");
+            errorMsg = t("scanner.iframeBlocked", "La camera est bloquee par le navigateur.");
           } else {
-            errorMsg = t("scanner.permissionDenied", "AccÃ¨s camÃ©ra refusÃ©.");
+            errorMsg = t("scanner.permissionDenied", "Acces camera refuse.");
           }
           showHelp = true;
         } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
-          errorMsg = t("scanner.noCameraFound", "Aucune camÃ©ra dÃ©tectÃ©e sur cet appareil.");
+          errorMsg = t("scanner.noCameraFound", "Aucune camera detectee sur cet appareil.");
         } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
-          errorMsg = t("scanner.cameraInUse", "La camÃ©ra est utilisÃ©e par une autre application.");
+          errorMsg = t("scanner.cameraInUse", "La camera est utilisee par une autre application.");
         } else if (err.name === 'SecurityError') {
-          errorMsg = t("scanner.securityError", "AccÃ¨s camÃ©ra bloquÃ© par les paramÃ¨tres de sÃ©curitÃ©.");
+          errorMsg = t("scanner.securityError", "Acces camera bloque par les parametres de securite.");
           showHelp = true;
         } else {
           showHelp = true;
@@ -1616,17 +1616,17 @@
         var helpHtml = '';
         if (showHelp) {
           helpHtml = '<div style="text-align:left;background:var(--surface-secondary);padding:12px;border-radius:8px;margin-top:12px;font-size:13px">' +
-            '<strong>' + t("scanner.howToEnable", "Comment activer la camÃ©ra :") + '</strong><br>' +
+            '<strong>' + t("scanner.howToEnable", "Comment activer la camera :") + '</strong><br>' +
             '<ol style="margin:8px 0 0 16px;padding:0">' +
-            '<li>' + t("scanner.step1", "Cliquez sur l'icÃ´ne camÃ©ra/cadenas dans la barre d'adresse") + '</li>' +
-            '<li>' + t("scanner.step2", "Autorisez l'accÃ¨s Ã  la camÃ©ra pour ce site") + '</li>' +
-            '<li>' + t("scanner.step3", "Rechargez la page si nÃ©cessaire") + '</li>' +
+            '<li>' + t("scanner.step1", "Cliquez sur l'icone camera/cadenas dans la barre d'adresse") + '</li>' +
+            '<li>' + t("scanner.step2", "Autorisez l'acces Ã  la camera pour ce site") + '</li>' +
+            '<li>' + t("scanner.step3", "Rechargez la page si necessaire") + '</li>' +
             '</ol></div>';
         }
         
         var buttonsHtml = '<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:12px">' +
           '<button class="btn btn-sm btn-secondary" onclick="app.startCamera()">' + 
-          '<i data-lucide="refresh-cw"></i> ' + t("action.retry", "RÃ©essayer") + '</button>' +
+          '<i data-lucide="refresh-cw"></i> ' + t("action.retry", "Reessayer") + '</button>' +
           '<button class="btn btn-sm btn-ghost" onclick="location.reload()">' + 
           '<i data-lucide="rotate-cw"></i> ' + t("action.reload", "Recharger") + '</button>' +
           '</div>';
@@ -1637,7 +1637,7 @@
   }
   
   function startBarcodeDetection(video, status) {
-    // DÃ©tection via BarcodeDetector API (Chrome, Edge, Android)
+    // Detection via BarcodeDetector API (Chrome, Edge, Android)
     if ('BarcodeDetector' in window) {
       var detector = new BarcodeDetector({ 
         formats: ['ean_13', 'ean_8', 'code_128', 'code_39', 'upc_a', 'upc_e', 'qr_code', 'codabar'] 
@@ -1663,9 +1663,9 @@
       }
       scanFrame();
     } else {
-      // BarcodeDetector non supportÃ© (Safari, Firefox)
+      // BarcodeDetector non supporte (Safari, Firefox)
       status.innerHTML += '<br><span class="text-muted text-sm">' + 
-        t("scanner.manualOnly", "DÃ©tection auto non supportÃ©e - utilisez la saisie manuelle") + '</span>';
+        t("scanner.manualOnly", "Detection auto non supportee - utilisez la saisie manuelle") + '</span>';
     }
   }
 
@@ -1703,13 +1703,13 @@
     closeModal();
     
     if (product) {
-      showToast(t("scanner.productFound", "Produit trouvÃ©!"), "success");
+      showToast(t("scanner.productFound", "Produit trouve!"), "success");
       openProductDetails(product.id);
     } else {
       showModal({
-        title: '<i data-lucide="search-x"></i> ' + t("scanner.notFound", "Produit non trouvÃ©"),
-        content: '<div class="text-center py-lg"><p>' + t("scanner.notFoundMsg", "Aucun produit trouvÃ© avec le code") + ' <strong>' + esc(code) + '</strong></p>' +
-          '<p class="text-muted">' + t("scanner.notFoundHint", "VÃ©rifiez que le code-barres est configurÃ© sur le produit dans Shopify.") + '</p></div>',
+        title: '<i data-lucide="search-x"></i> ' + t("scanner.notFound", "Produit non trouve"),
+        content: '<div class="text-center py-lg"><p>' + t("scanner.notFoundMsg", "Aucun produit trouve avec le code") + ' <strong>' + esc(code) + '</strong></p>' +
+          '<p class="text-muted">' + t("scanner.notFoundHint", "Verifiez que le code-barres est configure sur le produit dans Shopify.") + '</p></div>',
         footer: '<button class="btn btn-secondary" onclick="app.closeModal()">' + t("action.close", "Fermer") + '</button>' +
           '<button class="btn btn-primary" onclick="app.closeModal();app.showScannerModal()">' + t("scanner.scanAgain", "Scanner Ã  nouveau") + '</button>'
       });
@@ -1875,7 +1875,7 @@
         return;
       }
       
-      // Container scrollable limitÃ© Ã  5 Ã©lÃ©ments (~280px)
+      // Container scrollable limite Ã  5 elements (~280px)
       var html = '<div class="activity-list" style="max-height:280px;overflow-y:auto">';
       movements.forEach(function(m) {
         var mType = m.type || m.source || 'adjustment';
@@ -3375,7 +3375,7 @@
     document.getElementById("ordersContent").innerHTML =
       '<div class="card"><div class="card-body" style="padding:0">' +
       '<table class="data-table"><thead><tr>' +
-      '<th>' + t("orders.number", "NÃ‚Â°") + '</th>' +
+      '<th>' + t("orders.number", "N°") + '</th>' +
       '<th>' + t("orders.supplier", "Fournisseur") + '</th>' +
       '<th>' + t("orders.lines", "Lignes") + '</th>' +
       '<th>' + t("orders.total", "Total") + '</th>' +
@@ -3765,7 +3765,7 @@
     document.getElementById("ordersContent").innerHTML =
       '<div class="card"><div class="card-body" style="padding:0">' +
       '<table class="data-table"><thead><tr>' +
-      '<th>' + t("orders.number", "NÃ‚Â°") + '</th>' +
+      '<th>' + t("orders.number", "N°") + '</th>' +
       '<th>' + t("orders.source", "Source") + '</th>' +
       '<th>' + t("orders.revenue", "CA") + '</th>' +
       '<th>' + t("orders.cost", "Cout") + '</th>' +
@@ -3790,7 +3790,7 @@
     }
   }
 
-  // DÃ©tails d'une commande de vente
+  // Details d'une commande de vente
   async function openSODetails(orderId) {
     try {
       var res = await authFetch(apiUrl("/sales-orders/" + orderId));
@@ -5440,22 +5440,37 @@
     closeModal();
     var ct = document.getElementById("modalsContainer");
     if (!ct) return;
+    var modalId = "modal-" + Date.now();
     ct.innerHTML =
-      '<div class="modal-backdrop active" onclick="app.closeModal()"></div>' +
+      '<div class="modal-backdrop active" onclick="app.closeModal()" aria-hidden="true"></div>' +
       '<div class="modal active ' +
       (opts.size ? "modal-" + opts.size : "") +
-      '">' +
-      '<div class="modal-header"><h2 class="modal-title">' +
+      '" role="dialog" aria-modal="true" aria-labelledby="' + modalId + '-title">' +
+      '<div class="modal-header"><h2 class="modal-title" id="' + modalId + '-title">' +
       opts.title +
-      '</h2><button class="modal-close" onclick="app.closeModal()">X</button></div>' +
-      '<div class="modal-body">' +
+      '</h2><button class="modal-close" onclick="app.closeModal()" aria-label="' + t("action.close", "Fermer") + '" title="' + t("action.close", "Fermer") + '">&times;</button></div>' +
+      '<div class="modal-body" role="document">' +
       opts.content +
       "</div>" +
       (opts.footer ? '<div class="modal-footer">' + opts.footer + "</div>" : "") +
       "</div>";
+    
+    // Focus sur le modal pour l'accessibilité
+    var modal = ct.querySelector('.modal');
+    if (modal) modal.focus();
+    
+    // Fermer avec Escape
+    document.addEventListener('keydown', handleModalEscape);
+  }
+  
+  function handleModalEscape(e) {
+    if (e.key === 'Escape') {
+      closeModal();
+    }
   }
 
   function closeModal() {
+    document.removeEventListener('keydown', handleModalEscape);
     var el = document.getElementById("modalsContainer");
     if (el) el.innerHTML = "";
   }
@@ -6558,7 +6573,7 @@
   }
 
   // ============================================
-  // Ã¢Å“â€¦ FICHE DÃƒâ€°TAIL PRODUIT
+  // aÅ“"¦ FICHE DÃƒ"°TAIL PRODUIT
   // ============================================
   async function openProductDetails(productId) {
     if (!productId) return;
@@ -6785,7 +6800,7 @@
   }
 
   function showAddBatchForProduct(productId, productName) {
-    // Ouvrir le modal de crÃƒÂ©ation de lot avec le produit prÃƒÂ©-sÃƒÂ©lectionnÃƒÂ©
+    // Ouvrir le modal de creation de lot avec le produit pre-selectionne
     showModal({
       title: t("batches.addBatchFor", "Nouveau lot pour") + ' ' + (productName || 'ce produit'),
       size: "md",
@@ -7753,7 +7768,7 @@
     updateNestedSetting: updateNestedSetting,
     exportSettings: exportSettings,
     resetAllSettings: resetAllSettings,
-    // Dashboard amÃ©liorÃ©
+    // Dashboard ameliore
     showLowStockModal: showLowStockModal,
     showAllMovementsModal: showAllMovementsModal,
     showOutOfStockModal: showOutOfStockModal,
@@ -7815,7 +7830,7 @@
     get: function() { return state; }
   });
   
-  // Marquer l'app comme prÃªte
+  // Marquer l'app comme prete
   markAppReady();
 
   // Init

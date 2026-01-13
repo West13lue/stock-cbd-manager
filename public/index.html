@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Stock Manager Pro - Gestion de stock avancée pour Shopify">
   <title>Stock Manager Pro</title>
   
   <!-- Shopify App Bridge v4 - MUST BE FIRST -->
@@ -18,65 +19,66 @@
   <script src="./js/lucide.min.js"></script>
 </head>
 <body>
+  <a href="#main-content" class="skip-link visually-hidden">Aller au contenu principal</a>
   <div id="app">
     <!-- SIDEBAR -->
-    <aside class="sidebar" id="sidebar">
+    <aside class="sidebar" id="sidebar" role="navigation" aria-label="Navigation principale">
       <div class="sidebar-header">
         <div class="logo">
-          <span class="logo-icon"><i data-lucide="package" class="icon"></i></span>
+          <span class="logo-icon" aria-hidden="true"><i data-lucide="package" class="icon"></i></span>
           <span class="logo-text">Stock Manager</span>
         </div>
-        <span class="version-badge">PRO</span>
+        <span class="version-badge" aria-label="Version Pro">PRO</span>
       </div>
 
-      <nav class="sidebar-nav">
+      <nav class="sidebar-nav" role="menubar" aria-label="Menu principal">
         <!-- FREE -->
-        <a href="#" class="nav-item active" data-tab="dashboard">
-          <span class="nav-icon"><i data-lucide="layout-dashboard" class="icon"></i></span>
+        <a href="#" class="nav-item active" data-tab="dashboard" role="menuitem" aria-current="page">
+          <span class="nav-icon" aria-hidden="true"><i data-lucide="layout-dashboard" class="icon"></i></span>
           <span class="nav-label">Tableau de bord</span>
         </a>
-        <a href="#" class="nav-item" data-tab="products">
-          <span class="nav-icon"><i data-lucide="boxes" class="icon"></i></span>
+        <a href="#" class="nav-item" data-tab="products" role="menuitem">
+          <span class="nav-icon" aria-hidden="true"><i data-lucide="boxes" class="icon"></i></span>
           <span class="nav-label">Produits</span>
         </a>
         
         <!-- STARTER -->
-        <a href="#" class="nav-item" data-tab="suppliers" data-feature="hasSuppliers">
-          <span class="nav-icon"><i data-lucide="factory" class="icon"></i></span>
+        <a href="#" class="nav-item" data-tab="suppliers" data-feature="hasSuppliers" role="menuitem">
+          <span class="nav-icon" aria-hidden="true"><i data-lucide="factory" class="icon"></i></span>
           <span class="nav-label">Fournisseurs</span>
-          <span class="nav-badge starter">START</span>
+          <span class="nav-badge starter" aria-label="Plan Starter requis">START</span>
         </a>
         
         <!-- PRO -->
-        <a href="#" class="nav-item" data-tab="batches" data-feature="hasBatchTracking">
-          <span class="nav-icon"><i data-lucide="tags" class="icon"></i></span>
+        <a href="#" class="nav-item" data-tab="batches" data-feature="hasBatchTracking" role="menuitem">
+          <span class="nav-icon" aria-hidden="true"><i data-lucide="tags" class="icon"></i></span>
           <span class="nav-label">Lots et DLC</span>
-          <span class="nav-badge pro">PRO</span>
+          <span class="nav-badge pro" aria-label="Plan Pro requis">PRO</span>
         </a>
-        <a href="#" class="nav-item" data-tab="analytics" data-feature="hasAnalytics">
-          <span class="nav-icon"><i data-lucide="bar-chart-3" class="icon"></i></span>
+        <a href="#" class="nav-item" data-tab="analytics" data-feature="hasAnalytics" role="menuitem">
+          <span class="nav-icon" aria-hidden="true"><i data-lucide="bar-chart-3" class="icon"></i></span>
           <span class="nav-label">Analytics</span>
-          <span class="nav-badge pro">PRO</span>
+          <span class="nav-badge pro" aria-label="Plan Pro requis">PRO</span>
         </a>
-        <a href="#" class="nav-item" data-tab="inventory" data-feature="hasInventoryCount">
-          <span class="nav-icon"><i data-lucide="clipboard-check" class="icon"></i></span>
+        <a href="#" class="nav-item" data-tab="inventory" data-feature="hasInventoryCount" role="menuitem">
+          <span class="nav-icon" aria-hidden="true"><i data-lucide="clipboard-check" class="icon"></i></span>
           <span class="nav-label">Inventaire</span>
-          <span class="nav-badge pro">PRO</span>
+          <span class="nav-badge pro" aria-label="Plan Pro requis">PRO</span>
         </a>
         
         <!-- BUSINESS -->
-        <a href="#" class="nav-item" data-tab="orders" data-feature="hasPurchaseOrders">
-          <span class="nav-icon"><i data-lucide="clipboard-list" class="icon"></i></span>
+        <a href="#" class="nav-item" data-tab="orders" data-feature="hasPurchaseOrders" role="menuitem">
+          <span class="nav-icon" aria-hidden="true"><i data-lucide="clipboard-list" class="icon"></i></span>
           <span class="nav-label">Commandes</span>
-          <span class="nav-badge business">BIZ</span>
+          <span class="nav-badge business" aria-label="Plan Business requis">BIZ</span>
         </a>
-        <a href="#" class="nav-item" data-tab="forecast" data-feature="hasForecast">
-          <span class="nav-icon"><i data-lucide="trending-up" class="icon"></i></span>
+        <a href="#" class="nav-item" data-tab="forecast" data-feature="hasForecast" role="menuitem">
+          <span class="nav-icon" aria-hidden="true"><i data-lucide="trending-up" class="icon"></i></span>
           <span class="nav-label">Previsions</span>
-          <span class="nav-badge business">BIZ</span>
+          <span class="nav-badge business" aria-label="Plan Business requis">BIZ</span>
         </a>
-        <a href="#" class="nav-item" data-tab="kits" data-feature="hasKits">
-          <span class="nav-icon"><i data-lucide="puzzle" class="icon"></i></span>
+        <a href="#" class="nav-item" data-tab="kits" data-feature="hasKits" role="menuitem">
+          <span class="nav-icon" aria-hidden="true"><i data-lucide="puzzle" class="icon"></i></span>
           <span class="nav-label">Kits et Bundles</span>
           <span class="nav-badge business">BIZ</span>
         </a>
@@ -100,36 +102,36 @@
     </aside>
 
     <!-- MAIN CONTENT -->
-    <main class="main-content">
+    <main class="main-content" id="main-content" role="main">
       <!-- TOP BAR -->
-      <header class="topbar">
-        <button class="btn-icon sidebar-toggle" onclick="app.toggleSidebar()">
-          <i data-lucide="menu" class="icon"></i>
+      <header class="topbar" role="banner">
+        <button class="btn-icon sidebar-toggle" onclick="app.toggleSidebar()" aria-label="Ouvrir/Fermer le menu" aria-expanded="false" aria-controls="sidebar">
+          <i data-lucide="menu" class="icon" aria-hidden="true"></i>
         </button>
 
-        <div class="search-box" id="globalSearchBox">
-          <i data-lucide="search" class="search-icon icon"></i>
-          <input type="text" placeholder="Search product, batch, supplier..." id="globalSearch" autocomplete="off">
-          <div class="search-dropdown" id="searchDropdown" style="display:none"></div>
+        <div class="search-box" id="globalSearchBox" role="search">
+          <i data-lucide="search" class="search-icon icon" aria-hidden="true"></i>
+          <input type="text" placeholder="Search product, batch, supplier..." id="globalSearch" autocomplete="off" aria-label="Recherche globale">
+          <div class="search-dropdown" id="searchDropdown" style="display:none" role="listbox" aria-label="Resultats de recherche"></div>
         </div>
 
-        <div class="topbar-actions">
-          <button class="btn btn-primary btn-sm" onclick="app.syncShopifyProducts()" id="syncBtn">
-            <i data-lucide="refresh-cw" class="icon"></i>
+        <div class="topbar-actions" role="toolbar" aria-label="Actions rapides">
+          <button class="btn btn-primary btn-sm" onclick="app.syncShopifyProducts()" id="syncBtn" aria-label="Synchroniser avec Shopify">
+            <i data-lucide="refresh-cw" class="icon" aria-hidden="true"></i>
             <span class="btn-text" id="syncBtnText">Sync</span>
           </button>
 
-          <button class="btn-icon" onclick="app.showKeyboardShortcutsHelp()" data-tooltip="Raccourcis clavier (?)">>
-            <i data-lucide="keyboard" class="icon"></i>
+          <button class="btn-icon" onclick="app.showKeyboardShortcutsHelp()" aria-label="Raccourcis clavier" title="Raccourcis clavier (?)">
+            <i data-lucide="keyboard" class="icon" aria-hidden="true"></i>
           </button>
 
-          <button class="btn-icon" onclick="app.toggleNotifications()" data-tooltip="Notifications">
-            <i data-lucide="bell" class="icon"></i>
-            <span class="notification-badge" id="notifBadge" style="display:none">3</span>
+          <button class="btn-icon" onclick="app.toggleNotifications()" aria-label="Notifications" title="Notifications">
+            <i data-lucide="bell" class="icon" aria-hidden="true"></i>
+            <span class="notification-badge" id="notifBadge" style="display:none" aria-live="polite">3</span>
           </button>
 
           <div class="user-menu">
-            <button class="user-avatar" onclick="app.toggleUserMenu()">
+            <button class="user-avatar" onclick="app.toggleUserMenu()" aria-label="Menu utilisateur" aria-haspopup="true">
               <span>M</span>
             </button>
           </div>
