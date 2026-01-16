@@ -706,29 +706,43 @@
     // Traduire les labels de navigation
     translateNavigationLabels();
     
-    document.querySelectorAll(".nav-item[data-tab]").forEach(function (el) {
-      // Handler pour click et touch
-      var handleNav = function (e) {
-        e.preventDefault();
-        e.stopPropagation();
-        
-        var tab = el.dataset.tab;
-        var feat = el.dataset.feature;
-        
-        if (feat && !hasFeature(feat)) {
-          showLockedModal(feat);
-          return;
+    // Délégation d'événements sur le sidebar pour capturer tous les clics
+    var sidebar = document.getElementById("sidebar");
+    if (sidebar) {
+      sidebar.addEventListener("click", function(e) {
+        // Trouver le nav-item cliqué (ou son parent)
+        var target = e.target;
+        while (target && target !== sidebar) {
+          if (target.classList && target.classList.contains("nav-item") && target.dataset.tab) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            var tab = target.dataset.tab;
+            var feat = target.dataset.feature;
+            
+            console.log("[Nav] Sidebar delegation - tab:", tab);
+            
+            if (feat && !hasFeature(feat)) {
+              showLockedModal(feat);
+              return;
+            }
+            
+            navigateTo(tab);
+            return;
+          }
+          target = target.parentElement;
         }
-        
-        navigateTo(tab);
-      };
+      }, true); // Capture phase
       
-      // Utiliser click (fonctionne sur desktop et mobile)
-      el.addEventListener("click", handleNav);
-      
-      // Supprimer les anciens handlers si existants (éviter doublons)
-      el.removeAttribute("onclick");
+      console.log("[Nav] Event delegation setup on sidebar");
+    }
+    
+    // Aussi ajouter des handlers directs comme backup
+    document.querySelectorAll(".nav-item[data-tab]").forEach(function (el) {
+      el.style.cursor = "pointer";
     });
+    
+    console.log("[Nav] Setup complete, found", document.querySelectorAll(".nav-item[data-tab]").length, "nav items");
   }
 
   function translateNavigationLabels() {
