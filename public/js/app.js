@@ -706,43 +706,46 @@
     // Traduire les labels de navigation
     translateNavigationLabels();
     
-    // Délégation d'événements sur le sidebar pour capturer tous les clics
-    var sidebar = document.getElementById("sidebar");
-    if (sidebar) {
-      sidebar.addEventListener("click", function(e) {
-        // Trouver le nav-item cliqué (ou son parent)
-        var target = e.target;
-        while (target && target !== sidebar) {
-          if (target.classList && target.classList.contains("nav-item") && target.dataset.tab) {
-            e.preventDefault();
-            e.stopPropagation();
-            
-            var tab = target.dataset.tab;
-            var feat = target.dataset.feature;
-            
-            console.log("[Nav] Sidebar delegation - tab:", tab);
-            
-            if (feat && !hasFeature(feat)) {
-              showLockedModal(feat);
-              return;
-            }
-            
-            navigateTo(tab);
-            return;
-          }
-          target = target.parentElement;
-        }
-      }, true); // Capture phase
-      
-      console.log("[Nav] Event delegation setup on sidebar");
-    }
+    var navItems = document.querySelectorAll(".nav-item[data-tab]");
+    console.log("[Nav] Setting up", navItems.length, "nav items");
     
-    // Aussi ajouter des handlers directs comme backup
-    document.querySelectorAll(".nav-item[data-tab]").forEach(function (el) {
+    navItems.forEach(function (el) {
+      var tab = el.dataset.tab;
+      var feat = el.dataset.feature;
+      
+      // Forcer le style pointer
       el.style.cursor = "pointer";
+      
+      // Créer une fonction globale unique pour cet élément
+      var fnName = "nav_" + tab;
+      window[fnName] = function() {
+        console.log("[Nav] Direct call for:", tab);
+        if (feat && !hasFeature(feat)) {
+          showLockedModal(feat);
+          return false;
+        }
+        navigateTo(tab);
+        return false;
+      };
+      
+      // Ajouter onclick en tant qu'attribut HTML
+      el.setAttribute("onclick", fnName + "(); return false;");
+      
+      // Aussi addEventListener comme backup
+      el.addEventListener("click", function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        window[fnName]();
+      }, false);
+      
+      // Et touchend pour mobile
+      el.addEventListener("touchend", function(e) {
+        e.preventDefault();
+        window[fnName]();
+      }, { passive: false });
     });
     
-    console.log("[Nav] Setup complete, found", document.querySelectorAll(".nav-item[data-tab]").length, "nav items");
+    console.log("[Nav] Setup complete");
   }
 
   function translateNavigationLabels() {
