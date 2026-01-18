@@ -5479,13 +5479,14 @@ body {
     display: flex !important;
   }
   
-  /* Navigation items mobile - IMPORTANT: must be clickable */
+  /* Navigation items mobile - FORCE CLICKABLE */
   .sidebar-nav {
     padding: var(--space-sm);
+    pointer-events: auto !important;
   }
   
   .nav-item {
-    display: flex;
+    display: flex !important;
     align-items: center;
     gap: var(--space-md);
     padding: var(--space-md);
@@ -5493,8 +5494,15 @@ body {
     border-radius: var(--radius-md);
     color: var(--text-secondary);
     text-decoration: none;
-    cursor: pointer;
+    cursor: pointer !important;
     min-height: 48px;
+    pointer-events: auto !important;
+    opacity: 1 !important;
+    -webkit-tap-highlight-color: rgba(99, 102, 241, 0.3);
+  }
+  
+  .nav-item * {
+    pointer-events: none;
   }
   
   .nav-item.active {
@@ -5504,6 +5512,24 @@ body {
   
   .nav-label {
     font-size: 14px;
+    pointer-events: none;
+  }
+  
+  .nav-icon {
+    pointer-events: none;
+  }
+  
+  .nav-badge {
+    pointer-events: none;
+  }
+
+  /* Sidebar footer */
+  .sidebar-footer {
+    pointer-events: auto !important;
+  }
+  
+  .sidebar-footer .nav-item {
+    pointer-events: auto !important;
   }
 
   /* Topbar mobile */  

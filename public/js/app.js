@@ -712,6 +712,11 @@
       var tab = el.dataset.tab;
       var feat = el.dataset.feature;
       
+      // Forcer les styles pour être cliquable
+      el.style.pointerEvents = "auto";
+      el.style.cursor = "pointer";
+      el.style.opacity = "1";
+      
       // Méthode ultra-simple : remplacer le href et utiliser onclick inline
       el.href = "javascript:void(0)";
       el.onclick = function(e) {
@@ -726,6 +731,13 @@
         return false;
       };
     });
+    
+    // Fix pour Safari/iOS: re-attacher après un court délai
+    setTimeout(function() {
+      document.querySelectorAll(".nav-item[data-tab]").forEach(function(el) {
+        el.style.pointerEvents = "auto";
+      });
+    }, 500);
   }
 
   function translateNavigationLabels() {
