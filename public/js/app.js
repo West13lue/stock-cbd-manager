@@ -5326,7 +5326,7 @@
           '<div class="form-group">' +
           '<label class="form-label">' + t("settings.webhookUrl", "URL du Webhook") + '</label>' +
           '<input type="url" class="form-input" id="channelWebhookUrl" placeholder="https://discord.com/api/webhooks/..." value="' + (config.webhookUrl || '') + '">' +
-          '<p class="form-help">' + t("settings.discordHelp", "Créez un webhook dans les paramètres de votre canal Discord > Intégrations > Webhooks") + '</p>' +
+          '<p class="form-help">' + t("settings.discordHelp", "Creez un webhook dans les parametres de votre canal Discord > Integrations > Webhooks") + '</p>' +
           '</div>' +
           '<div class="form-group">' +
           '<label class="form-label">' + t("settings.enabled", "Activer") + '</label>' +
@@ -5340,7 +5340,7 @@
           '<div class="form-group">' +
           '<label class="form-label">' + t("settings.webhookUrl", "URL du Webhook") + '</label>' +
           '<input type="url" class="form-input" id="channelWebhookUrl" placeholder="https://hooks.slack.com/services/..." value="' + (config.webhookUrl || '') + '">' +
-          '<p class="form-help">' + t("settings.slackHelp", "Créez une app Slack puis ajoutez un Incoming Webhook") + '</p>' +
+          '<p class="form-help">' + t("settings.slackHelp", "Creez une app Slack puis ajoutez un Incoming Webhook") + '</p>' +
           '</div>' +
           '<div class="form-group">' +
           '<label class="form-label">' + t("settings.enabled", "Activer") + '</label>' +
@@ -5354,7 +5354,7 @@
           '<div class="form-group">' +
           '<label class="form-label">' + t("settings.botToken", "Token du Bot") + '</label>' +
           '<input type="text" class="form-input" id="channelBotToken" placeholder="123456789:ABC..." value="' + (config.botToken || '') + '">' +
-          '<p class="form-help">' + t("settings.telegramBotHelp", "Créez un bot avec @BotFather sur Telegram") + '</p>' +
+          '<p class="form-help">' + t("settings.telegramBotHelp", "Creez un bot avec @BotFather sur Telegram") + '</p>' +
           '</div>' +
           '<div class="form-group">' +
           '<label class="form-label">' + t("settings.chatId", "Chat ID") + '</label>' +
@@ -5373,7 +5373,7 @@
           '<div class="form-group">' +
           '<label class="form-label">' + t("settings.topic", "Topic") + '</label>' +
           '<input type="text" class="form-input" id="channelTopic" placeholder="my-stock-alerts" value="' + (config.topic || '') + '">' +
-          '<p class="form-help">' + t("settings.ntfyHelp", "Choisissez un nom unique. Installez l\'app Ntfy et abonnez-vous au même topic.") + '</p>' +
+          '<p class="form-help">' + t("settings.ntfyHelp", "Choisissez un nom unique. Installez l\'app Ntfy et abonnez-vous au meme topic.") + '</p>' +
           '</div>' +
           '<div class="form-group">' +
           '<label class="form-label">' + t("settings.server", "Serveur") + ' (' + t("settings.optional", "optionnel") + ')</label>' +
@@ -5390,17 +5390,22 @@
         return;
     }
     
-    var html = 
-      '<div class="modal-header"><h2>' + title + '</h2></div>' +
-      '<div class="modal-body">' + content + '</div>' +
-      '<div class="modal-footer">' +
+    var footer = 
       '<button class="btn btn-ghost" onclick="app.closeModal()">' + t("action.cancel", "Annuler") + '</button>' +
       '<button class="btn btn-secondary" onclick="app.testNotificationChannel(\'' + channelId + '\')">' +
       '<i data-lucide="bell-ring" style="width:16px;height:16px;margin-right:6px"></i>' + t("action.test", "Tester") + '</button>' +
-      '<button class="btn btn-primary" onclick="app.saveNotificationChannel(\'' + channelId + '\')">' + t("action.save", "Enregistrer") + '</button>' +
-      '</div>';
+      '<button class="btn btn-primary" onclick="app.saveNotificationChannel(\'' + channelId + '\')">' + t("action.save", "Enregistrer") + '</button>';
     
-    showModal(html);
+    showModal({
+      title: title,
+      content: content,
+      footer: footer
+    });
+    
+    // Réinitialiser les icônes Lucide après l'ouverture du modal
+    if (typeof lucide !== 'undefined' && lucide.createIcons) {
+      setTimeout(function() { lucide.createIcons(); }, 50);
+    }
   }
 
   async function saveNotificationChannel(channelId) {
