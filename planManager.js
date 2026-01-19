@@ -128,6 +128,7 @@ const PLANS = {
       hasApi: false,
       hasPrioritySupport: false,
       hasNotifications: false,
+      hasExternalNotifications: false,
       hasFreebies: false,
     },
     features: [
@@ -174,6 +175,7 @@ const PLANS = {
       hasApi: false,
       hasPrioritySupport: false,
       hasNotifications: false,
+      hasExternalNotifications: false,
       hasFreebies: false,
     },
     features: [
@@ -222,6 +224,7 @@ const PLANS = {
       hasApi: false,
       hasPrioritySupport: false,
       hasNotifications: true,
+      hasExternalNotifications: true,
       hasFreebies: true,
     },
     features: [
@@ -271,6 +274,7 @@ const PLANS = {
       hasApi: false,
       hasPrioritySupport: true,
       hasNotifications: true,
+      hasExternalNotifications: true,
       hasFreebies: true,
     },
     features: [
@@ -322,6 +326,7 @@ const PLANS = {
       hasApi: true,
       hasPrioritySupport: true,
       hasNotifications: true,
+      hasExternalNotifications: true,
       hasFreebies: true,
     },
     features: [
@@ -658,6 +663,7 @@ function checkLimit(shop, action, context = {}) {
     use_api: ["hasApi", "Acces API", "enterprise"],
     view_notifications: ["hasNotifications", "Notifications", "pro"],
     manage_notifications: ["hasNotifications", "Notifications", "pro"],
+    external_notifications: ["hasExternalNotifications", "Notifications externes (Discord/Slack/Telegram)", "pro"],
     manage_freebies: ["hasFreebies", "Freebies", "pro"],
     advanced_export: ["hasAdvancedExports", "Exports avances", "starter"],
   };
